@@ -1,0 +1,449 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ title }}</h1>
+<div class="tabs">
+  <a href="/settings?tab=tags" class="{% if tab == 'tags' %}on{% endif %}">过滤标签</a>
+  <a href="/settings?tab=sources" class="{% if tab == 'sources' %}on{% endif %}">新闻源</a>
+  <a href="/settings?tab=papers" class="{% if tab == 'papers' %}on{% endif %}">论文数据源</a>
+  <a href="/settings?tab=stocks" class="{% if tab == 'stocks' %}on{% endif %}">股票数据源</a>
+  <a href="/settings?tab=schedule" class="{% if tab == 'schedule' %}on{% endif %}">定时任务</a>
+  <a href="/settings?tab=cli" class="{% if tab == 'cli' %}on{% endif %}">CLI</a>
+  <a href="/settings?tab=config" class="{% if tab == 'config' %}on{% endif %}">配置</a>
+  <a href="/settings?tab=users" class="{% if tab == 'users' %}on{% endif %}">用户管理</a>
+  <a href="/settings?tab=health" class="{% if tab == 'health' %}on{% endif %}">系统状态</a>
+</div>
+
+{% if tab == 'tags' %}
+<div class="panel">
+  <p class="hint">
+    过滤标签写入关键词规则（INCLUDE）。有 INCLUDE 时，标题或摘要需至少命中一个才会进入候选。
+  </p>
+  <form class="inline" method="post" action="/settings/tags">
+    <input type="text" name="keyword" placeholder="例如：LLM, Agent, RAG" required />
+    <button type="submit">添加标签</button>
+  </form>
+  {% if include_tags %}
+    {% for rule in include_tags %}
+    <div class="row">
+      <div>
+        <div class="kw">{{ rule.keyword }}</div>
+        <div class="meta">权重 {{ rule.weight }} · {% if rule.enabled %}启用{% else %}停用{% endif %}</div>
+      </div>
+      <form method="post" action="/settings/tags/{{ rule.id }}/delete">
+        <button class="danger" type="submit">删除</button>
+      </form>
+    </div>
+    {% endfor %}
+  {% else %}
+    <p class="empty">尚未配置过滤标签。未配置 INCLUDE 时，采集会保留未命中排除词的全部内容。</p>
+  {% endif %}
+</div>
+{% if exclude_tags %}
+<div class="panel">
+  <p class="hint">系统排除词（EXCLUDE，种子数据）：命中则拒绝入库为候选。</p>
+  {% for rule in exclude_tags %}
+  <div class="row">
+    <div class="kw">{{ rule.keyword }}</div>
+    <div class="meta">排除</div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endif %}
+
+{% if tab == 'sources' %}
+<div class="panel">
+  <p class="hint">
+    下方为当前库内新闻源（首次启动由默认种子写入）。可启停、删除，或追加自定义 RSS。
+    默认清单见 <span class="mono">docs/default-news-sources.md</span>。
+  </p>
+  <form class="inline" method="post" action="/settings/sources">
+    <input type="text" name="name" placeholder="名称" required />
+    <input type="url" name="url" placeholder="https://…/rss" required style="flex:2;min-width:220px;" />
+    <select name="region">
+      <option value="CN">国内</option>
+      <option value="GLOBAL">海外</option>
+    </select>
+    <select name="source_type">
+      <option value="RSS">RSS</option>
+      <option value="RSSHUB">RSSHub</option>
+    </select>
+    <button type="submit">添加</button>
+  </form>
+</div>
+<div class="panel">
+  {% if sources %}
+    {% for s in sources %}
+    <div class="row">
+      <div>
+        <div class="kw">{{ s.name }}
+          <span class="badge {% if s.enabled %}on{% endif %}">{% if s.enabled %}ON{% else %}OFF{% endif %}</span>
+          <span class="badge cat">{{ s.region }}</span>
+          <span class="badge">{{ s.source_type }}</span>
+        </div>
+        <div class="meta" style="word-break:break-all;">{{ s.url }}</div>
+      </div>
+      <div class="actions">
+        <form method="post" action="/settings/sources/{{ s.id }}/toggle">
+          <input type="hidden" name="enabled" value="{% if s.enabled %}0{% else %}1{% endif %}" />
+          <button type="submit">{% if s.enabled %}停用{% else %}启用{% endif %}</button>
+        </form>
+        <form method="post" action="/settings/sources/{{ s.id }}/delete" onsubmit="return confirm('确认删除该源？');">
+          <button class="danger" type="submit">删除</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <p class="empty">暂无新闻源。可添加，或重启应用以写入默认种子。</p>
+  {% endif %}
+</div>
+{% if default_catalog %}
+<details class="panel">
+  <summary style="cursor:pointer;font-family:var(--font-mono);color:var(--accent-2);">查看内置默认数据源清单</summary>
+  {% for d in default_catalog %}
+  <div class="row">
+    <div>
+      <div class="kw">{{ d.name }}</div>
+      <div class="meta">{{ d.region }} · {{ d.source_type }} · 默认{% if d.enabled %}启用{% else %}关闭{% endif %}</div>
+    </div>
+    <div class="meta" style="max-width:42%;word-break:break-all;text-align:right;">{{ d.url }}</div>
+  </div>
+  {% endfor %}
+</details>
+{% endif %}
+{% endif %}
+
+{% if tab == 'papers' %}
+<div class="panel">
+  <p class="hint">
+    科普 Tab 使用的论文数据源。默认包含 arXiv（cs.AI / LG / CL / CV / RO）、Hugging Face Papers、OpenAlex、Semantic Scholar。
+    URL 约定：<code>arxiv:cs.AI</code>、<code>hf:daily</code>、<code>openalex:C154945302</code>、<code>s2:large language model</code>。
+  </p>
+  <form class="inline" method="post" action="/settings/papers">
+    <input type="text" name="name" placeholder="名称，如 arXiv cs.AI" required />
+    <input type="text" name="url" placeholder="arxiv:cs.AI" required style="flex:2;min-width:220px;" />
+    <button type="submit">添加</button>
+  </form>
+</div>
+<div class="panel">
+  {% if paper_sources %}
+    {% for s in paper_sources %}
+    <div class="row">
+      <div>
+        <div class="kw">{{ s.name }}
+          <span class="badge {% if s.enabled %}on{% endif %}">{% if s.enabled %}ON{% else %}OFF{% endif %}</span>
+        </div>
+        <div class="meta" style="word-break:break-all;">{{ s.url }}</div>
+      </div>
+      <div class="actions">
+        <form method="post" action="/settings/papers/{{ s.id }}/toggle">
+          <input type="hidden" name="enabled" value="{% if s.enabled %}0{% else %}1{% endif %}" />
+          <button type="submit">{% if s.enabled %}停用{% else %}启用{% endif %}</button>
+        </form>
+        <form method="post" action="/settings/papers/{{ s.id }}/delete" onsubmit="return confirm('确认删除该论文源？');">
+          <button class="danger" type="submit">删除</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <p class="empty">暂无论文源。可手动添加，或重启应用以写入默认种子。</p>
+  {% endif %}
+</div>
+{% if paper_catalog %}
+<details class="panel">
+  <summary style="cursor:pointer;font-family:var(--font-mono);color:var(--accent-2);">查看内置默认论文源清单</summary>
+  {% for d in paper_catalog %}
+  <div class="row">
+    <div>
+      <div class="kw">{{ d.name }}</div>
+      <div class="meta">{{ d.url }}</div>
+    </div>
+  </div>
+  {% endfor %}
+</details>
+{% endif %}
+{% endif %}
+
+{% if tab == 'stocks' %}
+<div class="panel">
+  <p class="hint">
+    股票 Tab 使用的资讯源（与 AI 新闻源隔离）。支持完整 RSS URL，或 RSSHub 相对路径（如 <code>/cls/telegraph</code>）。
+    默认含 Yahoo / MarketWatch / CNBC / BBC Business 等海外源；国内 RSSHub 源默认关闭，需自建 RSSHub 后启用。
+  </p>
+  <form class="inline" method="post" action="/settings/stocks">
+    <input type="text" name="name" placeholder="名称，如 CNBC" required />
+    <input type="text" name="url" placeholder="https://…/rss 或 /rsshub/path" required style="flex:2;min-width:220px;" />
+    <select name="region">
+      <option value="GLOBAL">海外</option>
+      <option value="CN">国内</option>
+    </select>
+    <button type="submit">添加</button>
+  </form>
+</div>
+<div class="panel">
+  {% if stock_sources %}
+    {% for s in stock_sources %}
+    <div class="row">
+      <div>
+        <div class="kw">{{ s.name }}
+          <span class="badge {% if s.enabled %}on{% endif %}">{% if s.enabled %}ON{% else %}OFF{% endif %}</span>
+          <span class="badge cat">{{ s.region }}</span>
+        </div>
+        <div class="meta" style="word-break:break-all;">{{ s.url }}</div>
+      </div>
+      <div class="actions">
+        <form method="post" action="/settings/stocks/{{ s.id }}/toggle">
+          <input type="hidden" name="enabled" value="{% if s.enabled %}0{% else %}1{% endif %}" />
+          <button type="submit">{% if s.enabled %}停用{% else %}启用{% endif %}</button>
+        </form>
+        <form method="post" action="/settings/stocks/{{ s.id }}/delete" onsubmit="return confirm('确认删除该股票源？');">
+          <button class="danger" type="submit">删除</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <p class="empty">暂无股票源。可手动添加，或重启应用以写入默认种子。</p>
+  {% endif %}
+</div>
+{% if stock_catalog %}
+<details class="panel">
+  <summary style="cursor:pointer;font-family:var(--font-mono);color:var(--accent-2);">查看内置默认股票源清单</summary>
+  {% for d in stock_catalog %}
+  <div class="row">
+    <div>
+      <div class="kw">{{ d.name }}</div>
+      <div class="meta">{{ d.region }} · 默认{% if d.enabled %}启用{% else %}关闭{% endif %}</div>
+    </div>
+    <div class="meta" style="max-width:42%;word-break:break-all;text-align:right;">{{ d.url }}</div>
+  </div>
+  {% endfor %}
+</details>
+{% endif %}
+{% endif %}
+
+{% if tab == 'schedule' and schedule_cfg %}
+<div class="panel">
+  <p class="hint">
+    进程内 APScheduler 定时拉取。实际间隔 = <strong>固定分钟</strong> + <strong>随机 0～N 秒</strong>（默认 N=120），降低整点机器人特征。
+    配置写入 <code>data/runtime_config.json</code>，保存后立即重载。建议单 worker 运行。
+  </p>
+  {% if schedule_status %}
+  <p class="meta">
+    状态：{% if schedule_status.running %}<span class="ok">运行中</span>{% else %}<span class="warn">未运行</span>{% endif %}
+    · 间隔 {{ schedule_status.interval_minutes }} 分 · 抖动 {{ schedule_status.jitter_seconds }} 秒
+    {% if schedule_status.jobs %}
+      · 任务
+      {% for j in schedule_status.jobs %}
+        <code>{{ j.id }}{% if j.next_run_time %}@{{ j.next_run_time }}{% endif %}</code>
+      {% endfor %}
+    {% endif %}
+  </p>
+  {% endif %}
+  <form method="post" action="/settings/schedule">
+    <label class="check" style="display:flex;align-items:center;gap:0.4rem;margin:0.6rem 0;color:var(--muted);">
+      <input type="checkbox" name="enable_scheduler" value="1" {% if schedule_cfg.enable_scheduler %}checked{% endif %} />
+      启用定时拉取
+    </label>
+    <div class="inline" style="margin:0.6rem 0;">
+      <label for="interval" style="color:var(--muted);font-size:0.85rem;">拉取间隔</label>
+      <select id="interval" name="schedule_interval_minutes">
+        {% for m in schedule_options %}
+        <option value="{{ m }}" {% if schedule_cfg.schedule_interval_minutes == m %}selected{% endif %}>每 {{ m }} 分钟</option>
+        {% endfor %}
+      </select>
+      <label for="jitter" style="color:var(--muted);font-size:0.85rem;">抖动上限（秒）</label>
+      <input id="jitter" type="text" name="schedule_jitter_seconds" value="{{ schedule_cfg.schedule_jitter_seconds }}" style="min-width:80px;" />
+    </div>
+    <label class="check" style="display:flex;align-items:center;gap:0.4rem;margin:0.35rem 0;color:var(--muted);">
+      <input type="checkbox" name="schedule_collect_news" value="1" {% if schedule_cfg.schedule_collect_news %}checked{% endif %} />
+      定时采集新闻
+    </label>
+    <label class="check" style="display:flex;align-items:center;gap:0.4rem;margin:0.35rem 0;color:var(--muted);">
+      <input type="checkbox" name="schedule_collect_github" value="1" {% if schedule_cfg.schedule_collect_github %}checked{% endif %} />
+      定时采集 GitHub
+    </label>
+    <label class="check" style="display:flex;align-items:center;gap:0.4rem;margin:0.35rem 0;color:var(--muted);">
+      <input type="checkbox" name="schedule_collect_stocks" value="1" {% if schedule_cfg.schedule_collect_stocks %}checked{% endif %} />
+      定时采集股票
+    </label>
+    <div style="margin-top:0.85rem;">
+      <button class="primary" type="submit">保存并重载调度</button>
+    </div>
+  </form>
+</div>
+{% endif %}
+
+{% if tab == 'cli' and runtime_cfg and cli_status %}
+<div class="panel">
+  <p class="hint">
+    应用内 CLI 使用 <strong>Typer + Rich</strong>（命令 <code>bagel</code>）。
+    外部工具（飞书等）走 <code>integrations/cli_runtime.py</code> 子进程封装，风格对齐 RSS 的 feedparser+httpx。
+    首次接入：<strong>飞书</strong>（优先 Webhook；可选 <code>lark-cli</code> 二进制）。
+  </p>
+  <p class="meta">
+    {% if cli_status.ready %}<span class="ok">就绪</span>{% else %}<span class="warn">未就绪</span>{% endif %}
+    · {{ cli_status.message }}
+  </p>
+  <form method="post" action="/settings/cli">
+    <label class="check" style="display:flex;align-items:center;gap:0.4rem;margin:0.6rem 0;color:var(--muted);">
+      <input type="checkbox" name="enable_feishu_cli" value="1" {% if runtime_cfg.enable_feishu_cli %}checked{% endif %} />
+      启用飞书 CLI / Webhook
+    </label>
+    <label class="check" style="display:flex;align-items:center;gap:0.4rem;margin:0.35rem 0;color:var(--muted);">
+      <input type="checkbox" name="feishu_push_after_collect" value="1" {% if runtime_cfg.feishu_push_after_collect %}checked{% endif %} />
+      定时采集完成后异步推送飞书（场景2）
+    </label>
+    <div class="inline" style="margin:0.5rem 0;">
+      <input type="text" name="feishu_cli_bin" value="{{ runtime_cfg.feishu_cli_bin }}" placeholder="lark-cli 或相对路径" style="flex:1;min-width:180px;" />
+      <input type="url" name="feishu_webhook_url" value="{{ runtime_cfg.feishu_webhook_url }}" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/…" style="flex:2;min-width:240px;" />
+    </div>
+    <button class="primary" type="submit">保存 CLI 配置</button>
+  </form>
+  <p class="hint" style="margin-top:0.75rem;">
+    <strong>场景1 · 飞书指令</strong>：在飞书开放平台创建企业自建应用，订阅 <code>im.message.receive_v1</code>，
+    请求地址填 <code>/api/feishu/events</code>（需公网可达）。在 .env 配置
+    <code>FEISHU_APP_ID</code> / <code>FEISHU_APP_SECRET</code> / <code>FEISHU_VERIFICATION_TOKEN</code>。
+    也可调试：<code>POST /api/feishu/command</code>，body <code>{"text":"把8月20号到8月21号的体操方向新闻发我","push":true}</code>。
+  </p>
+</div>
+<div class="panel">
+  <p class="hint">发送测试消息（需已启用并配置 Webhook 或安装 lark-cli）。命令行：<code>bagel cli feishu-send "你好"</code></p>
+  <form class="inline" method="post" action="/settings/cli/feishu-test">
+    <input type="text" name="text" value="贝果 CLI 测试消息" style="flex:2;min-width:220px;" />
+    <button type="submit">发送测试</button>
+  </form>
+</div>
+<div class="panel">
+  <p class="hint">
+    推送本库情报到飞书：昨日各类型列表（新闻 / 项目 / 论文 / 股票 / 自媒体 / 微信），或周汇总快照（本周+上周已生成的总结）。
+    CLI：<code>bagel cli feishu-digest yesterday</code> · <code>bagel cli feishu-digest week</code>
+  </p>
+  <div class="actions">
+    <form method="post" action="/settings/cli/feishu-digest">
+      <input type="hidden" name="kind" value="yesterday" />
+      <button type="submit">推送昨日列表</button>
+    </form>
+    <form method="post" action="/settings/cli/feishu-digest">
+      <input type="hidden" name="kind" value="week" />
+      <button type="submit">推送本周+上周汇总</button>
+    </form>
+    <form method="post" action="/settings/cli/feishu-digest">
+      <input type="hidden" name="kind" value="week-this" />
+      <button type="submit">仅本周汇总</button>
+    </form>
+    <form method="post" action="/settings/cli/feishu-digest">
+      <input type="hidden" name="kind" value="week-last" />
+      <button type="submit">仅上周汇总</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+{% if tab == 'config' and env_groups is not none %}
+<div class="panel">
+  <p class="hint">
+    可视化编辑 <code>.env</code> 中可对外配置项（写入项目根目录 <code>{{ env_path }}</code>）。
+    密钥类字段默认掩码显示，留空或保持掩码则不改动原值。标有「需重启」的项保存后请重启服务。
+  </p>
+  {% if config_message %}<p class="msg ok">{{ config_message }}</p>{% endif %}
+  <form method="post" action="/settings/config">
+    {% for group in env_groups %}
+    <h2 style="font-size:1rem;margin:1.1rem 0 0.55rem;font-family:var(--font-mono);color:var(--accent-2);">{{ group.group }}</h2>
+    {% for f in group.fields %}
+    <div class="row" style="align-items:flex-start;">
+      <div style="min-width:38%;">
+        <div class="kw">{{ f.label }} <span class="badge">{{ f.key }}</span>
+          {% if f.restart_hint %}<span class="badge tag">需重启</span>{% endif %}
+        </div>
+        {% if f.help %}<div class="meta">{{ f.help }}</div>{% endif %}
+      </div>
+      <div style="flex:1;">
+        {% if f.type == 'bool' %}
+        <label class="check" style="display:flex;align-items:center;gap:0.4rem;color:var(--muted);">
+          <input type="checkbox" name="{{ f.key }}" value="1" {% if f.value in ['true','1','True','yes','on'] %}checked{% endif %} />
+          启用
+        </label>
+        {% elif f.type == 'select' %}
+        <select name="{{ f.key }}" style="min-width:180px;">
+          {% for opt in f.options %}
+          <option value="{{ opt }}" {% if f.value == opt %}selected{% endif %}>{{ opt }}</option>
+          {% endfor %}
+        </select>
+        {% elif f.type == 'secret' %}
+        <input type="password" name="{{ f.key }}" value="{{ f.display }}" placeholder="留空/掩码=不修改" style="width:100%;min-width:200px;" autocomplete="new-password" />
+        {% else %}
+        <input type="text" name="{{ f.key }}" value="{{ f.value }}" style="width:100%;min-width:200px;" />
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+    {% endfor %}
+    <div style="margin-top:1rem;">
+      <button class="primary" type="submit">保存到 .env</button>
+    </div>
+  </form>
+</div>
+{% endif %}
+
+{% if tab == 'users' %}
+<div class="panel">
+  <p class="hint">管理登录账号（用户名 + 密码）。数据按用户隔离；默认管理员 <code>liuzemin</code> / <code>123456</code>。</p>
+  {% if not is_admin %}
+  <p class="msg warn">仅管理员可新增/停用用户。你可修改自己的密码。</p>
+  {% endif %}
+  <form class="inline" method="post" action="/settings/users" style="margin-bottom:1rem;">
+    <input type="text" name="username" placeholder="新用户名" {% if is_admin %}required{% else %}disabled{% endif %} />
+    <input type="password" name="password" placeholder="初始密码" {% if is_admin %}required{% else %}disabled{% endif %} />
+    <label class="check" style="display:flex;align-items:center;gap:0.35rem;color:var(--muted);font-size:0.85rem;">
+      <input type="checkbox" name="is_admin" value="1" {% if not is_admin %}disabled{% endif %} /> 管理员
+    </label>
+    <button type="submit" {% if not is_admin %}disabled{% endif %}>添加用户</button>
+  </form>
+  {% for u in users %}
+  <div class="row">
+    <div>
+      <div class="kw">{{ u.username }}{% if u.is_admin %} · 管理员{% endif %}</div>
+      <div class="meta">{% if u.is_active %}启用{% else %}停用{% endif %} · id {{ u.id }}</div>
+    </div>
+    <div class="inline">
+      <form method="post" action="/settings/users/{{ u.id }}/password">
+        <input type="password" name="password" placeholder="新密码" required />
+        <button type="submit">改密</button>
+      </form>
+      {% if is_admin and u.username != current_username %}
+      <form method="post" action="/settings/users/{{ u.id }}/toggle">
+        <button type="submit">{% if u.is_active %}停用{% else %}启用{% endif %}</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  {% else %}
+  <p class="empty">暂无用户。</p>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if tab == 'health' and report %}
+  {% for c in report.checks %}
+  <div class="health-row">
+    <div>
+      <div class="kw">{{ c.name }}</div>
+      {% if c.message %}<div class="meta">{{ c.message }}</div>{% endif %}
+    </div>
+    <div class="{% if c.ok %}ok{% else %}warn{% endif %}">
+      {% if c.ok %}正常{% else %}异常{% endif %}
+    </div>
+  </div>
+  {% endfor %}
+  <p class="hint" style="margin-top:1rem">
+    {% if report.can_run %}
+    系统可在降级模式下运行：海外 / GitHub 失败不会阻断国内采集。
+    {% else %}
+    请先修复数据库连接（SQLite 路径或 Postgres DATABASE_URL）。
+    {% endif %}
+  </p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="hint" style="margin-bottom:0.75rem;">
+  <a href="{{ back_url }}">← 返回列表</a>
+</p>
+<h1>关联分析</h1>
+<p class="hint">按<strong>摘要核心关键词</strong>相近聚合（并保留同一作者的其他作品）。不以粗标签或空标题硬凑关联。</p>
+
+<article class="item related-seed">
+  <div class="meta" style="margin-bottom:0.35rem;"><span class="badge on">当前条目</span>
+    {% if seed.item_type %}<span class="badge cat">{{ type_label }}</span>{% endif %}
+  </div>
+  <h2><a href="{{ seed.url }}" target="_blank" rel="noopener">{{ seed.title }}</a></h2>
+  <div class="meta">
+    {% if seed.category %}<span class="badge cat">{{ seed.category }}</span>{% endif %}
+    {% if seed.author %}<span class="time">作者 {{ seed.author }}</span>{% endif %}
+    {% if seed.time_label %}<span class="time">{{ seed.time_prefix }}{{ seed.time_label }}</span>{% endif %}
+    {% if seed.tags %}
+      {% for t in seed.tags %}<span class="badge tag">{{ t }}</span>{% endfor %}
+    {% endif %}
+  </div>
+  {% if seed.summary %}<p class="summary">{{ seed.summary }}</p>{% endif %}
+  <div class="actions">
+    <a class="btn" href="{{ seed.url }}" target="_blank" rel="noopener">打开原文</a>
+  </div>
+</article>
+
+{% if not groups %}
+  <p class="empty">暂未找到足够强的关联条目。可先采集更多同类型数据，或完善作者 / 标签信息。</p>
+{% else %}
+  {% for section_title, hits in groups %}
+  <h2 class="related-section-title">{{ section_title }} <span class="mono">/ {{ hits|length }}</span></h2>
+  {% for hit in hits %}
+  <article class="item">
+    <div class="meta" style="margin-bottom:0.35rem;">
+      {% for r in hit.reasons %}<span class="badge on">{{ r }}</span>{% endfor %}
+      <span class="time">相关度 {{ hit.score }}</span>
+    </div>
+    <h2><a href="{{ hit.item.url }}" target="_blank" rel="noopener">{{ hit.item.title }}</a></h2>
+    <div class="meta">
+      {% if hit.item.category %}<span class="badge cat">{{ hit.item.category }}</span>{% endif %}
+      {% if hit.item.author %}<span class="time">作者 {{ hit.item.author }}</span>{% endif %}
+      {% if hit.item.time_label %}<span class="time">{{ hit.item.time_prefix }}{{ hit.item.time_label }}</span>{% endif %}
+    </div>
+    {% if hit.item.summary %}<p class="summary">{{ hit.item.summary }}</p>{% endif %}
+    <div class="actions">
+      <a class="btn" href="{{ hit.item.url }}" target="_blank" rel="noopener">打开原文</a>
+      <a class="btn" href="/items/{{ hit.item.id }}/related">关联</a>
+    </div>
+  </article>
+  {% endfor %}
+  {% endfor %}
+{% endif %}
+{% endblock %}

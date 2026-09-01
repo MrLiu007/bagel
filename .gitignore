@@ -1,0 +1,18 @@
+# Local / generated — never commit
+data/
+*.pyc
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+.env
+*.egg-info/
+dist/
+build/
+.coverage
+htmlcov/
+.DS_Store
+
+# Third-party MediaCrawler is cloned locally, not vendored (see third_party/README.md)
+third_party/MediaCrawler/

@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block head %}
+<style>
+  article.brief-body {
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 1.25rem 1.35rem;
+    background: var(--brief-surface);
+    color: var(--fg);
+    line-height: 1.7;
+    box-shadow: var(--shadow-soft);
+  }
+  article.brief-body h1 { font-size: 1.35rem; color: var(--fg); }
+  article.brief-body h2 {
+    font-size: 1.15rem; margin-top: 1.75rem; color: var(--fg);
+    border-bottom: 1px solid var(--line); padding-bottom: 0.35rem;
+  }
+  article.brief-body p, article.brief-body li { color: var(--summary); }
+  article.brief-body h3.brief-item-title,
+  article.brief-body h4.brief-item-title {
+    font-size: 1.02rem; margin: 0.35rem 0 0.75rem; color: var(--fg);
+    padding: 0.55rem 0.75rem; border-left: 3px solid var(--accent);
+    background: var(--brief-inset); border-radius: 0 var(--radius) var(--radius) 0;
+  }
+  article.brief-body .item-index {
+    margin: 1.5rem 0 0.35rem; color: var(--accent); font-size: 0.9rem; font-weight: 650;
+    font-family: var(--font-mono);
+  }
+  article.brief-body hr.item-sep {
+    border: none; border-top: 1px dashed var(--hr-dashed); margin: 1.75rem 0 0.5rem;
+  }
+  article.brief-body blockquote {
+    margin: 0.6rem 0; padding: 0.55rem 0.8rem;
+    border-left: 3px solid var(--accent-2); color: var(--muted); background: var(--brief-inset);
+  }
+  article.brief-body a { color: var(--accent-2); }
+  article.brief-body pre {
+    overflow: auto; padding: 0.75rem; border: 1px solid var(--line); border-radius: var(--radius);
+    background: var(--code-bg); font-size: 0.82rem; font-family: var(--font-mono); color: var(--fg);
+  }
+  article.brief-body table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin: 0.75rem 0; }
+  article.brief-body th, article.brief-body td {
+    border: 1px solid var(--line); padding: 0.4rem 0.5rem; text-align: left; vertical-align: top;
+    color: var(--summary);
+  }
+  article.brief-body th { background: var(--brief-inset); color: var(--fg); }
+  .share-guide {
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 0.85rem 1rem;
+    margin: 0 0 1rem; background: var(--soft-bg); color: var(--muted); font-size: 0.88rem; line-height: 1.55;
+  }
+  .share-guide strong { color: var(--accent-2); }
+</style>
+{% endblock %}
+{% block content %}
+<h1>汇总</h1>
+{% include "briefs_tabs.html" %}
+
+{% if kind == 'STOCK' %}
+{% include "_stock_disclaimer.html" %}
+{% endif %}
+
+<p class="hint">
+  {% if kind == 'STOCK' %}
+  股票总结为<strong>投屏讲解终稿</strong>（事实 → 标的/主题 → 情绪与分歧 → 情报启示）。
+  {% else %}
+  四类总结均为<strong>投屏讲解终稿</strong>（新闻 / 项目 / 论文 / 自媒体结构不同）。
+  {% endif %}
+  支持<strong>月总结</strong>与<strong>周总结</strong>；按<strong>原文发布时间</strong>纳入。
+  可导出 Markdown。当前为<strong>{{ cadence_label }}</strong>。
+</p>
+
+<div class="toolbar">
+  <form method="get" action="{{ list_url }}" style="display:flex;gap:0.5rem;align-items:center;">
+    <input type="hidden" name="period" value="{{ period }}" />
+    <label for="month" style="color:var(--muted);font-size:0.85rem;">{% if period == 'week' %}周次{% else %}月份{% endif %}</label>
+    <select id="month" name="month" onchange="this.form.submit()">
+      {% if period_options %}
+        {% for opt in period_options %}
+        <option value="{{ opt.value }}" {% if opt.value == current_month %}selected{% endif %}>{{ opt.label }}</option>
+        {% endfor %}
+      {% else %}
+        <option value="{{ current_month }}">{{ current_month }}</option>
+      {% endif %}
+    </select>
+  </form>
+  <form method="post" action="/briefs/generate">
+    <input type="hidden" name="kind" value="{{ kind }}" />
+    <input type="hidden" name="year_month" value="{{ current_month }}" />
+    <input type="hidden" name="period" value="{{ period }}" />
+    <button type="submit">生成 / 刷新{{ scope_label }}</button>
+  </form>
+  <a class="btn primary" href="{{ export_url }}">导出 Markdown</a>
+</div>
+
+{% if brief %}
+  <p class="meta">
+    {{ brief.title }} · 纳入 {{ brief.item_count }} 条 · 生成于 {{ brief.generated_at }}
+  </p>
+  <article class="brief-body">{{ article_html | safe }}</article>
+{% else %}
+  <p class="empty">
+    尚无 {{ current_month }} 的{{ cadence_label }}。请确认该{% if period == 'week' %}周{% else %}月{% endif %}已有采集数据，然后点击「生成 / 刷新{{ scope_label }}」。
+  </p>
+{% endif %}
+{% endblock %}

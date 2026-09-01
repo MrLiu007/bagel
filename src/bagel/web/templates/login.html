@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="login-panel">
+  <h1>登录</h1>
+  <p class="hint">默认账号 <code>liuzemin</code> / <code>123456</code>（可在系统设置 → 用户管理中修改）。</p>
+  {% if error %}<p class="msg warn">{{ error }}</p>{% endif %}
+  <form method="post" action="/login" class="login-form">
+    <label>用户名
+      <input type="text" name="username" required autofocus autocomplete="username" />
+    </label>
+    <label>密码
+      <input type="password" name="password" required autocomplete="current-password" />
+    </label>
+    <button class="primary" type="submit">登录</button>
+  </form>
+</section>
+{% endblock %}

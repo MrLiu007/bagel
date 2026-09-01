@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block head %}
+<style>
+  article.brief-body {
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 1.25rem 1.35rem;
+    background: var(--brief-surface); color: var(--fg); line-height: 1.7; box-shadow: var(--shadow-soft);
+  }
+  article.brief-body h1, article.brief-body h2 { color: var(--fg); }
+  article.brief-body p, article.brief-body li { color: var(--summary); }
+  article.brief-body a { color: var(--accent-2); }
+</style>
+{% endblock %}
+{% block content %}
+<h1>{{ title }}</h1>
+{% include "_stock_disclaimer.html" %}
+<p class="hint">
+  多视角草稿仅引用站内资讯证据链。
+  <a href="/stocks/symbol/{{ symbol }}">← 返回标的页</a>
+</p>
+{% if draft.error %}
+<p class="msg warn">{{ draft.error }}</p>
+{% endif %}
+{% if article_html %}
+<article class="brief-body">{{ article_html | safe }}</article>
+{% else %}
+<p class="empty">未能生成草稿。</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}{{ title }} · 贝果{% endblock %}</title>
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("intel-theme");
+        if (t === "light" || t === "dark") {
+          document.documentElement.setAttribute("data-theme", t);
+        }
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="/static/css/theme.css" />
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="/">AI INTEL</a>
+    <nav class="site-nav">
+      {% for label, href, key in nav %}
+      <a href="{{ href }}" class="{% if active == key %}active{% endif %}">{{ label }}</a>
+      {% endfor %}
+    </nav>
+    <div class="header-right">
+      <div class="theme-switch" role="group" aria-label="主题色">
+        <button type="button" class="theme-btn" data-theme-set="light" title="白色主题" aria-label="白色主题">白</button>
+        <button type="button" class="theme-btn" data-theme-set="dark" title="黑色主题" aria-label="黑色主题">黑</button>
+      </div>
+      {% if request is defined and request.session.get('username') %}
+      <div class="user-chip">
+        <span>{{ request.session.get('username') }}</span>
+        <a href="/logout">退出</a>
+      </div>
+      {% endif %}
+    </div>
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  <script>
+  (function () {
+    function applyTheme(theme) {
+      if (theme !== "light" && theme !== "dark") theme = "dark";
+      document.documentElement.setAttribute("data-theme", theme);
+      try { localStorage.setItem("intel-theme", theme); } catch (e) {}
+      document.querySelectorAll("[data-theme-set]").forEach(function (btn) {
+        btn.classList.toggle("on", btn.getAttribute("data-theme-set") === theme);
+      });
+    }
+    var current = document.documentElement.getAttribute("data-theme") || "dark";
+    applyTheme(current);
+    document.querySelectorAll("[data-theme-set]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        applyTheme(btn.getAttribute("data-theme-set"));
+      });
+    });
+  })();
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

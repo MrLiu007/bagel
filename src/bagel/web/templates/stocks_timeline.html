@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ title }}</h1>
+{% include "_stock_disclaimer.html" %}
+<p class="hint">
+  近 <strong>{{ days }}</strong> 天股票资讯按发布日聚合；右侧为出现频次较高的标的。
+  <a href="/stocks">← 列表</a> ·
+  <a href="/stocks/timeline?days=7">7 天</a> ·
+  <a href="/stocks/timeline?days=14">14 天</a> ·
+  <a href="/stocks/timeline?days=30">30 天</a>
+</p>
+
+{% if symbols %}
+<div class="panel">
+  <h2 style="font-size:1rem;margin:0 0 0.75rem;font-family:var(--font-mono);">热门标的</h2>
+  <div class="symbol-cloud">
+    {% for s in symbols %}
+    <a class="badge ticker" href="/stocks/symbol/{{ s.symbol }}">{{ s.symbol }} · {{ s.count }}</a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% if not timeline %}
+<p class="empty">近 {{ days }} 天暂无股票资讯。请先 <a href="/collect">采集股票</a>。</p>
+{% else %}
+  {% for day in timeline %}
+  <section class="panel timeline-day">
+    <div class="timeline-head">
+      <strong class="mono">{{ day.day }}</strong>
+      <span class="meta">共 {{ day.count }} 条 ·
+        <span class="badge sentiment bullish">多 {{ day.bullish }}</span>
+        <span class="badge sentiment bearish">空 {{ day.bearish }}</span>
+        <span class="badge sentiment mixed">分歧 {{ day.mixed }}</span>
+        <span class="badge sentiment neutral">中 {{ day.neutral }}</span>
+      </span>
+    </div>
+    {% if day.themes %}
+    <div class="meta" style="margin-bottom:0.65rem;">
+      {% for th, n in day.themes %}<span class="badge tag">{{ th }} · {{ n }}</span>{% endfor %}
+    </div>
+    {% endif %}
+    {% for item in day.items %}
+      {% set vm = present_item(item) %}
+      <article class="item" style="margin-bottom:0.55rem;">
+        <h2 style="font-size:0.98rem;"><a href="{{ vm.url }}" target="_blank" rel="noopener">{{ vm.title }}</a></h2>
+        <div class="meta">
+          {% if vm.category %}<span class="badge cat">{{ vm.category }}</span>{% endif %}
+          {% if vm.sentiment %}<span class="badge sentiment {{ vm.sentiment }}">{{ vm.sentiment }}</span>{% endif %}
+          {% for t in vm.tickers[:4] %}
+          <a class="badge ticker" href="/stocks/symbol/{{ t.symbol }}">{{ t.symbol }}</a>
+          {% endfor %}
+          <span class="time">{{ vm.time_label }}</span>
+        </div>
+      </article>
+    {% endfor %}
+  </section>
+  {% endfor %}
+{% endif %}
+{% endblock %}

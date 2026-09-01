@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ title }}</h1>
+{% if active == 'stocks' or show_stock_disclaimer %}
+{% include "_stock_disclaimer.html" %}
+{% endif %}
+{% if page_intro %}
+<p class="hint">{{ page_intro | safe }}</p>
+{% endif %}
+{% if page_actions %}
+<div class="actions" style="margin-bottom:1rem;">
+  {% for a in page_actions %}
+  <a class="btn{% if a.primary %} primary{% endif %}" href="{{ a.href }}">{{ a.label }}</a>
+  {% endfor %}
+</div>
+{% endif %}
+{% if message %}<p class="msg">{{ message }}</p>{% endif %}
+{% include "_items_list.html" %}
+{% endblock %}

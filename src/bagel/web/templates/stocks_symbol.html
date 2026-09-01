@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block head %}
+<style>
+  .kline-wrap { position: relative; width: 100%; height: 280px; margin: 0.75rem 0 1rem; }
+  .kline-wrap canvas { width: 100%; height: 100%; display: block; border: 1px solid var(--line); border-radius: var(--radius); background: var(--soft-bg); }
+  .event-dot-legend { font-size: 0.8rem; color: var(--muted); margin-top: 0.35rem; }
+</style>
+{% endblock %}
+{% block content %}
+<h1>{{ bundle.symbol }} <span class="mono">{{ bundle.name }}</span></h1>
+{% include "_stock_disclaimer.html" %}
+<p class="hint">
+  近 {{ days }} 天关联资讯 <strong>{{ bundle.count }}</strong> 条 · {{ bundle.exchange }}
+  · <a href="/stocks/timeline">时间线</a>
+  · <a href="/stocks">列表</a>
+</p>
+
+<div class="viz-strip">
+  <div class="viz-card"><div class="label">资讯数</div><div class="value">{{ bundle.count }}</div></div>
+  <div class="viz-card"><div class="label">偏多</div><div class="value">{{ bundle.sentiment_counts.get('bullish', 0) }}</div></div>
+  <div class="viz-card"><div class="label">偏空</div><div class="value">{{ bundle.sentiment_counts.get('bearish', 0) }}</div></div>
+  <div class="viz-card"><div class="label">分歧</div><div class="value">{{ bundle.sentiment_counts.get('mixed', 0) }}</div></div>
+</div>
+
+{% if bundle.themes %}
+<div class="meta" style="margin-bottom:1rem;">
+  {% for th, n in bundle.themes %}<span class="badge tag">{{ th }} · {{ n }}</span>{% endfor %}
+</div>
+{% endif %}
+
+{% if market_enabled %}
+<section class="panel">
+  <h2 style="font-size:1rem;margin:0 0 0.35rem;font-family:var(--font-mono);">只读行情（公开数据）</h2>
+  <p class="hint" style="margin-top:0;">收盘价折线 + 资讯发布时间标记。失败时可能因网络/标的代码不支持。</p>
+  {% if ohlc and ohlc.error %}
+  <p class="msg warn">行情不可用：{{ ohlc.error }}</p>
+  {% elif ohlc and ohlc.bars %}
+  <div class="kline-wrap"><canvas id="kline" width="960" height="280"></canvas></div>
+  <p class="event-dot-legend">圆点 = 资讯日 · 绿偏多 / 红偏空 / 灰中性</p>
+  {% else %}
+  <p class="empty">暂无 OHLC 数据。</p>
+  {% endif %}
+</section>
+{% else %}
+<p class="hint">行情可视化已关闭（ENABLE_STOCK_MARKET_DATA=false）。</p>
+{% endif %}
+
+<div class="actions" style="margin-bottom:1rem;">
+  {% if research_enabled %}
+  <form method="post" action="/stocks/symbol/{{ bundle.symbol }}/research?days={{ days }}">
+    <button class="primary" type="submit">生成行研草稿</button>
+  </form>
+  {% endif %}
+  <a class="btn" href="/briefs/stocks">股票汇总</a>
+</div>
+
+{% for item in items %}
+<article class="item">
+  <h2><a href="{{ item.url }}" target="_blank" rel="noopener">{{ item.title }}</a></h2>
+  <div class="meta">
+    {% if item.category %}<span class="badge cat">{{ item.category }}</span>{% endif %}
+    {% if item.sentiment %}<span class="badge sentiment {{ item.sentiment }}">{{ item.sentiment }}</span>{% endif %}
+    <span class="time">{{ item.time_label }}</span>
+  </div>
+  {% if item.summary %}<p class="summary">{{ item.summary }}</p>{% endif %}
+</article>
+{% endfor %}
+{% endblock %}
+
+{% block scripts %}
+{% if ohlc and ohlc.bars %}
+<script>
+(function(){
+  const bars = {{ ohlc.bars | tojson }};
+  const events = {{ events | tojson }};
+  const canvas = document.getElementById('kline');
+  if (!canvas || !bars.length) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  const pad = {l: 48, r: 16, t: 16, b: 28};
+  const closes = bars.map(b => b.c);
+  const min = Math.min(...closes), max = Math.max(...closes);
+  const span = Math.max(max - min, 1e-6);
+  const xAt = (i) => pad.l + (i / Math.max(bars.length - 1, 1)) * (w - pad.l - pad.r);
+  const yAt = (v) => pad.t + (1 - (v - min) / span) * (h - pad.t - pad.b);
+  ctx.clearRect(0,0,w,h);
+  ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--line-strong').trim() || '#888';
+  ctx.beginPath();
+  bars.forEach((b,i) => {
+    const x = xAt(i), y = yAt(b.c);
+    if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+  const t0 = bars[0].t, t1 = bars[bars.length-1].t;
+  const xForTs = (ts) => {
+    if (t1 === t0) return pad.l;
+    return pad.l + ((ts - t0) / (t1 - t0)) * (w - pad.l - pad.r);
+  };
+  events.forEach(ev => {
+    if (ev.t < t0 || ev.t > t1) return;
+    const x = xForTs(ev.t);
+    let color = '#7d8b9a';
+    if (ev.sentiment === 'bullish') color = '#0b8a62';
+    if (ev.sentiment === 'bearish') color = '#c93c3c';
+    if (ev.sentiment === 'mixed') color = '#b86a0c';
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x, pad.t + 8, 4, 0, Math.PI*2);
+    ctx.fill();
+  });
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim() || '#888';
+  ctx.font = '12px monospace';
+  ctx.fillText(max.toFixed(2), 4, pad.t + 10);
+  ctx.fillText(min.toFixed(2), 4, h - pad.b);
+})();
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ title }} <span class="mono">/ gewe</span></h1>
+<p class="hint">
+  个人微信通过三方 <strong>Gewe</strong> HTTP API + Webhook 接入，避免自研协议风控。
+  Token / AppId 仅放 .env。{{ docs_hint }}
+</p>
+
+<div class="viz-strip">
+  <div class="viz-card">
+    <div class="label">Feature</div>
+    <div class="value">{% if status.enabled %}ON{% else %}OFF{% endif %}</div>
+  </div>
+  <div class="viz-card">
+    <div class="label">Config</div>
+    <div class="value" style="font-size:0.95rem;">{% if status.configured %}READY{% else %}NEED ENV{% endif %}</div>
+  </div>
+  <div class="viz-card">
+    <div class="label">Keywords</div>
+    <div class="value" style="font-size:0.95rem;">{{ status.keywords|length }}</div>
+  </div>
+</div>
+
+<div class="panel">
+  {% if not status.enabled %}
+  <p class="hint">请在 .env 设置 <code>ENABLE_WECHAT=true</code>、<code>GEWE_TOKEN</code>、<code>GEWE_APP_ID</code> 后重启。</p>
+  {% elif not status.configured %}
+  <p class="hint warn">Token 或 AppId 缺失。</p>
+  {% else %}
+  <span class="status-pill ok"><span class="dot"></span> Gewe 凭证已配置</span>
+  {% endif %}
+
+  <div class="row" style="margin-top:0.85rem;">
+    <div>
+      <div class="kw">Callback</div>
+      <div class="meta" style="word-break:break-all;">{{ callback_url }}</div>
+    </div>
+  </div>
+  <div class="row">
+    <div>
+      <div class="kw">关键词</div>
+      <div class="meta">{{ status.keywords | join(', ') or '（未配置，将接收全部）' }}</div>
+    </div>
+  </div>
+  {% if online_error %}
+  <p class="hint warn">在线检测：{{ online_error }}</p>
+  {% elif online %}
+  <p class="hint ok">checkOnline 响应已收到（详见 API JSON）。</p>
+  {% endif %}
+</div>
+
+<h2 style="font-size:1.05rem;margin:1.5rem 0 0.75rem;">命中消息</h2>
+{% include "_items_list.html" %}
+{% endblock %}

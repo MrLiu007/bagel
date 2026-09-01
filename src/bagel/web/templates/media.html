@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ title }} <span class="mono">/ media</span></h1>
+<p class="hint">
+  关键词在本页<strong>动态填写</strong>。多平台会<strong>依次</strong>各启动一次 MediaCrawler（单次只能一个平台）。
+  抓取完成后<strong>不会整页刷新</strong>，平台勾选与关键词会保留。{{ docs_hint }}
+</p>
+
+<div class="panel">
+  <div class="viz-strip" style="margin-bottom:0.75rem;">
+    <div class="viz-card">
+      <div class="label">Feature</div>
+      <div class="value">{% if status.enabled %}ON{% else %}OFF{% endif %}</div>
+    </div>
+    <div class="viz-card">
+      <div class="label">Path</div>
+      <div class="value" style="font-size:0.95rem;">{% if status.path_exists %}OK{% elif status.path_configured %}MISS{% else %}—{% endif %}</div>
+    </div>
+    <div class="viz-card">
+      <div class="label">Login</div>
+      <div class="value" style="font-size:0.95rem;">{{ status.login_type }}</div>
+    </div>
+  </div>
+
+  {% if not status.enabled %}
+  <p class="hint">默认已开启；若仍显示关闭，请检查 .env 是否被覆盖。</p>
+  {% elif not status.path_exists %}
+  <p class="hint warn">MEDIA_CRAWLER_PATH 无效：{{ status.path }}</p>
+  {% else %}
+  <span class="status-pill ok"><span class="dot"></span> MediaCrawler 目录就绪</span>
+  {% if status.playwright_ok is defined and not status.playwright_ok %}
+  <p class="hint" style="margin-top:0.65rem;">
+    将优先使用本机 <strong>Google Chrome</strong> 弹窗扫码。
+  </p>
+  {% elif status.playwright_ok %}
+  <p class="hint" style="margin-top:0.65rem;">Playwright Chromium 亦已就绪；抓取时会弹出浏览器窗口。</p>
+  {% endif %}
+  {% endif %}
+
+  <details class="hint" style="margin-top:0.85rem;">
+    <summary style="cursor:pointer;font-weight:600;">扫码与降频说明</summary>
+    <ol style="margin:0.5rem 0 0 1.1rem;line-height:1.55;">
+      <li>二维码在弹出的 <strong>Chrome</strong> 窗口（非本页）。</li>
+      <li>建议每次只勾 1 个平台、1 个关键词；默认限约 8 条、间隔约 6 秒。</li>
+      <li>抓取时请盯住<strong>运行 bagel 的控制台</strong>：三方日志以 <code>[MediaCrawler/小红书]</code> 开头完整打印；0 条会显示 <code>[failed]</code> 而不是成功。</li>
+      <li>关键词请用逗号：<code>AI,教育</code>（不要写成整词「AI 教育」）。</li>
+    </ol>
+  </details>
+
+  <form id="crawlForm" style="margin-top:1rem;">
+    <div class="meta" style="margin-bottom:0.35rem;">选择平台（建议先只勾 1 个完成登录，再多选）</div>
+    <div class="platform-grid">
+      {% for code, label in platforms %}
+      <label>
+        <input type="checkbox" name="platforms" value="{{ code }}"
+          {% if code in selected_platforms %}checked{% endif %} />
+        {{ label }}
+      </label>
+      {% endfor %}
+    </div>
+    <label class="meta" for="keywords">关键词（逗号分隔，本页每次抓取可不同）</label>
+    <div class="inline" style="margin-top:0.35rem;">
+      <input id="keywords" type="text" name="keywords" value="{{ keywords }}" style="flex:1;" />
+      <button class="primary" id="crawlBtn" type="submit" {% if not status.enabled or not status.path_exists %}disabled data-disabled="1"{% endif %}>
+        开始抓取
+      </button>
+    </div>
+  </form>
+
+  <div class="progress-wrap" style="margin-top:0.85rem;">
+    <div class="bar"><span id="bar"></span></div>
+    <div class="meta" id="meta">尚未开始抓取</div>
+    <div class="hint" id="tips" style="margin-top:0.45rem;display:none;"></div>
+  </div>
+</div>
+
+<div id="itemsPanel">
+{% include "_items_list.html" %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const bar = document.getElementById('bar');
+  const meta = document.getElementById('meta');
+  const tips = document.getElementById('tips');
+  const crawlBtn = document.getElementById('crawlBtn');
+  const form = document.getElementById('crawlForm');
+  const itemsPanel = document.getElementById('itemsPanel');
+  const FORM_KEY = 'mediaCrawlFormV1';
+  let timer = null;
+  let activeId = null;
+
+  function setBusy(busy) {
+    if (!crawlBtn) return;
+    crawlBtn.disabled = busy || crawlBtn.hasAttribute('data-disabled');
+  }
+
+  function showTips(text, isWarn) {
+    if (!tips) return;
+    if (!text) {
+      tips.style.display = 'none';
+      tips.textContent = '';
+      return;
+    }
+    tips.style.display = 'block';
+    tips.className = isWarn ? 'hint warn' : 'hint';
+    tips.textContent = text;
+  }
+
+  function saveForm() {
+    try {
+      const platforms = [...form.querySelectorAll('input[name="platforms"]:checked')].map(el => el.value);
+      const keywords = (document.getElementById('keywords')?.value || '').trim();
+      sessionStorage.setItem(FORM_KEY, JSON.stringify({ platforms, keywords }));
+    } catch (_) {}
+  }
+
+  function restoreForm() {
+    try {
+      const raw = sessionStorage.getItem(FORM_KEY);
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      if (Array.isArray(data.platforms) && data.platforms.length) {
+        form.querySelectorAll('input[name="platforms"]').forEach(el => {
+          el.checked = data.platforms.includes(el.value);
+        });
+      }
+      if (typeof data.keywords === 'string' && data.keywords.trim()) {
+        const kw = document.getElementById('keywords');
+        if (kw) kw.value = data.keywords;
+      }
+    } catch (_) {}
+  }
+
+  async function refreshItems() {
+    if (!itemsPanel) return;
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('fragment', 'items');
+      const resp = await fetch(url.toString(), { headers: { 'Accept': 'text/html' } });
+      if (!resp.ok) return;
+      itemsPanel.innerHTML = await resp.text();
+    } catch (_) {}
+  }
+
+  function render(state) {
+    const pct = state.percent || 0;
+    bar.style.width = pct + '%';
+    const cls = state.status === 'failed' ? 'warn' : (state.status === 'success' ? 'ok' : '');
+    const result = state.result || {};
+    const counts = state.result
+      ? ` · 发现 ${result.items_found ?? '-'} / 新建 ${result.items_created ?? '-'} / 更新 ${result.items_updated ?? '0'}`
+      : '';
+    const failedPlats = Array.isArray(result.platforms_failed) ? result.platforms_failed : [];
+    const skipNote = failedPlats.length
+      ? ` · 已跳过 ${failedPlats.map(f => f.label || f.platform).join('、')}`
+      : '';
+    const err = state.error ? (' · ' + state.error) : '';
+    meta.innerHTML = `<span class="${cls}">[${state.status}]</span> ${state.message || ''}${counts}${skipNote}${err} · ${pct}%`;
+
+    const hint = result.hint || '';
+    if (state.status === 'failed') {
+      showTips(
+        (state.error || hint || '抓取失败') +
+          '。可先只勾一个平台、一个关键词重试；扫码看弹出的浏览器窗口。',
+        true
+      );
+    } else if (hint && (state.status === 'success' || failedPlats.length)) {
+      showTips(hint, !!failedPlats.length || (result.items_found === 0));
+    } else if (state.status === 'running' && /扫码|登录|浏览器/.test(state.message || '')) {
+      showTips('请切换到弹出的 Chrome / 二维码窗口完成扫码；本页仅更新进度，不会整页刷新。', false);
+    } else if (state.status === 'running') {
+      showTips('进度仅局部更新；平台勾选与关键词会保留。', false);
+    }
+
+    if (state.status === 'success' || state.status === 'failed') {
+      setBusy(false);
+      if (timer) { clearInterval(timer); timer = null; }
+      if (state.status === 'success') {
+        const settled = meta.innerHTML;
+        meta.innerHTML = settled + ' · 正在局部刷新列表…';
+        refreshItems().finally(() => {
+          // Refreshing is transient — never leave it on the final success line.
+          meta.innerHTML = settled;
+        });
+      }
+    }
+  }
+
+  async function poll(id) {
+    const resp = await fetch('/api/tasks/' + id);
+    if (resp.status === 404) {
+      meta.innerHTML = '<span class="warn">任务不存在或已过期，请重新抓取</span>';
+      showTips('服务重启后内存任务会丢失；请再点「开始抓取」。', true);
+      setBusy(false);
+      if (timer) { clearInterval(timer); timer = null; }
+      return;
+    }
+    if (!resp.ok) return;
+    render(await resp.json());
+  }
+
+  form.addEventListener('change', saveForm);
+  form.addEventListener('input', saveForm);
+  restoreForm();
+
+  form.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    saveForm();
+    setBusy(true);
+    showTips('任务启动中…若首次登录，请留意桌面弹出的浏览器窗口。', false);
+    meta.textContent = '任务启动中…';
+    bar.style.width = '0%';
+    const body = new FormData(form);
+    const resp = await fetch('/api/media/crawl', { method: 'POST', body });
+    const state = await resp.json();
+    if (!resp.ok) {
+      meta.textContent = state.detail || '启动失败';
+      showTips(state.detail || '启动失败', true);
+      setBusy(false);
+      return;
+    }
+    activeId = state.id;
+    render(state);
+    if (timer) clearInterval(timer);
+    timer = setInterval(() => poll(activeId), 800);
+  });
+
+  {% if latest_task and latest_task.status in ['pending', 'running'] %}
+  activeId = {{ latest_task.id|tojson }};
+  setBusy(true);
+  render({{ latest_task|tojson }});
+  timer = setInterval(() => poll(activeId), 800);
+  {% elif latest_task %}
+  render({{ latest_task|tojson }});
+  {% endif %}
+</script>
+{% endblock %}

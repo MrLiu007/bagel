@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<section class="home-hero">
+  <h1>Bagel <span>贝果</span></h1>
+  <p>AI 情报采集、审阅与汇总。默认 SQLite 本地库；可选 Postgres、定时任务与飞书推送。</p>
+  <div class="viz-strip">
+    <div class="viz-card"><div class="label">Mode</div><div class="value">Manual</div></div>
+    <div class="viz-card"><div class="label">Version</div><div class="value">v{{ version }}</div></div>
+    <div class="viz-card"><div class="label">Theme</div><div class="value">Geek</div></div>
+  </div>
+  <div class="home-actions">
+    <a class="btn primary" href="/collect">手动采集</a>
+    <a class="btn" href="/news">AI新闻</a>
+    <a class="btn" href="/github">GitHub</a>
+    <a class="btn" href="/papers">论文</a>
+    <a class="btn" href="/stocks">股票</a>
+    <a class="btn" href="/media">自媒体</a>
+    <a class="btn" href="/wechat">微信</a>
+    <a class="btn" href="/briefs">汇总</a>
+    <a class="btn" href="/settings">系统设置</a>
+  </div>
+</section>
+{% endblock %}

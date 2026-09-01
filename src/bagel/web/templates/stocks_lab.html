@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block head %}
+<style>
+  .lab-hero { margin-bottom: 1.25rem; }
+  .flow-box, .lab-step {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--soft-bg);
+    padding: 1rem 1.1rem;
+    margin: 0.85rem 0 1.25rem;
+    color: var(--summary);
+    line-height: 1.65;
+  }
+  .flow-box ol { margin: 0.35rem 0 0; padding-left: 1.25rem; }
+  .flow-box li { margin: 0.35rem 0; color: var(--summary); }
+  .flow-arrow { color: var(--muted); text-align: center; margin: 0.25rem 0; font-family: var(--font-mono); }
+  .lab-note {
+    border-left: 3px solid var(--warn);
+    background: var(--brief-inset);
+    padding: 0.75rem 0.9rem;
+    margin: 0.75rem 0 1.5rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+    line-height: 1.55;
+  }
+  .lab-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 0.85rem;
+    margin: 1rem 0 1.5rem;
+  }
+  .lab-card {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--panel);
+    padding: 1rem;
+    box-shadow: var(--shadow-soft);
+  }
+  .lab-card h3 { margin: 0 0 0.45rem; font-size: 1rem; color: var(--fg); }
+  .lab-card p { margin: 0; color: var(--summary); font-size: 0.9rem; line-height: 1.55; }
+  .lab-card .tag {
+    display: inline-block; margin-top: 0.65rem;
+    font-family: var(--font-mono); font-size: 0.72rem;
+    color: var(--accent-2); border: 1px solid var(--badge-cat-border);
+    padding: 0.1rem 0.4rem; border-radius: 2px;
+  }
+</style>
+{% endblock %}
+{% block content %}
+<div class="lab-hero">
+  <h1>{{ title }}</h1>
+  {% include "_stock_disclaimer.html" %}
+  <p class="hint">
+    二期已上线：标的/主题抽取、情绪标签、事件时间线、只读行情对齐、行研草稿、股票周/月汇总。
+    三期（真回测 / 多 Agent 实盘级）仍明确不做。
+    <a href="/stocks">← 股票列表</a> ·
+    <a href="/stocks/timeline">时间线</a> ·
+    <a href="/briefs/stocks">股票汇总</a>
+  </p>
+</div>
+
+<div class="lab-grid">
+  <div class="lab-card">
+    <h3>一期 · 已上线</h3>
+    <p>可配置国内外股票资讯源、列表审核、关联分析、收藏。与 AI 新闻 INCLUDE 规则隔离。</p>
+    <span class="tag">LIST + RSS</span>
+  </div>
+  <div class="lab-card">
+    <h3>二期 · 已上线</h3>
+    <p>资讯 enrichment、时间线/标的页、公开行情只读折线+事件点、LLM 多视角草稿、股票汇总 Tab。</p>
+    <span class="tag">NEWS + CHART + DRAFT</span>
+  </div>
+  <div class="lab-card">
+    <h3>三期 · 仍不做</h3>
+    <p>因子搜索、策略回测引擎、一句话买卖。需要独立行情库与风控，不在本贝果产品里硬塞。</p>
+    <span class="tag">NOT YET</span>
+  </div>
+</div>
+
+<section>
+  <h2 style="font-size:1.1rem;margin:0 0 0.5rem;">实战 1：挖因子（候选 Alpha，不是已验证 Alpha）</h2>
+  <p class="hint">AI 产出<strong>候选</strong>后必须再经 IC、分层回测、样本外检验。本站<strong>不提供</strong>自动挖因子。</p>
+  <div class="flow-box">
+    <ol>
+      <li>输入：价量 / 财务等基础数据</li>
+      <li class="flow-arrow">↓</li>
+      <li>AI 搜索与组合因子表达式</li>
+      <li class="flow-arrow">↓</li>
+      <li>输出候选因子 → 检验 → 候选 Alpha</li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <h2 style="font-size:1.1rem;margin:0 0 0.5rem;">实战 2：自然语言 → 策略原型 → 回测</h2>
+  <p class="hint">二期仅做到「资讯 → 标的页可视化」；完整回测属于三期。</p>
+  <div class="flow-box">
+    <ol>
+      <li>自然语言描述策略想法</li>
+      <li class="flow-arrow">↓</li>
+      <li>生成代码与回测配置 → 收益/回撤 → 迭代原型</li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <h2 style="font-size:1.1rem;margin:0 0 0.5rem;">实战 3：多角色行研（轻量版已上）</h2>
+  <p class="hint">标的页「生成行研草稿」提供看多 / 看空 / 中性 + 证据链；完整 TradingAgents 编排仍属三期。</p>
+  <div class="flow-box">
+    <ol>
+      <li>输入：站内关联资讯（证据）</li>
+      <li class="flow-arrow">↓</li>
+      <li>看多 ↔ 看空 ↔ 中性综合 + 风险点</li>
+      <li class="flow-arrow">↓</li>
+      <li>可追溯 Markdown 草稿（非买卖指令）</li>
+    </ol>
+  </div>
+</section>
+
+<div class="actions">
+  <a class="btn primary" href="/stocks/timeline">打开时间线</a>
+  <a class="btn" href="/stocks">股票列表</a>
+  <a class="btn" href="/settings?tab=stocks">配置股票源</a>
+</div>
+{% endblock %}

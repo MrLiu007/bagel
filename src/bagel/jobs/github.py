@@ -1,0 +1,299 @@
+"""GitHub collection job — queries, releases, and star snapshots."""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import Any
+
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
+
+from bagel.collectors.github import COLLECTOR_VERSION, GithubCollector
+from bagel.domain.enums import ItemStatus, JobStatus
+from bagel.pipeline.category import classify_title
+from bagel.pipeline.filter import apply_keyword_rules
+from bagel.pipeline.recency import (
+    github_query_with_recency,
+    is_within_lookback,
+    sort_key_published,
+)
+from bagel.pipeline.textutil import strip_html, truncate
+from bagel.settings import Settings, get_settings
+from bagel.storage.repositories import (
+    GithubQueryRepository,
+    GithubSnapshotRepository,
+    ItemRepository,
+    JobRunRepository,
+    KeywordRuleRepository,
+    RawEvidenceRepository,
+)
+
+ProgressCallback = Callable[..., None]
+
+
+def _item_label(title: str | None, url: str | None) -> str:
+    label = (title or url or "unknown").strip()
+    return label[:80] + ("…" if len(label) > 80 else "")
+
+
+def run_collect_github(
+    session: Session,
+    settings: Settings | None = None,
+    *,
+    on_progress: ProgressCallback | None = None,
+) -> dict[str, Any]:
+    settings = settings or get_settings()
+    jobs = JobRunRepository(session)
+    run = jobs.start("collect_github")
+
+    def progress(current: int, total: int, message: str) -> None:
+        if on_progress:
+            on_progress(current=current, total=total, message=message)
+
+    if not settings.enable_github:
+        jobs.finish(
+            run,
+            status=JobStatus.SUCCESS,
+            error_message="GitHub collection disabled",
+        )
+        progress(1, 1, "GitHub 采集已关闭")
+        return {
+            "run_id": str(run.id),
+            "status": JobStatus.SUCCESS,
+            "items_found": 0,
+            "items_created": 0,
+            "items_updated": 0,
+            "items_skipped": 0,
+            "errors": ["GitHub collection disabled"],
+        }
+
+    query_repo = GithubQueryRepository(session)
+    queries = list(query_repo.list_enabled())
+    rules = KeywordRuleRepository(session).list_enabled()
+    collector = GithubCollector(settings)
+    items_repo = ItemRepository(session)
+    evidence_repo = RawEvidenceRepository(session)
+    snapshots_repo = GithubSnapshotRepository(session)
+
+    found = created = updated = skipped = 0
+    errors: list[str] = []
+    seen_repos: set[str] = set()
+    total = len(queries)
+    lookback_days = settings.collect_lookback_days
+    progress(0, total, f"准备执行 {total} 组 GitHub Query（近 {lookback_days} 天）…")
+
+    for index, query in enumerate(queries, start=1):
+        progress(index - 1, total, f"查询中 ({index}/{total})：{query.name}")
+        recent_q = github_query_with_recency(query.query, days=lookback_days)
+        try:
+            result = collector.search_repos(query, query_override=recent_q)
+        except Exception as exc:  # noqa: BLE001
+            session.rollback()
+            query_repo.mark_run(query, result_count=0, error=str(exc)[:200])
+            errors.append(f"{query.name}: {exc}")
+            progress(index, total, f"失败：{query.name}")
+            continue
+
+        if not result.ok:
+            query_repo.mark_run(query, result_count=0, error=result.error_code)
+            errors.append(f"{query.name}: {result.error_code}")
+            progress(index, total, f"失败：{query.name} ({result.error_code})")
+            continue
+
+        query_repo.mark_run(query, result_count=result.result_count, error=None)
+
+        for snap in result.snapshots:
+            name = snap.get("repo_full_name")
+            if not name:
+                continue
+            try:
+                with session.begin_nested():
+                    snapshots_repo.record(
+                        repo_full_name=name,
+                        stars=int(snap.get("stars") or 0),
+                        forks=int(snap.get("forks") or 0),
+                        open_issues=int(snap.get("open_issues") or 0),
+                    )
+                seen_repos.add(name)
+            except SQLAlchemyError:
+                continue
+
+        repo_items = sorted(
+            result.items,
+            key=lambda n: sort_key_published(n.published_at),
+            reverse=True,
+        )
+        for normalized in repo_items:
+            if not is_within_lookback(
+                normalized.published_at,
+                days=lookback_days,
+                keep_unknown=False,
+            ):
+                skipped += 1
+                continue
+            found += 1
+            label = _item_label(normalized.title, normalized.url)
+            try:
+                with session.begin_nested():
+                    filt = apply_keyword_rules(normalized.title, normalized.summary, rules)
+                    evidence = evidence_repo.create(
+                        source_type=normalized.source_type,
+                        source_url=normalized.url,
+                        external_id=normalized.external_id,
+                        raw_payload=normalized.raw_payload,
+                        http_status=normalized.http_status,
+                        etag=normalized.etag,
+                        last_modified=normalized.last_modified,
+                        collector_version=COLLECTOR_VERSION,
+                    )
+                    meta = dict(normalized.metadata or {})
+                    repo_name = meta.get("repo_full_name")
+                    if repo_name:
+                        delta = snapshots_repo.star_delta(repo_name, days=7)
+                        if delta is not None and delta > 0:
+                            meta["star_delta_7d"] = delta
+                            meta["change_type"] = meta.get("change_type") or "STAR_GROWTH"
+                    meta["filter"] = {
+                        "include": filt.matched_include,
+                        "exclude": filt.matched_exclude,
+                        "boost": filt.matched_boost,
+                    }
+                    summary = truncate(normalized.summary or normalized.content, 400) or None
+                    category = classify_title(normalized.title, summary)
+                    tags = list(
+                        {*(normalized.tags or []), *filt.matched_include, *filt.matched_boost}
+                    )
+                    status = filt.status if filt.accepted else ItemStatus.REJECTED
+                    score = float(meta.get("stars") or 0) / 1000.0 + filt.score
+
+                    _item, was_created = items_repo.upsert_from_normalized(
+                        item_type=normalized.item_type,
+                        source_type=normalized.source_type,
+                        source_id=None,
+                        title=strip_html(normalized.title) or normalized.title,
+                        url=normalized.url,
+                        summary=summary,
+                        content=normalized.content,
+                        author=normalized.author,
+                        language=normalized.language,
+                        published_at=normalized.published_at,
+                        tags=tags,
+                        topics=list({*(normalized.topics or []), category}),
+                        category=category,
+                        metadata=meta,
+                        raw_evidence_id=evidence.id,
+                        status=status,
+                        score=score,
+                    )
+                    if was_created:
+                        created += 1
+                    else:
+                        updated += 1
+            except (SQLAlchemyError, ValueError, TypeError) as exc:
+                skipped += 1
+                errors.append(f"{query.name}/{label}: {exc.__class__.__name__}")
+                continue
+
+        try:
+            session.commit()
+        except SQLAlchemyError as exc:
+            session.rollback()
+            errors.append(f"{query.name}: commit failed ({exc.__class__.__name__})")
+            progress(index, total, f"提交失败：{query.name}")
+            continue
+        progress(index, total, f"完成：{query.name}（累计新建 {created}，跳过 {skipped}）")
+
+    release_targets = list(seen_repos)[:5]
+    for offset, repo_name in enumerate(release_targets, start=1):
+        progress(total + offset - 1, total + len(release_targets), f"Release：{repo_name}")
+        try:
+            release = collector.fetch_latest_release(repo_name)
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"release/{repo_name}: {exc}")
+            continue
+        if not release:
+            continue
+        if not is_within_lookback(release.published_at, days=lookback_days, keep_unknown=False):
+            skipped += 1
+            continue
+        found += 1
+        label = _item_label(release.title, release.url)
+        try:
+            with session.begin_nested():
+                evidence = evidence_repo.create(
+                    source_type=release.source_type,
+                    source_url=release.url,
+                    external_id=release.external_id,
+                    raw_payload=release.raw_payload,
+                    collector_version=COLLECTOR_VERSION,
+                )
+                summary = truncate(release.summary or release.content, 400) or None
+                category = classify_title(release.title, summary)
+                _item, was_created = items_repo.upsert_from_normalized(
+                    item_type=release.item_type,
+                    source_type=release.source_type,
+                    source_id=None,
+                    title=strip_html(release.title) or release.title,
+                    url=release.url,
+                    summary=summary,
+                    content=release.content,
+                    author=release.author,
+                    published_at=release.published_at,
+                    tags=list(release.tags or []),
+                    topics=list({*(release.topics or []), category}),
+                    category=category,
+                    metadata=dict(release.metadata or {}),
+                    raw_evidence_id=evidence.id,
+                    status=ItemStatus.CANDIDATE,
+                    score=1.0,
+                )
+                if was_created:
+                    created += 1
+                else:
+                    updated += 1
+            session.commit()
+        except (SQLAlchemyError, ValueError, TypeError) as exc:
+            session.rollback()
+            skipped += 1
+            errors.append(f"release/{label}: {exc.__class__.__name__}")
+            continue
+
+    status = JobStatus.SUCCESS
+    error_code = None
+    error_message = None
+    if errors and (created + updated) > 0:
+        status = JobStatus.PARTIAL
+        error_message = "; ".join(errors[:10])
+    elif errors and (created + updated) == 0:
+        status = (
+            JobStatus.PARTIAL
+            if found > 0 or any("NETWORK" in e or "RATE" in e or "AUTH" in e for e in errors)
+            else JobStatus.FAILED
+        )
+        error_message = "; ".join(errors[:10])
+        error_code = "GITHUB_COLLECT_ERRORS"
+
+    jobs.finish(
+        run,
+        status=status,
+        items_found=found,
+        items_created=created,
+        items_updated=updated,
+        error_code=error_code,
+        error_message=error_message,
+    )
+    try:
+        session.commit()
+    except SQLAlchemyError:
+        session.rollback()
+    final_total = total + len(release_targets)
+    progress(final_total, final_total, f"GitHub 采集结束：新建 {created}，更新 {updated}，跳过 {skipped}")
+    return {
+        "run_id": str(run.id),
+        "status": status,
+        "items_found": found,
+        "items_created": created,
+        "items_updated": updated,
+        "items_skipped": skipped,
+        "errors": errors,
+    }

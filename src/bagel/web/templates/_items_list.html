@@ -1,0 +1,78 @@
+{% if platform_tabs is defined and platform_tabs %}
+<div class="tabs">
+  {% for code, label in platform_tabs %}
+  <a href="{{ base_path }}?{% if kind %}kind={{ kind }}&{% endif %}{% if code %}platform={{ code }}&{% endif %}{% if category %}category={{ category|urlencode }}&{% endif %}page_size={{ page_size }}"
+     class="{% if platform_filter == code %}on{% endif %}">{{ label }}</a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if categories is defined and categories %}
+<div class="toolbar">
+  <a href="{{ cat_all_url | default(base_path) }}" class="{% if not category %}on{% endif %}">全部</a>
+  {% for c in categories %}
+  <a href="{{ category_urls.get(c) if category_urls is defined else (base_path ~ '?category=' ~ (c|urlencode) ~ '&page_size=' ~ page_size) }}"
+     class="{% if category == c %}on{% endif %}">{{ c }}</a>
+  {% endfor %}
+  <span class="count">共 {{ total }} 条 · 第 {{ page }}/{{ total_pages }} 页</span>
+</div>
+{% elif total is defined %}
+<div class="toolbar"><span class="count">共 {{ total }} 条</span></div>
+{% endif %}
+
+{% if not items %}
+  <p class="empty">{{ empty_hint | default('暂无条目。请先前往 <a href="/collect">手动采集</a> 拉取数据；过滤标签可在 <a href="/settings">系统设置</a> 配置。') | safe }}</p>
+{% else %}
+  {% for item in items %}
+  <article class="item" data-item-id="{{ item.id }}">
+    <h2><a href="{{ item.url }}" target="_blank" rel="noopener">{{ item.title }}</a></h2>
+    <div class="meta">
+      {% if item.is_new %}<span class="badge on">新</span>{% endif %}
+      {% if item.category %}<span class="badge cat">{{ item.category }}</span>{% endif %}
+      {% if item.sentiment %}
+        <span class="badge sentiment {{ item.sentiment }}">
+          {% if item.sentiment == 'bullish' %}偏多
+          {% elif item.sentiment == 'bearish' %}偏空
+          {% elif item.sentiment == 'mixed' %}分歧
+          {% else %}中性{% endif %}
+        </span>
+      {% endif %}
+      {% if item.tickers %}
+        {% for t in item.tickers[:4] %}
+        <a class="badge ticker" href="/stocks/symbol/{{ t.symbol }}">{{ t.symbol }}</a>
+        {% endfor %}
+      {% endif %}
+      {% if item.themes %}
+        {% for th in item.themes %}<span class="badge tag">{{ th }}</span>{% endfor %}
+      {% endif %}
+      {% if item.author %}<span class="time">{{ item.author }}</span>{% endif %}
+      {% if item.time_label %}<span class="time">{{ item.time_prefix }}{{ item.time_label }}</span>{% endif %}
+      {% if item.is_favorite %}<span class="badge on">收藏</span>{% endif %}
+      {% if item.tags and not item.tickers %}
+        {% for t in item.tags %}<span class="badge tag">{{ t }}</span>{% endfor %}
+      {% endif %}
+    </div>
+    {% if item.summary %}<p class="summary">{{ item.summary }}</p>{% endif %}
+    <div class="actions">
+      <form method="post" action="/items/{{ item.id }}/action">
+        <input type="hidden" name="next" value="{{ return_url }}" />
+        <input type="hidden" name="action" value="{% if item.is_favorite %}unfavorite{% else %}favorite{% endif %}" />
+        <button type="submit">{% if item.is_favorite %}取消收藏{% else %}收藏{% endif %}</button>
+      </form>
+      {% if item.show_related %}
+      <a class="btn" href="/items/{{ item.id }}/related">关联</a>
+      {% endif %}
+    </div>
+  </article>
+  {% endfor %}
+
+  {% if total_pages and total_pages > 1 %}
+  <div class="pager">
+    {% if prev_url %}<a href="{{ prev_url }}">上一页</a>{% else %}<span class="disabled">上一页</span>{% endif %}
+    {% for p in pages %}
+      <a href="{{ p.url }}" class="{% if p.active %}active{% endif %}">{{ p.num }}</a>
+    {% endfor %}
+    {% if next_url %}<a href="{{ next_url }}">下一页</a>{% else %}<span class="disabled">下一页</span>{% endif %}
+  </div>
+  {% endif %}
+{% endif %}
