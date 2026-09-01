@@ -1,0 +1,80 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: intel
+      POSTGRES_PASSWORD: intel
+      POSTGRES_DB: intel
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U intel -d intel"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  rsshub:
+    image: diygod/rsshub:latest
+    environment:
+      CACHE_TYPE: memory
+      NODE_ENV: production
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:1200/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  freshrss:
+    image: freshrss/freshrss:latest
+    environment:
+      TZ: Asia/Shanghai
+      CRON_MIN: "1,31"
+    volumes:
+      - freshrss_data:/var/www/FreshRSS/data
+    # Not exposed publicly by default; debug via profile "debug"
+    restart: unless-stopped
+
+  app:
+    build: .
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://intel:intel@postgres:5432/intel
+      RSSHUB_BASE_URL: http://rsshub:1200
+      FRESHRSS_BASE_URL: http://freshrss
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    volumes:
+      - ./data:/app/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rsshub:
+        condition: service_started
+      freshrss:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  # Optional: expose FreshRSS for ops debugging
+  # docker compose --profile debug up -d
+  freshrss-debug:
+    profiles: ["debug"]
+    image: freshrss/freshrss:latest
+    network_mode: "service:freshrss"
+    ports:
+      - "8080:80"
+
+volumes:
+  postgres_data:
+  freshrss_data:

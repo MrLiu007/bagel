@@ -13,7 +13,7 @@
 - [x] GitHub repos & releases
 - [x] 论文源
 - [x] 股票资讯源 + enrichment / timeline / research draft
-- [x] MediaCrawler 自媒体
+- [x] MediaCrawler 自媒体（本机克隆，不进 git；`bagel setup-media`）
 - [x] Gewe 微信
 - [x] Reddit RSS seeds
 - [x] 关键词过滤（INCLUDE / EXCLUDE）

@@ -108,6 +108,10 @@ class Settings(BaseSettings):
     enable_media_crawler: bool = True
     media_crawler_enabled: bool = True
     media_crawler_path: str = "./third_party/MediaCrawler"
+    # Auto git-clone on startup when checkout missing (source stays gitignored)
+    media_crawler_auto_setup: bool = True
+    media_crawler_git_url: str = ""  # empty → GitHub upstream; set mirror if needed
+    media_crawler_git_ref: str = "main"
     media_crawler_cmd: str = "uv run main.py"
     media_crawler_platforms: str = "xhs"
     media_crawler_keywords: str = "AI,教育"

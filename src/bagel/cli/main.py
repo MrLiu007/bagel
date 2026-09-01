@@ -104,11 +104,24 @@ def dev(
     bind_host = host or settings.app_host
     bind_port = port or settings.app_port
     console.print(f"Starting Bagel on http://{bind_host}:{bind_port}")
+    # Exclude MediaCrawler / data / venvs — startup may touch bagel_entry.py and
+    # MediaCrawler writes runtime files; watching them causes infinite reload loops.
+    reload_excludes = [
+        "third_party/MediaCrawler/*",
+        "third_party\\MediaCrawler\\*",
+        "data/*",
+        "data\\*",
+        ".venv/*",
+        "**/.venv/*",
+        "**/__pycache__/*",
+        "**/*.pyc",
+    ]
     uvicorn.run(
         "bagel.main:app",
         host=bind_host,
         port=bind_port,
         reload=reload,
+        reload_excludes=reload_excludes if reload else None,
         log_level=settings.log_level.lower(),
     )
 

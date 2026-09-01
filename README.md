@@ -65,6 +65,7 @@ uv run bagel dev --host 127.0.0.1 --port 8000 --reload
 - **源码不进 git**（`third_party/MediaCrawler/` 已 ignore），仓库保持精简。
 - **默认启动时**：若开启自媒体且本地还没有 MediaCrawler，会自动 `git clone` 到本机（仅首次/缺失时）。
 - **GitHub 在海外**：clone 可能需 **VPN / 代理**，或 `.env` 设置 `MEDIA_CRAWLER_GIT_URL` 镜像。失败不阻断主站。
+- **`--reload` 热重载**：已排除 `third_party/MediaCrawler` 与 `data/`；入口 shim 仅在内容变化时写入，避免控制台无限 Reloading。
 - 若你曾 `git add .` 导致提交报 submodule 错，按文档修复索引即可。
 
 详见 **[docs/git-and-mediacrawler.md](./docs/git-and-mediacrawler.md)**。

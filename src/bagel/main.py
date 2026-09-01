@@ -47,6 +47,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     import logging
 
     from bagel.jobs.scheduler import start_scheduler, stop_scheduler
+    from bagel.services.media_setup import ensure_mediacrawler_on_startup
     from bagel.storage.database import init_db
 
     log = logging.getLogger(__name__)
@@ -54,6 +55,11 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         init_db(seed=True)
     except Exception as exc:  # noqa: BLE001 — boot even if DB temporarily down
         log.warning("init_db failed: %s", exc)
+    try:
+        # Keeps git repo small: MediaCrawler is gitignored and cloned on first boot if missing.
+        ensure_mediacrawler_on_startup()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("mediacrawler ensure failed: %s", exc)
     try:
         start_scheduler()
     except Exception as exc:  # noqa: BLE001

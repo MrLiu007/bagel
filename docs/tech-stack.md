@@ -36,7 +36,7 @@
 | --- | --- | --- |
 | AI 新闻 | feedparser + httpx | 官方 RSS / RSSHub |
 | GitHub | GitHub REST + httpx | Search / Release / stars 快照 |
-| 自媒体 | **MediaCrawler**（外部进程） | 小红书/抖音/B 站等；本仓库不内嵌其源码（非商业学习许可） |
+| 自媒体 | MediaCrawler（外部进程，本机 `bagel setup-media` 克隆） | 小红书等；源码不进本仓库 |
 | 微信 | **Gewe API**（HTTP） | 个人微信消息通道；风控由三方协议承担 |
 | 调度（可选） | APScheduler | 当前默认手动采集 |
 

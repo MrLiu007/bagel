@@ -1,0 +1,55 @@
+[project]
+name = "bagel"
+version = "0.3.0"
+description = "Bagel（贝果）— AI 情报采集、审阅、汇总与飞书推送"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "liuzemin", email = "liuzemin@skyline.com.cn" }
+]
+requires-python = ">=3.14"
+keywords = ["ai", "rss", "news", "github", "feishu", "bagel"]
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "sqlalchemy>=2.0.36",
+    "alembic>=1.14.0",
+    "pydantic-settings>=2.7.0",
+    "httpx>=0.28.0",
+    "jinja2>=3.1.5",
+    "psycopg[binary]>=3.2.0",
+    "python-dotenv>=1.0.1",
+    "feedparser>=6.0.11",
+    "apscheduler>=3.10.4",
+    "typer>=0.15.0",
+    "rich>=13.9.0",
+    "python-multipart>=0.0.32",
+    "itsdangerous>=2.2.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/liuzemin/bagel"
+Documentation = "https://github.com/liuzemin/bagel#readme"
+Issues = "https://github.com/liuzemin/bagel/issues"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.25.0",
+    "httpx>=0.28.0",
+]
+
+[project.scripts]
+bagel = "bagel.cli.main:app"
+
+[build-system]
+requires = ["uv_build>=0.11.8,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+pythonpath = ["src"]
+
+[tool.uv]
+package = true

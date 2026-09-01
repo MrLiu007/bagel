@@ -104,7 +104,26 @@ Playwright 浏览器内核下载同样可能受网络影响，需在 MediaCrawle
 
 ---
 
-## 5. 相关配置（`.env`）
+## 5. `bagel dev --reload` 一直 Reloading？
+
+若控制台反复出现：
+
+```text
+WatchFiles detected changes in 'third_party\MediaCrawler\bagel_entry.py'. Reloading...
+```
+
+原因：启动时安装入口 shim 会写该文件，而热重载监视了整个仓库 → 写文件 → 重启 → 再写 → 循环。站点仍可访问，但日志刷屏。
+
+当前版本已修复：
+
+1. shim **内容未变则不写盘**（不碰 mtime）  
+2. `bagel dev` 的 `reload_excludes` 排除 `third_party/MediaCrawler` 与 `data/`
+
+请更新代码后重新执行 `uv run bagel dev --host 127.0.0.1 --port 8000 --reload`。
+
+---
+
+## 6. 相关配置（`.env`）
 
 ```env
 ENABLE_MEDIA_CRAWLER=true
