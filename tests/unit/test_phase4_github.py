@@ -110,7 +110,7 @@ def test_collect_github_with_mock_api(db: Session) -> None:
     assert any(i.source_type == SourceType.GITHUB for i in items)
 
 
-def test_github_network_failure_is_partial(db: Session) -> None:
+def test_github_network_failure_is_failed_with_errors(db: Session) -> None:
     seed_if_empty(db)
     for q in db.query(IntelGithubQuery).all():
         q.enabled = False
@@ -123,6 +123,7 @@ def test_github_network_failure_is_partial(db: Session) -> None:
     with patch.object(GithubCollector, "_get_json", side_effect=boom):
         result = run_collect_github(db)
 
-    assert result["status"] == JobStatus.PARTIAL
+    assert result["status"] == JobStatus.FAILED
     assert result["items_created"] == 0
     assert result["errors"]
+    assert result.get("error") or result.get("hint")

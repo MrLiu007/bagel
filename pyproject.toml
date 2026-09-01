@@ -28,9 +28,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/liuzemin/bagel"
-Documentation = "https://github.com/liuzemin/bagel#readme"
-Issues = "https://github.com/liuzemin/bagel/issues"
+Homepage = "https://github.com/MrLiu007/bagel"
+Documentation = "https://github.com/MrLiu007/bagel#readme"
+Issues = "https://github.com/MrLiu007/bagel/issues"
 
 [project.optional-dependencies]
 dev = [
@@ -53,3 +53,5 @@ pythonpath = ["src"]
 
 [tool.uv]
 package = true
+# Windows often cannot hardlink from the uv cache across drives/filesystems.
+link-mode = "copy"

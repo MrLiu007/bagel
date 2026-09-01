@@ -1,4 +1,8 @@
-"""Normalize collector payloads into IntelItem-ready dicts."""
+"""Normalize collector payloads into `NormalizedItem` DTOs.
+
+All collectors should funnel through helpers here (or equivalent) so URL
+canonicalization and datetime parsing stay consistent before upsert.
+"""
 
 from __future__ import annotations
 

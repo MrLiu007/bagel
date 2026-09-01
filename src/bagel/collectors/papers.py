@@ -13,7 +13,7 @@ import httpx
 
 from bagel.settings import get_settings
 
-USER_AGENT = "AI-bagel/0.2 (paper-collector; research)"
+USER_AGENT = "Bagel/0.3 (paper-collector; +https://github.com/MrLiu007/bagel)"
 
 
 @dataclass

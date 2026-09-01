@@ -1,4 +1,9 @@
-"""Database engine and session factory."""
+"""Database engine and session factory.
+
+Default backend is file-backed SQLite under `data/`. Postgres uses the same
+ORM models; call `alembic upgrade head` for production schema upgrades.
+`init_db` is safe for local MVP (create_all + light column patches + seed).
+"""
 
 from __future__ import annotations
 
@@ -28,6 +33,11 @@ def _ensure_sqlite_parent(database_url: str) -> None:
 
 
 def get_engine(url: str | None = None, *, echo: bool = False) -> Engine:
+    """Create (or return process-global) SQLAlchemy engine.
+
+    Passing an explicit ``url`` returns a one-off engine without touching the
+    process globals — used heavily by unit tests.
+    """
     global _engine, _SessionLocal
     database_url = url or get_settings().resolved_database_url
     _ensure_sqlite_parent(database_url)

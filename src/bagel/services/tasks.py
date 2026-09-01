@@ -1,4 +1,9 @@
-"""In-memory manual task runner with progress reporting (no scheduler)."""
+"""In-memory manual collect task runner with progress reporting.
+
+Powers `/collect` — runs jobs in background threads, persists recent task
+state under `data/task_state.json`, and survives process restart by marking
+in-flight tasks failed.
+"""
 
 from __future__ import annotations
 
@@ -249,30 +254,41 @@ class TaskManager:
             skipped = int((result or {}).get("items_skipped") or 0)
             created = int((result or {}).get("items_created") or 0)
             updated = int((result or {}).get("items_updated") or 0)
+            errors = (result or {}).get("errors") or []
+            if not isinstance(errors, list):
+                errors = [str(errors)]
+
+            def _err_text(*fallbacks: str) -> str:
+                for key in ("error", "hint"):
+                    val = (result or {}).get(key)
+                    if val:
+                        return str(val)[:500]
+                if errors:
+                    return "; ".join(str(e) for e in errors[:5])[:500]
+                for fb in fallbacks:
+                    if fb:
+                        return fb[:500]
+                return "任务失败"
+
             if result_status in {"FAILED", "ERROR"}:
-                err = str((result or {}).get("error") or (result or {}).get("hint") or "任务失败")
                 self._update(
                     task_id,
                     status="failed",
                     message="失败",
-                    error=err[:500],
+                    error=_err_text("任务失败"),
                     result=result,
                     finished_at=datetime.now(UTC).isoformat(),
+                    percent=100.0,
                 )
                 return
             # Guard: never mark green success when nothing was ingested.
             found = int((result or {}).get("items_found") or 0)
             if found <= 0 and created <= 0 and updated <= 0:
-                err = str(
-                    (result or {}).get("error")
-                    or (result or {}).get("hint")
-                    or "未抓取到任何内容"
-                )
                 self._update(
                     task_id,
                     status="failed",
                     message="失败（0 条）",
-                    error=err[:500],
+                    error=_err_text("未抓取到任何内容"),
                     result=result,
                     finished_at=datetime.now(UTC).isoformat(),
                     percent=100.0,
@@ -309,6 +325,9 @@ class TaskManager:
                 current=total,
             )
         except Exception as exc:  # noqa: BLE001
+            import logging
+
+            logging.getLogger(__name__).exception("task.failed id=%s kind=%s", task_id, kind)
             session.rollback()
             self._update(
                 task_id,

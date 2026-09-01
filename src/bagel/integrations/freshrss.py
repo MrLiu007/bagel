@@ -19,10 +19,10 @@ class FreshRssStatus:
 
 
 class FreshRssClient:
-    """Thin health/adapter wrapper.
+    """Thin health/adapter wrapper around optional FreshRSS infra.
 
-    Business items must live in PostgreSQL (IntelItem). FreshRSS is optional
-    RSS reading/parsing infrastructure and must not hold exclusive state.
+    Business items must live in the transactional DB (`IntelItem`). FreshRSS is
+    optional RSS reading infrastructure and must not hold exclusive state.
     """
 
     def __init__(self, settings: Settings | None = None) -> None:

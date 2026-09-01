@@ -1,4 +1,9 @@
-"""Application settings loaded from environment / .env only."""
+"""Application settings loaded from environment / `.env` only.
+
+UI overrides for scheduler / Feishu live in `data/runtime_config.json`
+(see `services.runtime_config`) and intentionally do not replace these env
+defaults for secrets and infrastructure URLs.
+"""
 
 from __future__ import annotations
 
@@ -25,6 +30,8 @@ DEFAULT_SQLITE_URL = "sqlite+pysqlite:///./data/bagel.db"
 
 
 class Settings(BaseSettings):
+    """Bagel runtime configuration (see `.env.example` for the full key list)."""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -206,4 +213,5 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
+    """Cached settings singleton — call ``cache_clear()`` after writing `.env`."""
     return Settings()

@@ -1,15 +1,47 @@
 # Architecture
 
 ```text
-User → Bagel (FastAPI / Jinja2)
+User → Bagel (FastAPI + Jinja2 + Typer CLI)
             │
-   ┌────────┼────────┐
-   ▼        ▼        ▼
-PostgreSQL  FreshRSS  RSSHub
-(business)  (RSS infra) (feed adapter)
+   ┌────────┼──────────────┐
+   ▼        ▼              ▼
+SQLite /  FreshRSS       RSSHub
+Postgres  (RSS infra)    (feed adapter)
+(business SoT)
 ```
 
-- PostgreSQL is the **only** business source of truth (`IntelItem`, `IntelRawEvidence`).
-- Collectors normalize into `IntelItem`; LLM never overwrites raw evidence.
+## Principles
+
+- **Transactional DB is the only business source of truth** (`IntelItem`, `IntelRawEvidence`).
+  Default is **SQLite** (`data/bagel.db`); PostgreSQL is optional for team / concurrent writes.
+- Collectors only collect. All external payloads normalize into `IntelItem` via `NormalizedItem`.
+- LLM output never overwrites raw evidence (`IntelRawEvidence`).
 - FreshRSS / RSSHub are hidden infrastructure (no public ports by default).
-- Network mode `AUTO` / `DIRECT` / `PROXY` with degraded operation when overseas/GitHub fails.
+- Network mode `AUTO` / `DIRECT` / `PROXY`: overseas / GitHub failures must not stop CN collection.
+- In-process APScheduler for scheduled jobs (idempotent; prefer single worker).
+- Optional Markdown **wiki export** (`WIKI_ENABLED`) is a read-only side channel for Obsidian / RAG — not a DB replacement.
+
+## Package layout
+
+| Package | Role |
+| --- | --- |
+| `domain/` | ORM models, enums, DTOs |
+| `collectors/` | Fetch external data only |
+| `pipeline/` | Normalize, filter, categorize, recency |
+| `storage/` | Engine, repositories, seed |
+| `jobs/` | Idempotent collect / digest / brief jobs |
+| `services/` | Business orchestration (auth, health, Feishu, LLM, …) |
+| `integrations/` | HTTP clients / external CLIs |
+| `web/` | FastAPI routes + Jinja templates |
+| `cli/` | `bagel` Typer entry |
+
+## Stack (summary)
+
+| Layer | Choice |
+| --- | --- |
+| Runtime | Python ≥ 3.14, uv |
+| Web | FastAPI, Uvicorn, Jinja2 |
+| ORM / migrate | SQLAlchemy 2.x, Alembic |
+| HTTP | httpx, feedparser |
+| Schedule | APScheduler |
+| LLM | OpenAI-compatible `chat/completions` (optional) |

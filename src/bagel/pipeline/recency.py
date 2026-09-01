@@ -32,12 +32,17 @@ def is_within_lookback(
 
 
 def github_query_with_recency(query: str, *, days: int, now: datetime | None = None) -> str:
-    """Append pushed:>YYYY-MM-DD when the query has no explicit date filter."""
+    """Append ``pushed:>YYYY-MM-DD`` when the query has no explicit date filter.
+
+    Do **not** wrap the base query in parentheses — GitHub Search returns HTTP 422
+    for many ``(a OR b …) pushed:>date`` forms. Appending the qualifier is enough
+    for qualifier scoping on the whole query string.
+    """
     q = (query or "").strip()
     if not q or _DATE_FILTER_RE.search(q):
         return q
     since = lookback_cutoff(days, now=now).strftime("%Y-%m-%d")
-    return f"({q}) pushed:>{since}"
+    return f"{q} pushed:>{since}"
 
 
 def sort_key_published(published_at: datetime | None) -> float:

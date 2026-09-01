@@ -1,4 +1,10 @@
-"""Repositories — all business persistence goes through PostgreSQL."""
+"""Repositories — transactional persistence for Bagel domain objects.
+
+SQLite is the default backend; PostgreSQL is optional. All collectors and
+jobs should write through these repositories so dedup and status rules stay
+consistent. Raw collector payloads are stored in `IntelRawEvidence` and must
+never be overwritten by LLM fields on `IntelItem`.
+"""
 
 from __future__ import annotations
 
@@ -31,6 +37,7 @@ _DOI_RE = re.compile(r"10\.\d{4,9}/[-._;()/:A-Z0-9]+", re.I)
 
 
 def extract_arxiv_id(text: str | None) -> str | None:
+    """Pull a bare arXiv id (e.g. ``2401.12345``) from a URL or free text."""
     if not text:
         return None
     m = _ARXIV_ID_RE.search(text)
@@ -38,6 +45,7 @@ def extract_arxiv_id(text: str | None) -> str | None:
 
 
 def extract_doi(text: str | None) -> str | None:
+    """Normalize a DOI string, stripping resolver prefixes when present."""
     if not text:
         return None
     cleaned = text.strip()
@@ -52,6 +60,7 @@ def extract_doi(text: str | None) -> str | None:
 
 
 def canonicalize_url(url: str) -> str:
+    """Stable URL key used for upsert / uniqueness (strips tracking params)."""
     raw = (url or "").strip()
     parsed = urlparse(raw)
     netloc = parsed.netloc.lower()
@@ -76,12 +85,14 @@ def canonicalize_url(url: str) -> str:
 
 
 def normalize_title(title: str) -> str:
+    """Lowercase + collapse whitespace for title-based hashing."""
     t = title.strip().lower()
     t = re.sub(r"\s+", " ", t)
     return t
 
 
 def content_hash(canonical_url: str, title: str) -> str:
+    """SHA-256 of canonical URL + normalized title (secondary uniqueness key)."""
     payload = f"{canonical_url}|{normalize_title(title)}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 

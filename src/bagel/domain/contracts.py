@@ -1,4 +1,4 @@
-"""Shared domain contracts / DTOs."""
+"""Shared domain contracts / DTOs exchanged between collectors and storage."""
 
 from __future__ import annotations
 
@@ -10,7 +10,12 @@ from pydantic import BaseModel, Field
 
 
 class NormalizedItem(BaseModel):
-    """Collector → pipeline intermediate contract."""
+    """Collector → pipeline intermediate contract.
+
+    Collectors must emit this shape; repositories persist it as `IntelItem`
+    plus optional `IntelRawEvidence`. LLM summaries live on the item row only
+    and must never replace `raw_payload`.
+    """
 
     item_type: str
     source_type: str
@@ -31,16 +36,3 @@ class NormalizedItem(BaseModel):
     http_status: int | None = None
     etag: str | None = None
     last_modified: str | None = None
-
-
-class ItemReviewAction(BaseModel):
-    item_id: UUID
-    action: str  # favorite | ignore | top | deep_read | tag
-    value: bool | str | list[str] | None = None
-
-
-class HealthCheckResult(BaseModel):
-    name: str
-    ok: bool
-    message: str = ""
-    degraded: bool = False

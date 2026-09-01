@@ -24,7 +24,9 @@ def test_lookback_keeps_recent_only() -> None:
 def test_github_query_appends_pushed_filter() -> None:
     now = datetime(2026, 8, 30, tzinfo=UTC)
     q = github_query_with_recency("llm stars:>50", days=14, now=now)
-    assert "pushed:>2026-08-16" in q
+    assert q == "llm stars:>50 pushed:>2026-08-16"
+    # Must not wrap in parentheses — GitHub Search returns 422 for many "(q) pushed:>" forms.
+    assert not q.startswith("(")
     # idempotent when already dated
     assert github_query_with_recency(q, days=14, now=now) == q
     assert lookback_cutoff(14, now=now).day == 16

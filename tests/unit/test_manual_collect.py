@@ -5,10 +5,12 @@ from __future__ import annotations
 import time
 from unittest.mock import patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from bagel.main import create_app
 from bagel.services.tasks import TaskManager
+from bagel.settings import get_settings
 
 
 def test_task_manager_progress_and_success() -> None:
@@ -50,9 +52,14 @@ def test_collect_routes_registered() -> None:
     assert "/api/tasks/{task_id}" in paths
 
 
-def test_collect_page_renders() -> None:
-    client = TestClient(create_app())
-    resp = client.get("/collect")
-    assert resp.status_code == 200
-    assert "手动采集" in resp.text
-    assert "进度" in resp.text or "progress" in resp.text.lower() or "bar" in resp.text
+def test_collect_page_renders(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AUTH_REQUIRED", "false")
+    get_settings.cache_clear()
+    try:
+        client = TestClient(create_app())
+        resp = client.get("/collect")
+        assert resp.status_code == 200
+        assert "手动采集" in resp.text
+        assert "进度" in resp.text or "progress" in resp.text.lower() or "bar" in resp.text
+    finally:
+        get_settings.cache_clear()
