@@ -1,4 +1,8 @@
-"""Seed default sources, keyword rules, and GitHub queries."""
+"""Seed default sources, keyword rules, and GitHub queries on empty DBs.
+
+Idempotent: only inserts when the corresponding table has zero rows.
+Catalog of default news URLs is mirrored in `docs/default-news-sources.md`.
+"""
 
 from __future__ import annotations
 

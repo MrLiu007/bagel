@@ -50,7 +50,7 @@
 ## 最快上手
 
 ```bash
-git clone https://github.com/liuzemin/bagel.git
+git clone https://github.com/MrLiu007/bagel.git
 cd bagel
 cp .env.example .env
 uv sync
@@ -197,14 +197,12 @@ uv run bagel cli feishu-ask "把8月20号到8月21号的体操方向新闻发我
 | 文档 | 内容 |
 |------|------|
 | [AGENTS.md](./AGENTS.md) | 开发约束 |
-| [docs/git-and-mediacrawler.md](./docs/git-and-mediacrawler.md) | `git add .` 修复 + 启动自动 clone + VPN |
-| [docs/capabilities.md](./docs/capabilities.md) | 能力归档清单 |
-| [docs/architecture.md](./docs/architecture.md) | 架构原则 |
-| [docs/tech-stack.md](./docs/tech-stack.md) | 技术栈 |
+| [docs/architecture.md](./docs/architecture.md) | 架构原则与包结构 |
 | [docs/storage.md](./docs/storage.md) | SQLite / Postgres / Wiki |
 | [docs/data-model.md](./docs/data-model.md) | 数据模型 |
 | [docs/network.md](./docs/network.md) | 网络与代理 |
 | [docs/default-news-sources.md](./docs/default-news-sources.md) | 默认新闻源 |
+| [docs/git-and-mediacrawler.md](./docs/git-and-mediacrawler.md) | MediaCrawler 克隆与 git 注意点 |
 | [docs/user-config-media-wechat.md](./docs/user-config-media-wechat.md) | 自媒体 + 微信 |
 
 ---
@@ -234,12 +232,52 @@ docker compose up -d
 
 - **协议**：MIT（见 [LICENSE](./LICENSE)）
 - **品牌**：英文名 **Bagel**，中文名 **贝果**；Python 包 / CLI / 默认库文件均为 `bagel`
-- **第三方**：`third_party/MediaCrawler` 为外部工具集成，遵循其自身许可证；请勿当作本仓库核心代码一并再许可
+- **第三方**：见下方「依赖与致谢」；外部工具源码不随本仓库再许可
 - **免责**：股票相关能力仅供信息整理，**不构成投资建议**
 
 欢迎 Issue / PR。GitHub 仓库名建议使用 `bagel`。若本地目录仍叫 `ai-intel-center`，关闭占用后可自行改名为 `bagel`（包名与 CLI 已是 `bagel`，不影响运行）。
 
 若从旧版升级：默认库文件由 `data/intel.db` 改为 `data/bagel.db`；可将旧库改名或在 `.env` 里继续指向原路径。
+
+---
+
+## 依赖与致谢
+
+Bagel（贝果）站在开源社区肩膀上。下列为运行时/集成依赖与引用的第三方项目；**许可证与版权归原作者所有**，请在二次分发时一并遵守。
+
+### Python 运行时（`pyproject.toml` / `uv.lock`）
+
+| 项目 | 用途 |
+|------|------|
+| [FastAPI](https://github.com/fastapi/fastapi) / [Uvicorn](https://github.com/encode/uvicorn) / [Starlette](https://github.com/encode/starlette) | Web 与 ASGI |
+| [SQLAlchemy](https://github.com/sqlalchemy/sqlalchemy) / [Alembic](https://github.com/sqlalchemy/alembic) / [psycopg](https://github.com/psycopg/psycopg) | ORM、迁移、Postgres 驱动 |
+| [Pydantic Settings](https://github.com/pydantic/pydantic-settings) / [python-dotenv](https://github.com/theskumar/python-dotenv) | `.env` 配置 |
+| [httpx](https://github.com/encode/httpx) / [feedparser](https://github.com/kurtmckee/feedparser) | HTTP 与 RSS 解析 |
+| [APScheduler](https://github.com/agronholm/apscheduler) | 进程内定时任务 |
+| [Typer](https://github.com/fastapi/typer) / [Rich](https://github.com/Textualize/rich) | CLI |
+| [Jinja2](https://github.com/pallets/jinja) | 服务端模板 |
+| [uv](https://github.com/astral-sh/uv) | 包管理与锁定 |
+
+### 基础设施与外部 API（可选）
+
+| 项目 / 服务 | 用途 | 说明 |
+|-------------|------|------|
+| [RSSHub](https://github.com/DIYgod/RSSHub) | 无原生 RSS 站点的 feed 适配 | **不 fork**；Compose 可选依赖 |
+| [FreshRSS](https://github.com/FreshRSS/FreshRSS) | RSS 阅读基础设施 | **不 fork**；Compose 可选依赖 |
+| [GitHub REST API](https://docs.github.com/en/rest) | 仓库搜索 / Release / star 快照 | 建议配置 `GITHUB_TOKEN` |
+| OpenAI 兼容 LLM API | 摘要与润色（可选） | 任意兼容 `chat/completions` 的服务 |
+| Yahoo Finance 等行情源 | 股票时间线可视化（可选） | 可在配置中关闭 |
+| Gewe API | 个人微信消息桥接（可选） | 第三方 HTTP 协议；风控与合规由使用者自负 |
+
+### 本机克隆的外部工具（不进 git）
+
+| 项目 | 用途 | 说明 |
+|------|------|------|
+| [MediaCrawler](https://github.com/NanmiCoder/MediaCrawler) | 自媒体平台采集 | 默认 `bagel setup-media` / 启动时自动 clone 到 `third_party/MediaCrawler`（已 gitignore）；**遵循其自身许可证**，本仓库仅提供 `bagel_entry.py` 入口 shim |
+
+### 致谢
+
+感谢上述项目的作者与维护者，以及所有为 AI 情报、RSS、开源爬虫与 Python Web 生态做出贡献的人。若名单有遗漏，欢迎提 Issue / PR 补充。
 
 ---
 

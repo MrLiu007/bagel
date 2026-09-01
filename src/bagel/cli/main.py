@@ -100,10 +100,44 @@ def dev(
     reload: bool = True,
 ) -> None:
     """Start the FastAPI app for local development."""
+    import logging
+
     settings = get_settings()
     bind_host = host or settings.app_host
     bind_port = port or settings.app_port
-    console.print(f"Starting Bagel on http://{bind_host}:{bind_port}")
+    url = f"http://{bind_host}:{bind_port}"
+    console.print(f"[bold]Starting Bagel[/bold] on {url}")
+    if settings.auth_required:
+        console.print(
+            "[dim]Auth on — open the URL and sign in "
+            "(default [cyan]liuzemin[/cyan] / [cyan]123456[/cyan]). "
+            "Set AUTH_REQUIRED=false in .env to skip login locally.[/dim]"
+        )
+    else:
+        console.print("[dim]Auth off (AUTH_REQUIRED=false).[/dim]")
+
+    # Drop CDP / favicon probe noise from the access log (common on Windows IDE browsers).
+    class _QuietProbeFilter(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            try:
+                msg = record.getMessage()
+            except Exception:  # noqa: BLE001
+                return True
+            # uvicorn access lines: '127.0.0.1:1234 - "GET /json/version HTTP/1.1" 404'
+            return not any(
+                marker in msg
+                for marker in (
+                    "/json/version",
+                    "/json/list",
+                    '"GET /json ',
+                    "/favicon.ico",
+                    "/robots.txt",
+                    "/.well-known/",
+                )
+            )
+
+    logging.getLogger("uvicorn.access").addFilter(_QuietProbeFilter())
+
     # Exclude MediaCrawler / data / venvs — startup may touch bagel_entry.py and
     # MediaCrawler writes runtime files; watching them causes infinite reload loops.
     reload_excludes = [
@@ -115,6 +149,8 @@ def dev(
         "**/.venv/*",
         "**/__pycache__/*",
         "**/*.pyc",
+        ".idea/*",
+        ".pytest_cache/*",
     ]
     uvicorn.run(
         "bagel.main:app",

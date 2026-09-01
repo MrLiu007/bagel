@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from typing import Any
 
@@ -28,12 +29,21 @@ from bagel.storage.repositories import (
     RawEvidenceRepository,
 )
 
+logger = logging.getLogger(__name__)
 ProgressCallback = Callable[..., None]
 
 
 def _item_label(title: str | None, url: str | None) -> str:
     label = (title or url or "unknown").strip()
     return label[:80] + ("…" if len(label) > 80 else "")
+
+
+def _result_hint(errors: list[str], *, found: int, created: int) -> str | None:
+    if errors:
+        return "; ".join(errors[:8])
+    if found <= 0 and created <= 0:
+        return "未抓取到任何内容（请检查 GitHub Query、网络/代理或 GITHUB_TOKEN）"
+    return None
 
 
 def run_collect_github(
@@ -65,6 +75,7 @@ def run_collect_github(
             "items_updated": 0,
             "items_skipped": 0,
             "errors": ["GitHub collection disabled"],
+            "hint": "ENABLE_GITHUB=false",
         }
 
     query_repo = GithubQueryRepository(session)
@@ -80,27 +91,72 @@ def run_collect_github(
     seen_repos: set[str] = set()
     total = len(queries)
     lookback_days = settings.collect_lookback_days
+    logger.info(
+        "collect_github.start queries=%s lookback_days=%s token=%s proxy=%s",
+        total,
+        lookback_days,
+        bool(settings.github_token),
+        bool(settings.proxy_url),
+    )
+
+    if total == 0:
+        hint = "没有启用的 GitHub Query，请在系统设置中添加"
+        logger.warning("collect_github.empty_queries")
+        jobs.finish(run, status=JobStatus.FAILED, error_code="NO_QUERIES", error_message=hint)
+        try:
+            session.commit()
+        except SQLAlchemyError:
+            session.rollback()
+        progress(1, 1, hint)
+        return {
+            "run_id": str(run.id),
+            "status": JobStatus.FAILED,
+            "items_found": 0,
+            "items_created": 0,
+            "items_updated": 0,
+            "items_skipped": 0,
+            "errors": [hint],
+            "error": hint,
+            "hint": hint,
+        }
+
     progress(0, total, f"准备执行 {total} 组 GitHub Query（近 {lookback_days} 天）…")
 
     for index, query in enumerate(queries, start=1):
         progress(index - 1, total, f"查询中 ({index}/{total})：{query.name}")
         recent_q = github_query_with_recency(query.query, days=lookback_days)
+        logger.info("collect_github.query name=%s q=%s", query.name, recent_q)
         try:
             result = collector.search_repos(query, query_override=recent_q)
         except Exception as exc:  # noqa: BLE001
             session.rollback()
             query_repo.mark_run(query, result_count=0, error=str(exc)[:200])
             errors.append(f"{query.name}: {exc}")
+            logger.exception("collect_github.query_exception name=%s", query.name)
             progress(index, total, f"失败：{query.name}")
             continue
 
         if not result.ok:
-            query_repo.mark_run(query, result_count=0, error=result.error_code)
-            errors.append(f"{query.name}: {result.error_code}")
+            detail = result.error_message or result.error_code or "unknown"
+            query_repo.mark_run(query, result_count=0, error=str(result.error_code))
+            errors.append(f"{query.name}: {result.error_code} ({detail})")
+            logger.warning(
+                "collect_github.query_failed name=%s code=%s http=%s detail=%s",
+                query.name,
+                result.error_code,
+                result.http_status,
+                detail[:200],
+            )
             progress(index, total, f"失败：{query.name} ({result.error_code})")
             continue
 
         query_repo.mark_run(query, result_count=result.result_count, error=None)
+        logger.info(
+            "collect_github.query_ok name=%s api_count=%s items=%s",
+            query.name,
+            result.result_count,
+            len(result.items),
+        )
 
         for snap in result.snapshots:
             name = snap.get("repo_full_name")
@@ -192,6 +248,12 @@ def run_collect_github(
             except (SQLAlchemyError, ValueError, TypeError) as exc:
                 skipped += 1
                 errors.append(f"{query.name}/{label}: {exc.__class__.__name__}")
+                logger.warning(
+                    "collect_github.item_skip name=%s item=%s err=%s",
+                    query.name,
+                    label,
+                    exc,
+                )
                 continue
 
         try:
@@ -199,6 +261,7 @@ def run_collect_github(
         except SQLAlchemyError as exc:
             session.rollback()
             errors.append(f"{query.name}: commit failed ({exc.__class__.__name__})")
+            logger.exception("collect_github.commit_failed name=%s", query.name)
             progress(index, total, f"提交失败：{query.name}")
             continue
         progress(index, total, f"完成：{query.name}（累计新建 {created}，跳过 {skipped}）")
@@ -210,6 +273,7 @@ def run_collect_github(
             release = collector.fetch_latest_release(repo_name)
         except Exception as exc:  # noqa: BLE001
             errors.append(f"release/{repo_name}: {exc}")
+            logger.warning("collect_github.release_exception repo=%s err=%s", repo_name, exc)
             continue
         if not release:
             continue
@@ -265,11 +329,7 @@ def run_collect_github(
         status = JobStatus.PARTIAL
         error_message = "; ".join(errors[:10])
     elif errors and (created + updated) == 0:
-        status = (
-            JobStatus.PARTIAL
-            if found > 0 or any("NETWORK" in e or "RATE" in e or "AUTH" in e for e in errors)
-            else JobStatus.FAILED
-        )
+        status = JobStatus.FAILED
         error_message = "; ".join(errors[:10])
         error_code = "GITHUB_COLLECT_ERRORS"
 
@@ -287,6 +347,18 @@ def run_collect_github(
     except SQLAlchemyError:
         session.rollback()
     final_total = total + len(release_targets)
+    hint = _result_hint(errors, found=found, created=created)
+    logger.info(
+        "collect_github.done status=%s found=%s created=%s updated=%s skipped=%s errors=%s",
+        status,
+        found,
+        created,
+        updated,
+        skipped,
+        len(errors),
+    )
+    if errors:
+        logger.warning("collect_github.errors %s", "; ".join(errors[:10]))
     progress(final_total, final_total, f"GitHub 采集结束：新建 {created}，更新 {updated}，跳过 {skipped}")
     return {
         "run_id": str(run.id),
@@ -296,4 +368,6 @@ def run_collect_github(
         "items_updated": updated,
         "items_skipped": skipped,
         "errors": errors,
+        "error": error_message or hint,
+        "hint": hint,
     }

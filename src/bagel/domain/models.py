@@ -36,7 +36,7 @@ def _uuid() -> uuid.UUID:
 
 
 class AppUser(Base):
-    """Application login user — data isolation boundary."""
+    """Login account; `owner_id` on other tables scopes multi-user data."""
 
     __tablename__ = "app_user"
     __table_args__ = (UniqueConstraint("username", name="uq_app_user_username"),)
@@ -55,6 +55,8 @@ class AppUser(Base):
 
 
 class IntelSource(Base):
+    """Configurable feed / crawl endpoint (RSS, RSSHub path, stock, paper, …)."""
+
     __tablename__ = "intel_source"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
@@ -80,6 +82,8 @@ class IntelSource(Base):
 
 
 class IntelKeywordRule(Base):
+    """INCLUDE / EXCLUDE / BOOST keyword applied during collect filtering."""
+
     __tablename__ = "intel_keyword_rule"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
@@ -96,6 +100,8 @@ class IntelKeywordRule(Base):
 
 
 class IntelGithubQuery(Base):
+    """Saved GitHub Search query executed by the GitHub collect job."""
+
     __tablename__ = "intel_github_query"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
@@ -114,6 +120,8 @@ class IntelGithubQuery(Base):
 
 
 class IntelRawEvidence(Base):
+    """Immutable collector payload snapshot — never overwritten by LLM output."""
+
     __tablename__ = "intel_raw_evidence"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
@@ -132,6 +140,8 @@ class IntelRawEvidence(Base):
 
 
 class IntelItem(Base):
+    """Normalized intel unit — the primary business entity for review UIs."""
+
     __tablename__ = "intel_item"
     __table_args__ = (
         UniqueConstraint("canonical_url", name="uq_intel_item_canonical_url"),
@@ -205,7 +215,7 @@ class IntelItem(Base):
 
 
 class IntelMonthlyBrief(Base):
-    """One monthly sharing brief per kind (news / github)."""
+    """Generated week/month brief (news, github, papers, media, stock)."""
 
     __tablename__ = "intel_monthly_brief"
     __table_args__ = (
@@ -238,6 +248,8 @@ class IntelMonthlyBrief(Base):
 
 
 class IntelJobRun(Base):
+    """Audit row for a scheduled or manual job execution."""
+
     __tablename__ = "intel_job_run"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)

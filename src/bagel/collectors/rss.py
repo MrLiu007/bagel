@@ -1,4 +1,8 @@
-"""RSS / RSSHub feed collector."""
+"""RSS / RSSHub feed collector.
+
+Collectors only fetch + normalize into `NormalizedItem`. Persistence, keyword
+filtering, and category assignment belong in jobs / pipeline layers.
+"""
 
 from __future__ import annotations
 
@@ -19,6 +23,8 @@ from bagel.settings import Settings, get_settings
 
 @dataclass
 class CollectResult:
+    """Outcome of one feed fetch (items may be empty when ``error_code`` is set)."""
+
     items: list[NormalizedItem] = field(default_factory=list)
     raw_entries: list[dict[str, Any]] = field(default_factory=list)
     http_status: int | None = None
@@ -32,10 +38,13 @@ class CollectResult:
 
 
 class RssCollector:
+    """Fetch one `IntelSource` feed and emit normalized news/stock items."""
+
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
 
     def resolve_feed_url(self, source: IntelSource) -> str:
+        """Expand RSSHub-relative paths against ``RSSHUB_BASE_URL``."""
         url = source.url
         # STOCK feeds may also store RSSHub-relative paths.
         needs_hub = source.source_type in {SourceType.RSSHUB, SourceType.STOCK}

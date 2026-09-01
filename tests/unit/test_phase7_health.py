@@ -81,7 +81,11 @@ def test_run_health_checks_with_mocked_probes(db: Session) -> None:
     assert report.can_run is True
 
 
-def test_settings_health_page(db: Session) -> None:
+def test_settings_health_page(db: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AUTH_REQUIRED", "false")
+    from bagel.settings import get_settings
+
+    get_settings.cache_clear()
     app = create_app()
 
     def _override():
@@ -104,3 +108,4 @@ def test_settings_health_page(db: Session) -> None:
             assert "GitHub API" in resp.text
             assert "降级" in resp.text
     app.dependency_overrides.clear()
+    get_settings.cache_clear()

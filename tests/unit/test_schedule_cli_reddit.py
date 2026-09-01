@@ -74,7 +74,7 @@ def test_reddit_headers_are_browser_like():
 
 def test_non_reddit_keeps_app_ua():
     hdrs = request_headers_for_url("https://www.jiqizhixin.com/rss")
-    assert "AI-bagel" in hdrs["User-Agent"]
+    assert "Bagel" in hdrs["User-Agent"]
 
 
 def test_default_reddit_sources_present():

@@ -1,4 +1,8 @@
-"""Request auth helpers."""
+"""Request auth helpers for FastAPI HTML + API routes.
+
+`require_user` redirects browsers to `/login`; JSON `/api/*` callers get 401
+via the AuthGate middleware when session is missing.
+"""
 
 from __future__ import annotations
 

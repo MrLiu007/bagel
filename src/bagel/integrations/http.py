@@ -1,4 +1,9 @@
-"""HTTP client helpers with network-mode / proxy awareness."""
+"""HTTP client helpers with network-mode / proxy awareness.
+
+`NETWORK_MODE=AUTO` tries direct first; on failure with a configured proxy,
+`fetch_text` retries once via proxy so CN sources stay reachable when overseas
+egress is flaky.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +11,7 @@ import httpx
 
 from bagel.settings import NetworkMode, Settings, get_settings
 
-DEFAULT_UA = "AI-bagel/0.3 (+https://github.com/local/ai-bagel)"
+DEFAULT_UA = "Bagel/0.3 (+https://github.com/MrLiu007/bagel)"
 # Reddit rejects bot-shaped Accept / UA; use browser-navigation headers.
 BROWSER_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "

@@ -10,6 +10,7 @@ from bagel.domain.enums import ItemStatus, ItemType, SourceType
 from bagel.domain.models import Base, IntelItem
 from bagel.main import create_app
 from bagel.services import review as review_svc
+from bagel.settings import get_settings
 from bagel.storage.database import get_db, get_engine, get_session_factory
 from bagel.storage.repositories import ItemRepository
 
@@ -30,7 +31,9 @@ def db(tmp_path) -> Session:
 
 
 @pytest.fixture()
-def client(db: Session):
+def client(db: Session, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("AUTH_REQUIRED", "false")
+    get_settings.cache_clear()
     app = create_app()
 
     def _override_db():
@@ -45,6 +48,7 @@ def client(db: Session):
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
+    get_settings.cache_clear()
 
 
 def _seed_item(db: Session, **kwargs) -> IntelItem:

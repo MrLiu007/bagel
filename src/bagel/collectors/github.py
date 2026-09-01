@@ -44,7 +44,7 @@ class GithubCollector:
         headers = {
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "AI-bagel/0.2",
+            "User-Agent": "Bagel/0.3 (+https://github.com/MrLiu007/bagel)",
         }
         token = self.settings.github_token
         if token:
@@ -55,17 +55,30 @@ class GithubCollector:
         try:
             with build_http_client(self.settings, timeout=45.0) as client:
                 resp = client.get(url, params=params, headers=self._headers())
-                if resp.status_code in {401, 403, 404, 429}:
-                    return {"_status": resp.status_code, "_body": resp.text}, resp.status_code
-                resp.raise_for_status()
+                # Keep non-2xx bodies for callers (auth / rate-limit / invalid query).
+                if resp.status_code >= 400:
+                    try:
+                        body: Any = resp.json()
+                    except Exception:  # noqa: BLE001
+                        body = {"_body": resp.text}
+                    if isinstance(body, dict):
+                        body.setdefault("_status", resp.status_code)
+                        body.setdefault("_body", resp.text)
+                    return body, resp.status_code
                 return resp.json(), resp.status_code
         except (httpx.HTTPError, OSError):
             if self.settings.network_mode == NetworkMode.AUTO and self.settings.proxy_url:
                 with build_http_client(self.settings, timeout=45.0, force_proxy=True) as client:
                     resp = client.get(url, params=params, headers=self._headers())
-                    if resp.status_code in {401, 403, 404, 429}:
-                        return {"_status": resp.status_code, "_body": resp.text}, resp.status_code
-                    resp.raise_for_status()
+                    if resp.status_code >= 400:
+                        try:
+                            body = resp.json()
+                        except Exception:  # noqa: BLE001
+                            body = {"_body": resp.text}
+                        if isinstance(body, dict):
+                            body.setdefault("_status", resp.status_code)
+                            body.setdefault("_body", resp.text)
+                        return body, resp.status_code
                     return resp.json(), resp.status_code
             raise
 
@@ -103,17 +116,41 @@ class GithubCollector:
                 http_status=401,
             )
         if status == 429 or (
-            status == 403 and "rate limit" in str(payload.get("_body", "")).lower()
+            status == 403
+            and isinstance(payload, dict)
+            and "rate limit" in str(payload.get("_body", "")).lower()
         ):
             return GithubCollectResult(
                 error_code=ErrorCode.RATE_LIMITED,
                 error_message="GitHub rate limited",
                 http_status=status,
             )
+        if status == 422:
+            # Invalid search syntax (e.g. bad parentheses / qualifiers).
+            msg = ""
+            if isinstance(payload, dict):
+                msg = str(payload.get("message") or payload.get("_body") or "")
+            return GithubCollectResult(
+                error_code=ErrorCode.INVALID_DATA,
+                error_message=(msg or "GitHub search query rejected (422)")[:500],
+                http_status=422,
+            )
         if status >= 400:
+            body = ""
+            if isinstance(payload, dict):
+                body = str(payload.get("_body", status))
+            else:
+                body = str(status)
             return GithubCollectResult(
                 error_code=ErrorCode.HTTP_ERROR,
-                error_message=str(payload.get("_body", status))[:500],
+                error_message=body[:500],
+                http_status=status,
+            )
+
+        if not isinstance(payload, dict):
+            return GithubCollectResult(
+                error_code=ErrorCode.PARSE_ERROR,
+                error_message="Unexpected GitHub search payload",
                 http_status=status,
             )
 

@@ -4,14 +4,23 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
 
 from bagel.domain.models import Base
 from bagel.main import create_app
+from bagel.settings import get_settings
 from bagel.storage.database import get_db, get_engine, get_session_factory
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+@pytest.fixture()
+def no_auth(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("AUTH_REQUIRED", "false")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 def test_required_project_files_exist() -> None:
@@ -60,15 +69,15 @@ def test_openapi_exposes_mvp_routes() -> None:
         assert path in paths, path
 
 
-def test_home_and_health_ok() -> None:
+def test_home_and_health_ok(no_auth) -> None:
     client = TestClient(create_app())
     assert client.get("/health").status_code == 200
     home = client.get("/")
     assert home.status_code == 200
-    assert "情报" in home.text or "Intel" in home.text
+    assert "情报" in home.text or "Intel" in home.text or "贝果" in home.text
 
 
-def test_candidates_page_with_sqlite(tmp_path) -> None:
+def test_candidates_page_with_sqlite(tmp_path, no_auth) -> None:
     engine = get_engine(f"sqlite+pysqlite:///{tmp_path / 'p9.db'}")
     Base.metadata.create_all(engine)
     factory = get_session_factory(engine)

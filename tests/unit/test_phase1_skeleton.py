@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
 from bagel.main import create_app
-from bagel.settings import Settings, NetworkMode
+from bagel.settings import NetworkMode, Settings, get_settings
 
 
 def test_settings_defaults() -> None:
@@ -28,8 +29,13 @@ def test_health_endpoint() -> None:
     assert "version" in body
 
 
-def test_home_page() -> None:
-    client = TestClient(create_app())
-    resp = client.get("/")
-    assert resp.status_code == 200
-    assert "贝果" in resp.text
+def test_home_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AUTH_REQUIRED", "false")
+    get_settings.cache_clear()
+    try:
+        client = TestClient(create_app())
+        resp = client.get("/")
+        assert resp.status_code == 200
+        assert "贝果" in resp.text
+    finally:
+        get_settings.cache_clear()

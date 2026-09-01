@@ -1,4 +1,10 @@
-"""FastAPI application entry point."""
+"""FastAPI application entry point.
+
+`create_app()` wires routes, session auth, and lifespan hooks that:
+1. init / seed the DB (degraded boot if DB is temporarily down)
+2. optionally clone MediaCrawler into `third_party/` (gitignored)
+3. start the in-process APScheduler when enabled in runtime config
+"""
 
 from __future__ import annotations
 
@@ -15,6 +21,7 @@ from starlette.requests import Request
 
 from bagel import __version__
 from bagel.settings import get_settings
+from bagel.web.auth_gate import AuthGateMiddleware
 from bagel.web.deps import NotAuthenticated
 from bagel.web.nav import NAV_ITEMS
 from bagel.web.routes.auth import router as auth_router
@@ -28,18 +35,6 @@ from bagel.web.routes.wechat import router as wechat_router
 from bagel.web.templating import templates
 
 STATIC_DIR = Path(__file__).resolve().parent / "web" / "static"
-
-_PUBLIC_PREFIXES = (
-    "/login",
-    "/logout",
-    "/health",
-    "/static",
-    "/api/health",
-    "/api/wechat/webhook",
-    "/api/feishu/events",
-    "/api/feishu/command",
-    "/api/feishu/status",
-)
 
 
 @asynccontextmanager
@@ -69,6 +64,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         stop_scheduler()
     except Exception as exc:  # noqa: BLE001
         log.warning("stop_scheduler failed: %s", exc)
+
 
 def create_app() -> FastAPI:
     settings = get_settings()
@@ -117,25 +113,6 @@ def create_app() -> FastAPI:
         )
 
     # Middleware order: last added runs first. Session must wrap auth gate.
-    from starlette.middleware.base import BaseHTTPMiddleware
-
-    class AuthGateMiddleware(BaseHTTPMiddleware):
-        async def dispatch(self, request: Request, call_next):
-            path = request.url.path
-            if not settings.auth_required or any(path.startswith(p) for p in _PUBLIC_PREFIXES):
-                return await call_next(request)
-            if request.session.get("user_id"):
-                return await call_next(request)
-            if path.startswith("/api/"):
-                from fastapi.responses import JSONResponse
-
-                return JSONResponse({"detail": "未登录"}, status_code=401)
-            nxt = quote(
-                path + (f"?{request.url.query}" if request.url.query else ""),
-                safe="/?=&",
-            )
-            return RedirectResponse(url=f"/login?next={nxt}", status_code=303)
-
     application.add_middleware(AuthGateMiddleware)
     application.add_middleware(
         SessionMiddleware,

@@ -1,8 +1,14 @@
-"""Delete duplicate PAPER rows and realign identity hashes."""
+"""Ops helper: merge duplicate PAPER rows via ``ItemRepository.dedupe_papers``.
+
+Usage (from repo root)::
+
+    uv run python scripts/dedupe_papers.py
+"""
+
 from __future__ import annotations
 
 from bagel.settings import get_settings
-from bagel.storage.database import get_session_factory, get_engine
+from bagel.storage.database import get_engine, get_session_factory
 from bagel.storage.repositories import ItemRepository
 
 

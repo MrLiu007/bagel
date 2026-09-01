@@ -1,4 +1,8 @@
-"""RSSHub client — adapter for sites without native RSS."""
+"""RSSHub client — optional adapter for sites without native RSS.
+
+Production collectors usually build feed URLs via `settings.rsshub_base_url`
+directly; this client is used for health checks and explicit path fetches.
+"""
 
 from __future__ import annotations
 
@@ -21,6 +25,8 @@ class RsshubFeed:
 
 
 class RsshubClient:
+    """Fetch or ping an RSSHub instance (always direct — never via egress proxy)."""
+
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
 
