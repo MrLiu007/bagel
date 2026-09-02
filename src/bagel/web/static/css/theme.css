@@ -412,7 +412,16 @@ h1 .mono {
   font-size: 0.85rem;
 }
 .badge.tag { color: var(--badge-tag-fg); border-color: var(--badge-tag-border); }
-.badge.on { color: var(--ok); border-color: var(--badge-on-border); }
+.badge.on {
+  color: var(--ok);
+  border-color: var(--badge-on-border);
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+}
+.badge.off {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 50%, var(--line));
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+}
 .badge.ticker {
   color: var(--accent-2);
   border-color: var(--badge-cat-border);
@@ -473,6 +482,26 @@ button.primary, .btn.primary {
   color: var(--accent);
 }
 button.danger:hover { border-color: var(--danger); color: var(--danger); background: rgba(255,92,92,0.08); }
+button.btn-state-on {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 45%, var(--line));
+}
+button.btn-state-on:hover {
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+  border-color: var(--ok);
+}
+button.btn-state-off {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 45%, var(--line));
+}
+button.btn-state-off:hover {
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  border-color: var(--warn);
+}
+.row.is-off {
+  opacity: 0.78;
+}
+.row.is-off .kw { color: var(--muted); }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
 
 input[type=text], input[type=url], select, textarea {

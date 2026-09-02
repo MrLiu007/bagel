@@ -343,25 +343,11 @@ def run_collect_github(
             )
             continue
         if not release:
-            source_stats.append(
-                source_stat(
-                    f"release/{repo_name}",
-                    status="skipped",
-                    duration_ms=elapsed_ms(src_t0),
-                    error="no release",
-                )
-            )
+            # Many trending repos never publish GitHub Releases — skip quietly.
+            logger.debug("collect_github.no_release repo=%s", repo_name)
             continue
         if not is_within_lookback(release.published_at, days=lookback_days, keep_unknown=False):
-            skipped += 1
-            source_stats.append(
-                source_stat(
-                    f"release/{repo_name}",
-                    status="skipped",
-                    items_skipped=1,
-                    duration_ms=elapsed_ms(src_t0),
-                )
-            )
+            logger.debug("collect_github.release_outside_lookback repo=%s", repo_name)
             continue
         found += 1
         label = _item_label(release.title, release.url)

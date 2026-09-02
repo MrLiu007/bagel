@@ -67,15 +67,24 @@ def run_collect_papers(
         try:
             papers = fetch_from_source(src.name, src.url)
         except Exception as exc:  # noqa: BLE001
-            errors.append(f"{src.name}: {exc}"[:200])
-            src.last_error_code = "FETCH_ERROR"
+            msg = str(exc)
+            rate_limited = "429" in msg or "Too Many Requests" in msg
+            code = "RATE_LIMITED" if rate_limited else "FETCH_ERROR"
+            hint = (
+                "Semantic Scholar 限流（429）。可在 .env 设置 SEMANTIC_SCHOLAR_API_KEY，"
+                "或暂时关闭该论文源。"
+                if rate_limited
+                else msg
+            )
+            errors.append(f"{src.name}: {hint}"[:220])
+            src.last_error_code = code
             source_stats.append(
                 source_stat(
                     src.name,
-                    status="failed",
+                    status="rate_limited" if rate_limited else "failed",
                     source_id=str(src.id),
                     duration_ms=elapsed_ms(src_t0),
-                    error=str(exc),
+                    error=hint,
                 )
             )
             continue
@@ -133,15 +142,18 @@ def run_collect_papers(
     if on_progress:
         on_progress(current=len(sources), total=len(sources), message=f"完成，新建 {created}")
 
+    # Single-source failures (e.g. S2 429) must not fail the whole job when others worked.
+    any_ok = any(s.get("status") == "success" for s in source_stats)
     status = "SUCCESS"
-    if errors and created == 0:
-        status = "FAILED"
-    elif errors:
+    if errors and any_ok:
         status = "PARTIAL"
+    elif errors and not any_ok:
+        status = "FAILED"
     return {
         "status": status,
         "items_found": found,
         "items_created": created,
+        "items_updated": max(0, found - created),
         "sources": len(sources),
         "duration_ms": elapsed_ms(job_t0),
         "source_stats": source_stats,

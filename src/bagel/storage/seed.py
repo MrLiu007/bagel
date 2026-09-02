@@ -9,8 +9,8 @@ from __future__ import annotations
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
-from bagel.domain.enums import KeywordRuleType, NetworkRequirement, Region, SourceType
-from bagel.domain.models import IntelGithubQuery, IntelKeywordRule, IntelSource
+from bagel.domain.enums import ItemType, KeywordRuleType, NetworkRequirement, Region, SourceType
+from bagel.domain.models import IntelGithubQuery, IntelItem, IntelKeywordRule, IntelSource
 
 # 20+ stable AI news / blog sources (official RSS preferred)
 # X (Twitter) via RSSHub — defined first so DEFAULT_SOURCES can include them.
@@ -22,7 +22,8 @@ DEFAULT_X_SOURCES: list[dict] = [
         "source_type": SourceType.RSSHUB,
         "network": NetworkRequirement.PROXY_PREFERRED,
         "priority": 230,
-        "enabled": True,
+        # RSSHub→X often 502 without cookies / healthy RSSHub; opt-in in settings.
+        "enabled": False,
     },
     {
         "name": "X · Anthropic",
@@ -31,7 +32,7 @@ DEFAULT_X_SOURCES: list[dict] = [
         "source_type": SourceType.RSSHUB,
         "network": NetworkRequirement.PROXY_PREFERRED,
         "priority": 240,
-        "enabled": True,
+        "enabled": False,
     },
     {
         "name": "X · Hugging Face",
@@ -40,7 +41,7 @@ DEFAULT_X_SOURCES: list[dict] = [
         "source_type": SourceType.RSSHUB,
         "network": NetworkRequirement.PROXY_PREFERRED,
         "priority": 250,
-        "enabled": True,
+        "enabled": False,
     },
     {
         "name": "X · Andrej Karpathy",
@@ -49,7 +50,7 @@ DEFAULT_X_SOURCES: list[dict] = [
         "source_type": SourceType.RSSHUB,
         "network": NetworkRequirement.PROXY_PREFERRED,
         "priority": 260,
-        "enabled": True,
+        "enabled": False,
     },
     {
         "name": "X · Andrew Ng",
@@ -58,7 +59,7 @@ DEFAULT_X_SOURCES: list[dict] = [
         "source_type": SourceType.RSSHUB,
         "network": NetworkRequirement.PROXY_PREFERRED,
         "priority": 270,
-        "enabled": True,
+        "enabled": False,
     },
     {
         "name": "X · DeepLearningAI",
@@ -67,14 +68,26 @@ DEFAULT_X_SOURCES: list[dict] = [
         "source_type": SourceType.RSSHUB,
         "network": NetworkRequirement.PROXY_PREFERRED,
         "priority": 280,
-        "enabled": True,
+        "enabled": False,
     },
 ]
 
 DEFAULT_SOURCES: list[dict] = [
     # --- CN ---
-    {"name": "机器之心", "url": "https://www.jiqizhixin.com/rss", "region": Region.CN, "priority": 10},
-    {"name": "量子位", "url": "https://www.qbitai.com/feed", "region": Region.CN, "priority": 20},
+    {
+        "name": "机器之心",
+        "url": "https://www.jiqizhixin.com/rss",
+        "region": Region.CN,
+        "priority": 10,
+        "enabled": False,  # official page is HTML/paywalled, not a public RSS body
+    },
+    {
+        "name": "量子位",
+        "url": "https://www.qbitai.com/feed",
+        "region": Region.CN,
+        "priority": 20,
+        "enabled": False,  # often 403 without residential IP
+    },
     {"name": "InfoQ 中国", "url": "https://www.infoq.cn/feed", "region": Region.CN, "priority": 30},
     {"name": "少数派", "url": "https://sspai.com/feed", "region": Region.CN, "priority": 40},
     {"name": "Solidot", "url": "https://www.solidot.org/index.rss", "region": Region.CN, "priority": 50},
@@ -82,14 +95,26 @@ DEFAULT_SOURCES: list[dict] = [
     {"name": "IT之家", "url": "https://www.ithome.com/rss/", "region": Region.CN, "priority": 70},
     {"name": "OSCHINA", "url": "https://www.oschina.net/news/rss", "region": Region.CN, "priority": 80},
     {"name": "掘金后端", "url": "https://juejin.cn/rss", "region": Region.CN, "priority": 90},
-    {"name": "博客园精华", "url": "https://www.cnblogs.com/aggsite/rss", "region": Region.CN, "priority": 100},
+    {
+        "name": "博客园精华",
+        "url": "https://feed.cnblogs.com/blog/sitehome/rss",
+        "region": Region.CN,
+        "priority": 100,
+    },
+    {"name": "爱范儿", "url": "https://www.ifanr.com/feed", "region": Region.CN, "priority": 105},
     # --- GLOBAL ---
     {"name": "OpenAI Blog", "url": "https://openai.com/blog/rss.xml", "region": Region.GLOBAL, "network": NetworkRequirement.PROXY_PREFERRED, "priority": 10},
     {"name": "Google AI Blog", "url": "https://blog.google/technology/ai/rss/", "region": Region.GLOBAL, "network": NetworkRequirement.PROXY_PREFERRED, "priority": 20},
     {"name": "DeepMind", "url": "https://deepmind.google/blog/rss.xml", "region": Region.GLOBAL, "network": NetworkRequirement.PROXY_PREFERRED, "priority": 30},
     {"name": "Anthropic", "url": "https://raw.githubusercontent.com/anthropics/anthropic-cookbook/main/README.md", "region": Region.GLOBAL, "network": NetworkRequirement.PROXY_PREFERRED, "priority": 40, "enabled": False},
     {"name": "Hugging Face Blog", "url": "https://huggingface.co/blog/feed.xml", "region": Region.GLOBAL, "network": NetworkRequirement.PROXY_PREFERRED, "priority": 50},
-    {"name": "Meta AI", "url": "https://ai.meta.com/blog/rss/", "region": Region.GLOBAL, "network": NetworkRequirement.PROXY_PREFERRED, "priority": 60},
+    {
+        "name": "Meta Engineering",
+        "url": "https://engineering.fb.com/feed/",
+        "region": Region.GLOBAL,
+        "network": NetworkRequirement.PROXY_PREFERRED,
+        "priority": 60,
+    },
     {"name": "NVIDIA Blog", "url": "https://blogs.nvidia.com/feed/", "region": Region.GLOBAL, "network": NetworkRequirement.PROXY_PREFERRED, "priority": 70},
     {"name": "Microsoft Research", "url": "https://www.microsoft.com/en-us/research/feed/", "region": Region.GLOBAL, "network": NetworkRequirement.PROXY_PREFERRED, "priority": 80},
     {"name": "AWS ML Blog", "url": "https://aws.amazon.com/blogs/machine-learning/feed/", "region": Region.GLOBAL, "network": NetworkRequirement.PROXY_PREFERRED, "priority": 90},
@@ -98,7 +123,13 @@ DEFAULT_SOURCES: list[dict] = [
     {"name": "Ars Technica", "url": "https://feeds.arstechnica.com/arstechnica/technology-lab", "region": Region.GLOBAL, "network": NetworkRequirement.PROXY_PREFERRED, "priority": 120},
     {"name": "Towards Data Science", "url": "https://towardsdatascience.com/feed", "region": Region.GLOBAL, "network": NetworkRequirement.PROXY_PREFERRED, "priority": 130},
     {"name": "PyTorch Blog", "url": "https://pytorch.org/blog/feed.xml", "region": Region.GLOBAL, "network": NetworkRequirement.PROXY_PREFERRED, "priority": 140},
-    {"name": "LangChain Blog", "url": "https://blog.langchain.dev/rss/", "region": Region.GLOBAL, "network": NetworkRequirement.PROXY_PREFERRED, "priority": 150},
+    {
+        "name": "LangChain Blog",
+        "url": "https://blog.langchain.dev/rss.xml",
+        "region": Region.GLOBAL,
+        "network": NetworkRequirement.PROXY_PREFERRED,
+        "priority": 150,
+    },
     # --- Reddit (official .rss; require browser-like UA — see http.fetch_text) ---
     {
         "name": "Reddit r/MachineLearning",
@@ -150,7 +181,16 @@ DEFAULT_PAPER_SOURCES: list[dict] = [
     {"name": "arXiv cs.RO", "url": "arxiv:cs.RO", "source_type": SourceType.PAPER, "region": Region.GLOBAL, "network": NetworkRequirement.PROXY_PREFERRED, "priority": 50},
     {"name": "Hugging Face Papers", "url": "hf:daily", "source_type": SourceType.PAPER, "region": Region.GLOBAL, "network": NetworkRequirement.PROXY_PREFERRED, "priority": 60},
     {"name": "OpenAlex AI", "url": "openalex:C154945302", "source_type": SourceType.PAPER, "region": Region.GLOBAL, "network": NetworkRequirement.PROXY_PREFERRED, "priority": 70},
-    {"name": "Semantic Scholar LLM", "url": "s2:large language model", "source_type": SourceType.PAPER, "region": Region.GLOBAL, "network": NetworkRequirement.PROXY_PREFERRED, "priority": 80},
+    {
+        "name": "Semantic Scholar LLM",
+        "url": "s2:large language model",
+        "source_type": SourceType.PAPER,
+        "region": Region.GLOBAL,
+        "network": NetworkRequirement.PROXY_PREFERRED,
+        "priority": 80,
+        # Anonymous S2 search often hits 429; enable after SEMANTIC_SCHOLAR_API_KEY.
+        "enabled": False,
+    },
 ]
 
 # AI model hubs (MODEL type). Keep the enabled set small — overlapping feeds
@@ -334,6 +374,38 @@ _EDUCATION_NAME_FIXES: dict[str, str] = {
     "https://ai.stanford.edu/blog/feed.xml": "Stanford AI Lab Blog",
     "https://news.harvard.edu/gazette/feed/": "Harvard Gazette",
 }
+
+# Broken / obsolete news RSS URLs → replacement ("" disables).
+_NEWS_URL_MIGRATIONS: dict[str, str] = {
+    "https://www.cnblogs.com/aggsite/rss": "https://feed.cnblogs.com/blog/sitehome/rss",
+    "https://blog.langchain.dev/rss/": "https://blog.langchain.dev/rss.xml",
+    "https://blog.langchain.dev/rss": "https://blog.langchain.dev/rss.xml",
+    "https://ai.meta.com/blog/rss/": "https://engineering.fb.com/feed/",
+    "https://ai.meta.com/blog/rss": "https://engineering.fb.com/feed/",
+}
+
+_NEWS_DISABLE_URLS: frozenset[str] = frozenset(
+    {
+        "https://www.jiqizhixin.com/rss",
+        "https://www.qbitai.com/feed",
+    }
+)
+
+_NEWS_NAME_FIXES: dict[str, str] = {
+    "https://feed.cnblogs.com/blog/sitehome/rss": "博客园精华",
+    "https://blog.langchain.dev/rss.xml": "LangChain Blog",
+    "https://engineering.fb.com/feed/": "Meta Engineering",
+}
+
+# Added to existing DBs that were seeded before these feeds existed.
+_NEWS_ENSURE_EXTRA: list[dict] = [
+    {
+        "name": "爱范儿",
+        "url": "https://www.ifanr.com/feed",
+        "region": Region.CN,
+        "priority": 105,
+    },
+]
 
 # Stock / market news RSS (STOCK type). Relative paths resolve via RSSHub.
 DEFAULT_STOCK_SOURCES: list[dict] = [
@@ -539,16 +611,8 @@ def seed_if_empty(session: Session) -> dict[str, int]:
     }
     admin = ensure_default_admin(session)
     created["users"] = 1 if admin is not None else 0
-    # Attach legacy rows without owner to default admin for isolation baseline.
-    if admin is not None:
-        from bagel.domain.models import IntelItem
-        from sqlalchemy import update
-
-        session.execute(
-            update(IntelItem)
-            .where(IntelItem.owner_id.is_(None))
-            .values(owner_id=admin.id)
-        )
+    # Shared catalog types (news / github / papers / education) keep owner_id NULL
+    # so all users can review them. Do not claim null-owner rows for the admin.
 
     source_count = session.scalar(select(func.count()).select_from(IntelSource)) or 0
     if source_count == 0:
@@ -631,6 +695,9 @@ def seed_if_empty(session: Session) -> dict[str, int]:
     created["model_sources"] = ensure_model_sources(session)
     created["education_sources"] = ensure_education_sources(session)
     created["education_sources_repaired"] = repair_education_sources(session)
+    created["news_sources_repaired"] = repair_news_sources(session)
+    created["paper_sources_repaired"] = repair_paper_sources(session)
+    created["shared_catalog_owners_repaired"] = repair_shared_catalog_owners(session)
 
     session.flush()
     return created
@@ -800,6 +867,114 @@ def repair_education_sources(session: Session) -> int:
         src.enabled = True
         changed += 1
     return changed
+
+
+def repair_news_sources(session: Session) -> int:
+    """Migrate broken news feed URLs, disable dead ones, ensure extras (idempotent)."""
+    changed = 0
+    rows = list(
+        session.scalars(
+            select(IntelSource).where(
+                IntelSource.source_type.in_([SourceType.RSS, SourceType.RSSHUB])
+            )
+        ).all()
+    )
+    occupied = {_norm_source_url(r.url) for r in rows}
+
+    for src in rows:
+        raw = (src.url or "").strip()
+        if raw in _NEWS_DISABLE_URLS:
+            if src.enabled:
+                src.enabled = False
+                src.last_error_code = "FEED_UNRELIABLE"
+                changed += 1
+            continue
+        if raw not in _NEWS_URL_MIGRATIONS:
+            continue
+        new_url = _NEWS_URL_MIGRATIONS[raw]
+        if not new_url:
+            if src.enabled:
+                src.enabled = False
+                src.last_error_code = "FEED_GONE"
+                changed += 1
+            continue
+        norm_new = _norm_source_url(new_url)
+        if norm_new == _norm_source_url(raw):
+            continue
+        if norm_new in occupied:
+            if src.enabled:
+                src.enabled = False
+                src.last_error_code = "FEED_REPLACED"
+                changed += 1
+            continue
+        occupied.discard(_norm_source_url(raw))
+        occupied.add(norm_new)
+        src.url = new_url
+        src.last_error_code = None
+        if new_url in _NEWS_NAME_FIXES:
+            src.name = _NEWS_NAME_FIXES[new_url]
+        src.enabled = True
+        changed += 1
+
+    existing_urls = {_norm_source_url(u) for u in session.scalars(select(IntelSource.url)).all()}
+    for row in _NEWS_ENSURE_EXTRA:
+        url = str(row["url"]).strip()
+        if _norm_source_url(url) in existing_urls:
+            continue
+        session.add(
+            IntelSource(
+                name=row["name"],
+                url=url,
+                source_type=row.get("source_type", SourceType.RSS),
+                region=row.get("region", Region.CN),
+                network_requirement=row.get("network", NetworkRequirement.DIRECT),
+                priority=row.get("priority", 100),
+                enabled=row.get("enabled", True),
+            )
+        )
+        existing_urls.add(_norm_source_url(url))
+        changed += 1
+    return changed
+
+
+def repair_paper_sources(session: Session) -> int:
+    """Disable Semantic Scholar by default (anonymous search often 429)."""
+    changed = 0
+    rows = list(
+        session.scalars(
+            select(IntelSource).where(IntelSource.source_type == SourceType.PAPER)
+        ).all()
+    )
+    for src in rows:
+        url = (src.url or "").strip().lower()
+        if not (url.startswith("s2:") or "semanticscholar.org" in url):
+            continue
+        if src.enabled:
+            src.enabled = False
+            src.last_error_code = "DEFAULT_OFF_RATE_LIMIT"
+            changed += 1
+    return changed
+
+
+# Catalog tabs shared across users — collectors leave owner_id NULL.
+_SHARED_CATALOG_TYPES: tuple[str, ...] = (
+    ItemType.NEWS,
+    ItemType.GITHUB_REPO,
+    ItemType.GITHUB_RELEASE,
+    ItemType.PAPER,
+    ItemType.EDUCATION,
+)
+
+
+def repair_shared_catalog_owners(session: Session) -> int:
+    """Undo mistaken admin claim on shared news/github/papers/education rows."""
+    result = session.execute(
+        update(IntelItem)
+        .where(IntelItem.item_type.in_(_SHARED_CATALOG_TYPES))
+        .where(IntelItem.owner_id.is_not(None))
+        .values(owner_id=None)
+    )
+    return int(result.rowcount or 0)
 
 
 def ensure_reddit_sources(session: Session) -> int:

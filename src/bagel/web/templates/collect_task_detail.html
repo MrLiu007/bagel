@@ -64,7 +64,7 @@
         <td style="padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);">{{ s.name }}</td>
         <td style="padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);color:var(--muted);">{{ s.region or '—' }}</td>
         <td style="padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);">
-          <span class="{% if s.status == 'failed' %}warn{% elif s.status == 'success' %}ok{% endif %}">{{ s.status }}</span>
+          <span class="{% if s.status in ['failed', 'rate_limited'] %}warn{% elif s.status == 'success' %}ok{% endif %}">{{ s.status }}</span>
         </td>
         <td style="padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);text-align:right;">{{ s.items_created }}</td>
         <td style="padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);text-align:right;">{{ s.items_updated }}</td>

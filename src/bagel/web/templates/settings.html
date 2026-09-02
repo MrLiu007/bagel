@@ -43,10 +43,10 @@
 <div class="panel">
   {% if sources %}
     {% for s in sources %}
-    <div class="row">
+    <div class="row {% if not s.enabled %}is-off{% endif %}">
       <div>
         <div class="kw">{{ s.name }}
-          <span class="badge {% if s.enabled %}on{% endif %}">{% if s.enabled %}ON{% else %}OFF{% endif %}</span>
+          <span class="badge {% if s.enabled %}on{% else %}off{% endif %}">{% if s.enabled %}ON{% else %}OFF{% endif %}</span>
           <span class="badge cat">{{ s.region }}</span>
           <span class="badge">{{ s.source_type }}</span>
         </div>
@@ -55,7 +55,7 @@
       <div class="actions">
         <form method="post" action="/settings/sources/{{ s.id }}/toggle">
           <input type="hidden" name="enabled" value="{% if s.enabled %}0{% else %}1{% endif %}" />
-          <button type="submit">{% if s.enabled %}停用{% else %}启用{% endif %}</button>
+          <button type="submit" class="{% if s.enabled %}btn-state-off{% else %}btn-state-on{% endif %}">{% if s.enabled %}停用{% else %}启用{% endif %}</button>
         </form>
         <form method="post" action="/settings/sources/{{ s.id }}/delete" onsubmit="return confirm('确认删除该源？');">
           <button class="danger" type="submit">删除</button>
@@ -94,17 +94,17 @@
 <div class="panel">
   {% if github_queries %}
     {% for q in github_queries %}
-    <div class="row">
+    <div class="row {% if not q.enabled %}is-off{% endif %}">
       <div>
         <div class="kw">{{ q.name }}
-          <span class="badge {% if q.enabled %}on{% endif %}">{% if q.enabled %}ON{% else %}OFF{% endif %}</span>
+          <span class="badge {% if q.enabled %}on{% else %}off{% endif %}">{% if q.enabled %}ON{% else %}OFF{% endif %}</span>
         </div>
         <div class="meta" style="word-break:break-all;">{{ q.query }}</div>
       </div>
       <div class="actions">
         <form method="post" action="/settings/github/{{ q.id }}/toggle">
           <input type="hidden" name="enabled" value="{% if q.enabled %}0{% else %}1{% endif %}" />
-          <button type="submit">{% if q.enabled %}停用{% else %}启用{% endif %}</button>
+          <button type="submit" class="{% if q.enabled %}btn-state-off{% else %}btn-state-on{% endif %}">{% if q.enabled %}停用{% else %}启用{% endif %}</button>
         </form>
       </div>
     </div>
@@ -142,10 +142,10 @@
   {% if exclude_scope_meta %}
     {% for meta in exclude_scope_meta %}
     {% set rule = meta.rule %}
-    <div class="row" style="flex-wrap:wrap;align-items:flex-start;gap:0.75rem;">
+    <div class="row {% if not rule.enabled %}is-off{% endif %}" style="flex-wrap:wrap;align-items:flex-start;gap:0.75rem;">
       <div style="flex:1;min-width:140px;">
         <div class="kw">{{ rule.keyword }}
-          <span class="badge {% if rule.enabled %}on{% endif %}">{% if rule.enabled %}ON{% else %}OFF{% endif %}</span>
+          <span class="badge {% if rule.enabled %}on{% else %}off{% endif %}">{% if rule.enabled %}ON{% else %}OFF{% endif %}</span>
         </div>
         <div class="meta">适用：{{ meta.labels | join(' · ') }}</div>
       </div>
@@ -163,7 +163,7 @@
       <div class="actions">
         <form method="post" action="/settings/excludes/{{ rule.id }}/toggle">
           <input type="hidden" name="enabled" value="{% if rule.enabled %}0{% else %}1{% endif %}" />
-          <button type="submit">{% if rule.enabled %}停用{% else %}启用{% endif %}</button>
+          <button type="submit" class="{% if rule.enabled %}btn-state-off{% else %}btn-state-on{% endif %}">{% if rule.enabled %}停用{% else %}启用{% endif %}</button>
         </form>
         <form method="post" action="/settings/excludes/{{ rule.id }}/delete" onsubmit="return confirm('确认删除该排除词？');">
           <button class="danger" type="submit">删除</button>
@@ -180,8 +180,9 @@
 {% if tab == 'papers' %}
 <div class="panel">
   <p class="hint">
-    科普 Tab 使用的论文数据源。默认包含 arXiv（cs.AI / LG / CL / CV / RO）、Hugging Face Papers、OpenAlex、Semantic Scholar。
+    科普 Tab 使用的论文数据源。默认包含 arXiv（cs.AI / LG / CL / CV / RO）、Hugging Face Papers、OpenAlex；Semantic Scholar 默认关闭（无 API Key 时易 429）。
     URL 约定：<code>arxiv:cs.AI</code>、<code>hf:daily</code>、<code>openalex:C154945302</code>、<code>s2:large language model</code>。
+    如需启用 Semantic Scholar，请在 <code>.env</code> 配置 <code>SEMANTIC_SCHOLAR_API_KEY</code> 后于本页打开该源。
   </p>
   <form class="inline" method="post" action="/settings/papers">
     <input type="text" name="name" placeholder="名称，如 arXiv cs.AI" required />
@@ -192,17 +193,17 @@
 <div class="panel">
   {% if paper_sources %}
     {% for s in paper_sources %}
-    <div class="row">
+    <div class="row {% if not s.enabled %}is-off{% endif %}">
       <div>
         <div class="kw">{{ s.name }}
-          <span class="badge {% if s.enabled %}on{% endif %}">{% if s.enabled %}ON{% else %}OFF{% endif %}</span>
+          <span class="badge {% if s.enabled %}on{% else %}off{% endif %}">{% if s.enabled %}ON{% else %}OFF{% endif %}</span>
         </div>
         <div class="meta" style="word-break:break-all;">{{ s.url }}</div>
       </div>
       <div class="actions">
         <form method="post" action="/settings/papers/{{ s.id }}/toggle">
           <input type="hidden" name="enabled" value="{% if s.enabled %}0{% else %}1{% endif %}" />
-          <button type="submit">{% if s.enabled %}停用{% else %}启用{% endif %}</button>
+          <button type="submit" class="{% if s.enabled %}btn-state-off{% else %}btn-state-on{% endif %}">{% if s.enabled %}停用{% else %}启用{% endif %}</button>
         </form>
         <form method="post" action="/settings/papers/{{ s.id }}/delete" onsubmit="return confirm('确认删除该论文源？');">
           <button class="danger" type="submit">删除</button>
@@ -249,17 +250,17 @@
 <div class="panel">
   {% if education_sources %}
     {% for s in education_sources %}
-    <div class="row">
+    <div class="row {% if not s.enabled %}is-off{% endif %}">
       <div>
         <div class="kw">{{ s.name }}
-          <span class="badge {% if s.enabled %}on{% endif %}">{% if s.enabled %}ON{% else %}OFF{% endif %}</span>
+          <span class="badge {% if s.enabled %}on{% else %}off{% endif %}">{% if s.enabled %}ON{% else %}OFF{% endif %}</span>
         </div>
         <div class="meta" style="word-break:break-all;">{{ s.region }} · {{ s.url }}</div>
       </div>
       <div class="actions">
         <form method="post" action="/settings/education/{{ s.id }}/toggle">
           <input type="hidden" name="enabled" value="{% if s.enabled %}0{% else %}1{% endif %}" />
-          <button type="submit">{% if s.enabled %}停用{% else %}启用{% endif %}</button>
+          <button type="submit" class="{% if s.enabled %}btn-state-off{% else %}btn-state-on{% endif %}">{% if s.enabled %}停用{% else %}启用{% endif %}</button>
         </form>
         <form method="post" action="/settings/education/{{ s.id }}/delete" onsubmit="return confirm('确认删除该教育源？');">
           <button class="danger" type="submit">删除</button>
@@ -307,17 +308,17 @@
 <div class="panel">
   {% if model_sources %}
     {% for s in model_sources %}
-    <div class="row">
+    <div class="row {% if not s.enabled %}is-off{% endif %}">
       <div>
         <div class="kw">{{ s.name }}
-          <span class="badge {% if s.enabled %}on{% endif %}">{% if s.enabled %}ON{% else %}OFF{% endif %}</span>
+          <span class="badge {% if s.enabled %}on{% else %}off{% endif %}">{% if s.enabled %}ON{% else %}OFF{% endif %}</span>
         </div>
         <div class="meta" style="word-break:break-all;">{{ s.region }} · {{ s.url }}</div>
       </div>
       <div class="actions">
         <form method="post" action="/settings/models/{{ s.id }}/toggle">
           <input type="hidden" name="enabled" value="{% if s.enabled %}0{% else %}1{% endif %}" />
-          <button type="submit">{% if s.enabled %}停用{% else %}启用{% endif %}</button>
+          <button type="submit" class="{% if s.enabled %}btn-state-off{% else %}btn-state-on{% endif %}">{% if s.enabled %}停用{% else %}启用{% endif %}</button>
         </form>
         <form method="post" action="/settings/models/{{ s.id }}/delete" onsubmit="return confirm('确认删除该模型源？');">
           <button class="danger" type="submit">删除</button>
@@ -364,10 +365,10 @@
 <div class="panel">
   {% if stock_sources %}
     {% for s in stock_sources %}
-    <div class="row">
+    <div class="row {% if not s.enabled %}is-off{% endif %}">
       <div>
         <div class="kw">{{ s.name }}
-          <span class="badge {% if s.enabled %}on{% endif %}">{% if s.enabled %}ON{% else %}OFF{% endif %}</span>
+          <span class="badge {% if s.enabled %}on{% else %}off{% endif %}">{% if s.enabled %}ON{% else %}OFF{% endif %}</span>
           <span class="badge cat">{{ s.region }}</span>
         </div>
         <div class="meta" style="word-break:break-all;">{{ s.url }}</div>
@@ -375,7 +376,7 @@
       <div class="actions">
         <form method="post" action="/settings/stocks/{{ s.id }}/toggle">
           <input type="hidden" name="enabled" value="{% if s.enabled %}0{% else %}1{% endif %}" />
-          <button type="submit">{% if s.enabled %}停用{% else %}启用{% endif %}</button>
+          <button type="submit" class="{% if s.enabled %}btn-state-off{% else %}btn-state-on{% endif %}">{% if s.enabled %}停用{% else %}启用{% endif %}</button>
         </form>
         <form method="post" action="/settings/stocks/{{ s.id }}/delete" onsubmit="return confirm('确认删除该股票源？');">
           <button class="danger" type="submit">删除</button>

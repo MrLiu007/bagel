@@ -402,7 +402,7 @@ async def education(
         page_size=page_size,
     )
 
-    source_tabs = [("", "全部学校")] + [(b["key"], b["label"]) for b in ordered]
+    source_tabs = [("", "全部")] + [(b["key"], b["label"]) for b in ordered]
     source_urls = {
         code: _page_url(
             "/education",

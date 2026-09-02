@@ -142,14 +142,16 @@ def run_collect_education(
         on_progress(current=len(sources), total=len(sources), message=f"完成，新建 {created}")
 
     status = "SUCCESS"
-    if errors and created == 0:
-        status = "FAILED"
-    elif errors:
+    any_ok = any(s.get("status") == "success" for s in source_stats)
+    if errors and any_ok:
         status = "PARTIAL"
+    elif errors and not any_ok:
+        status = "FAILED"
     return {
         "status": status,
         "items_found": found,
         "items_created": created,
+        "items_updated": max(0, found - created),
         "sources": len(sources),
         "duration_ms": elapsed_ms(job_t0),
         "source_stats": source_stats,

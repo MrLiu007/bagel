@@ -13,10 +13,10 @@
   </form>
   {% if include_tags %}
     {% for rule in include_tags %}
-    <div class="row">
+    <div class="row {% if not rule.enabled %}is-off{% endif %}">
       <div>
         <div class="kw">{{ rule.keyword }}
-          <span class="badge {% if rule.enabled %}on{% endif %}">{% if rule.enabled %}ON{% else %}OFF{% endif %}</span>
+          <span class="badge {% if rule.enabled %}on{% else %}off{% endif %}">{% if rule.enabled %}ON{% else %}OFF{% endif %}</span>
         </div>
         <div class="meta">权重 {{ rule.weight }}</div>
       </div>
@@ -24,7 +24,7 @@
         <form method="post" action="/settings/tags/{{ rule.id }}/toggle">
           <input type="hidden" name="scope" value="{{ include_scope }}" />
           <input type="hidden" name="enabled" value="{% if rule.enabled %}0{% else %}1{% endif %}" />
-          <button type="submit">{% if rule.enabled %}停用{% else %}启用{% endif %}</button>
+          <button type="submit" class="{% if rule.enabled %}btn-state-off{% else %}btn-state-on{% endif %}">{% if rule.enabled %}停用{% else %}启用{% endif %}</button>
         </form>
         <form method="post" action="/settings/tags/{{ rule.id }}/delete" onsubmit="return confirm('确认删除该兴趣标签？');">
           <input type="hidden" name="scope" value="{{ include_scope }}" />

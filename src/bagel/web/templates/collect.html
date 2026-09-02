@@ -10,8 +10,8 @@
 <p class="hint">当前为<strong>主动触发</strong>模式。每次拉取只保留<strong>近 {{ lookback_days | default(14) }} 天内发布</strong>的条目（按发布时间，而非入库时间），列表也按发布时间倒序。点击任务可查看各数据源明细。</p>
 
 <div class="panel">
-  <div class="actions">
-    <button class="primary" data-kind="collect_news" data-all="1" type="button">采集新闻</button>
+  <div class="actions" id="collect-kinds">
+    <button data-kind="collect_news" type="button">采集新闻</button>
     <button data-kind="collect_github" type="button">采集 GitHub</button>
     <button data-kind="collect_papers" type="button">采集论文</button>
     <button data-kind="collect_education" type="button">采集教育</button>
@@ -60,6 +60,16 @@
 <script>
   const TRIGGER = {{ tab|tojson }};
   const recentBody = document.getElementById('recent');
+  const KIND_META = {
+    collect_news: { label: '新闻', href: '/news' },
+    collect_github: { label: 'GitHub', href: '/github' },
+    collect_papers: { label: '论文', href: '/papers' },
+    collect_education: { label: '教育', href: '/education' },
+    collect_models: { label: '模型', href: '/models' },
+    collect_stocks: { label: '股票', href: '/stocks' },
+    collect_all: { label: '全部', href: '/news' },
+    summarize: { label: '摘要', href: '/briefs' }
+  };
 
   function bindRows(root) {
     root.querySelectorAll('tr.task-row[data-href]').forEach(tr => {
@@ -71,15 +81,33 @@
   {% if tab == 'manual' %}
   const bar = document.getElementById('bar');
   const meta = document.getElementById('meta');
-  const buttons = [...document.querySelectorAll('button[data-kind]')];
+  const buttons = [...document.querySelectorAll('#collect-kinds button[data-kind]')];
   let timer = null;
   let activeId = null;
+  let activeKind = null;
 
   function setBusy(busy) {
     buttons.forEach(b => b.disabled = busy);
   }
 
+  function highlightKind(kind) {
+    activeKind = kind || null;
+    if (kind) {
+      try { sessionStorage.setItem('bagel.collect.kind', kind); } catch (_) {}
+    }
+    buttons.forEach(b => {
+      b.classList.toggle('primary', !!kind && b.dataset.kind === kind);
+    });
+  }
+
+  function resultLink(kind) {
+    const info = KIND_META[kind] || KIND_META.collect_news;
+    return `<a href="${info.href}">查看${info.label}</a>`;
+  }
+
   function render(state) {
+    const kind = state.kind || activeKind;
+    if (kind) highlightKind(kind);
     const pct = state.percent || 0;
     bar.style.width = pct + '%';
     const cls = state.status === 'failed' ? 'warn' : (state.status === 'success' ? 'ok' : '');
@@ -96,7 +124,7 @@
         meta.innerHTML += ` · <a href="/collect/tasks/${state.id}">查看详情</a>`;
       }
       if (state.status === 'success') {
-        meta.innerHTML += ` · <a href="/news">查看新闻</a>`;
+        meta.innerHTML += ` · ${resultLink(kind)}`;
       }
       refreshRecent();
     }
@@ -117,6 +145,7 @@
 
   async function start(kind) {
     setBusy(true);
+    highlightKind(kind);
     meta.textContent = '任务启动中…';
     bar.style.width = '0%';
     const body = new FormData();
@@ -160,11 +189,17 @@
 
   {% if latest and latest.status in ['pending', 'running'] %}
   activeId = {{ latest.id|tojson }};
+  highlightKind({{ latest.kind|tojson }});
   setBusy(true);
   timer = setInterval(() => poll(activeId), 800);
   poll(activeId);
   {% elif latest %}
   render({{ latest|tojson }});
+  {% else %}
+  try {
+    const remembered = sessionStorage.getItem('bagel.collect.kind');
+    if (remembered) highlightKind(remembered);
+  } catch (_) {}
   {% endif %}
   {% endif %}
 </script>
