@@ -1,0 +1,39 @@
+{# Shared INCLUDE interest-tag panel. Expects: include_tags, include_scope, include_scope_label #}
+<div class="panel">
+  <h2 style="font-size:1rem;margin:0 0 0.55rem;font-family:var(--font-mono);">兴趣标签（INCLUDE）</h2>
+  <p class="hint">
+    仅作用于本页类目「{{ include_scope_label }}」：配置后，标题或摘要需至少命中一个启用标签才进入候选。
+    未配置时不过兴趣门禁（仍受<strong>系统排除词</strong>约束）。
+    自媒体 / 微信用各自拉取关键词，不使用此处 INCLUDE。
+  </p>
+  <form class="inline" method="post" action="/settings/tags">
+    <input type="hidden" name="scope" value="{{ include_scope }}" />
+    <input type="text" name="keyword" placeholder="例如：LLM, Agent, RAG" required />
+    <button type="submit">添加兴趣标签</button>
+  </form>
+  {% if include_tags %}
+    {% for rule in include_tags %}
+    <div class="row">
+      <div>
+        <div class="kw">{{ rule.keyword }}
+          <span class="badge {% if rule.enabled %}on{% endif %}">{% if rule.enabled %}ON{% else %}OFF{% endif %}</span>
+        </div>
+        <div class="meta">权重 {{ rule.weight }}</div>
+      </div>
+      <div class="actions">
+        <form method="post" action="/settings/tags/{{ rule.id }}/toggle">
+          <input type="hidden" name="scope" value="{{ include_scope }}" />
+          <input type="hidden" name="enabled" value="{% if rule.enabled %}0{% else %}1{% endif %}" />
+          <button type="submit">{% if rule.enabled %}停用{% else %}启用{% endif %}</button>
+        </form>
+        <form method="post" action="/settings/tags/{{ rule.id }}/delete" onsubmit="return confirm('确认删除该兴趣标签？');">
+          <input type="hidden" name="scope" value="{{ include_scope }}" />
+          <button class="danger" type="submit">删除</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <p class="empty">尚未配置本类目兴趣标签。未配置时采集不过 INCLUDE 门禁。</p>
+  {% endif %}
+</div>

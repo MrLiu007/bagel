@@ -41,6 +41,9 @@ def test_home_redirects_to_login_when_auth_on(monkeypatch: pytest.MonkeyPatch) -
         assert resp.status_code == 303
         assert resp.headers["location"].startswith("/login")
         assert "next=/" in resp.headers["location"] or "next=%2F" in resp.headers["location"]
+        # Bare Accept (IDE/probe style) must not 401 on `/`.
+        resp2 = client.get("/", follow_redirects=False, headers={"Accept": "*/*"})
+        assert resp2.status_code == 303
     finally:
         get_settings.cache_clear()
 

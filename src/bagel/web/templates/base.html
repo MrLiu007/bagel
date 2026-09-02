@@ -41,6 +41,24 @@
   <main>
     {% block content %}{% endblock %}
   </main>
+
+  {# Related drawer: mounted but fully hidden until 「关联」 — never in page flow #}
+  <div id="related-drawer-mask" class="related-mask" hidden></div>
+  <aside id="related-drawer" class="related-drawer" hidden aria-hidden="true">
+    <header class="related-drawer-hd">
+      <strong>关联资源</strong>
+      <button type="button" class="btn" id="related-drawer-close">关闭</button>
+    </header>
+    <div class="related-drawer-tabs">
+      <button type="button" class="on" data-rd-tab="list">列表视图</button>
+      <button type="button" data-rd-tab="graph">图谱视图</button>
+    </div>
+    <div id="related-drawer-body" class="related-drawer-body"></div>
+    <footer class="related-drawer-ft">
+      <a id="related-full-link" class="btn primary" href="/briefs/space" target="_blank" rel="noopener">在新页面打开完整 GBrain</a>
+    </footer>
+  </aside>
+
   <script>
   (function () {
     function applyTheme(theme) {
@@ -58,6 +76,189 @@
         applyTheme(btn.getAttribute("data-theme-set"));
       });
     });
+
+    var mask = document.getElementById("related-drawer-mask");
+    var drawer = document.getElementById("related-drawer");
+    var body = document.getElementById("related-drawer-body");
+    var fullLink = document.getElementById("related-full-link");
+    var chartInst = null;
+    var lastPayload = null;
+    var activeTab = "list";
+    var echartsLoading = null;
+
+    function loadEcharts() {
+      if (typeof echarts !== "undefined") return Promise.resolve();
+      if (echartsLoading) return echartsLoading;
+      echartsLoading = new Promise(function (resolve, reject) {
+        var s = document.createElement("script");
+        s.src = "https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js";
+        s.async = true;
+        s.onload = function () { resolve(); };
+        s.onerror = function () { reject(new Error("ECharts 加载失败")); };
+        document.head.appendChild(s);
+      });
+      return echartsLoading;
+    }
+
+    function closeDrawer() {
+      if (!drawer) return;
+      drawer.classList.remove("open");
+      drawer.hidden = true;
+      drawer.setAttribute("aria-hidden", "true");
+      if (mask) { mask.hidden = true; }
+      if (chartInst) { try { chartInst.dispose(); } catch (e) {} chartInst = null; }
+      if (body) body.innerHTML = "";
+      lastPayload = null;
+    }
+    function openDrawer() {
+      if (!drawer) return;
+      drawer.hidden = false;
+      drawer.classList.add("open");
+      drawer.setAttribute("aria-hidden", "false");
+      if (mask) mask.hidden = false;
+    }
+    function esc(s) {
+      return String(s || "").replace(/[&<>"']/g, function (c) {
+        return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c];
+      });
+    }
+    function renderList(payload) {
+      var seed = payload.seed || {};
+      var html = "";
+      html += '<article class="item related-seed" style="margin-bottom:0.75rem;">';
+      html += '<div class="meta"><span class="badge on">当前</span><span class="badge cat">' + esc(payload.type_label) + '</span></div>';
+      html += '<h2 style="font-size:1rem;"><a href="' + esc(seed.url) + '" target="_blank" rel="noopener">' + esc(seed.title) + '</a></h2>';
+      if (seed.summary) html += '<p class="summary">' + esc(seed.summary) + '</p>';
+      if (seed.url) html += '<p class="meta"><a href="' + esc(seed.url) + '" target="_blank" rel="noopener">点击查看原文 ›</a></p>';
+      html += '</article>';
+      var groups = payload.type_groups || [];
+      if (!groups.length) {
+        html += '<p class="empty">暂未找到足够强的跨类型关联。可先采集更多数据，或切换到「图谱视图」看概念关联。</p>';
+      } else {
+        groups.forEach(function (g) {
+          html += '<h3 class="related-section-title">' + esc(g.type_label) + ' <span class="mono">/ ' + g.count + '</span></h3>';
+          (g.hits || []).forEach(function (hit) {
+            var it = hit.item || {};
+            html += '<article class="item" style="margin:0.5rem 0;">';
+            html += '<div class="meta">';
+            (hit.reasons || []).forEach(function (r) { html += '<span class="badge on">' + esc(r) + '</span>'; });
+            html += '<span class="time">相关度 ' + esc(hit.score) + '</span></div>';
+            html += '<h2 style="font-size:0.98rem;"><a href="' + esc(it.url) + '" target="_blank" rel="noopener">' + esc(it.title) + '</a></h2>';
+            if (it.summary) html += '<p class="summary">' + esc(it.summary) + '</p>';
+            if (it.url) html += '<p class="meta"><a href="' + esc(it.url) + '" target="_blank" rel="noopener">点击查看原文 ›</a></p>';
+            html += '</article>';
+          });
+        });
+      }
+      body.innerHTML = html;
+    }
+    function graphTooltip(p) {
+      if (p.dataType === "edge") return "共现 " + (p.data.value || 1);
+      var d = p.data || {};
+      var lines = [d.name || ""];
+      lines.push((d.kind_label || d.kind || "") + " · 权重 " + (d.value || 0));
+      if (d.hint) lines.push(d.hint);
+      else if (d.url) lines.push("点击打开详情");
+      return lines.join("<br/>");
+    }
+    async function renderGraph(payload) {
+      var stats = (payload.echarts && payload.echarts.stats) || {};
+      body.innerHTML =
+        '<p class="related-graph-meta">资源节点 ' + (stats.items || 0) +
+        ' · 可点击 ' + (stats.clickable || 0) +
+        ' · 绿边框=可打开详情 · 拖拽/滚轮缩放</p>' +
+        '<div id="related-echarts" style="width:100%;height:560px;"></div>';
+      try {
+        await loadEcharts();
+      } catch (err) {
+        body.innerHTML = '<p class="empty">' + esc(err.message || err) + '</p>';
+        return;
+      }
+      var el = document.getElementById("related-echarts");
+      var data = payload.echarts || {};
+      if (!el || !(data.nodes || []).length) {
+        body.innerHTML = '<p class="empty">图谱数据不足。请先采集更多新闻/论文等资源。</p>';
+        return;
+      }
+      chartInst = echarts.init(el);
+      chartInst.setOption({
+        backgroundColor: "transparent",
+        tooltip: { formatter: graphTooltip },
+        legend: [{
+          data: (data.categories || []).map(function (c) { return c.name; }),
+          formatter: function (name) {
+            var cat = (data.categories || []).find(function (c) { return c.name === name; });
+            return (cat && cat.label) || name;
+          },
+          bottom: 0,
+          textStyle: { fontSize: 11 }
+        }],
+        series: [{
+          type: "graph",
+          layout: "force",
+          roam: true,
+          draggable: true,
+          data: data.nodes,
+          links: data.links,
+          categories: data.categories || [],
+          label: { show: true, position: "right", fontSize: 10, color: "inherit" },
+          force: { repulsion: 160, edgeLength: [36, 110], gravity: 0.08 },
+          emphasis: { focus: "adjacency", scale: true },
+          lineStyle: { color: "source", curveness: 0.12, opacity: 0.45 }
+        }]
+      });
+      chartInst.on("click", function (p) {
+        if (p.dataType === "node" && p.data && p.data.url) {
+          window.open(p.data.url, "_blank", "noopener");
+        }
+      });
+      chartInst.getZr().on("mousemove", function (ev) {
+        // cursor hint via tooltip only; ECharts handles node hover
+      });
+    }
+    function showTab(tab) {
+      activeTab = tab;
+      if (!drawer) return;
+      drawer.querySelectorAll("[data-rd-tab]").forEach(function (b) {
+        b.classList.toggle("on", b.getAttribute("data-rd-tab") === tab);
+      });
+      if (!lastPayload) return;
+      if (chartInst) { try { chartInst.dispose(); } catch (e) {} chartInst = null; }
+      if (tab === "graph") renderGraph(lastPayload);
+      else renderList(lastPayload);
+    }
+    async function loadRelated(id) {
+      openDrawer();
+      body.innerHTML = '<p class="empty">加载关联中…</p>';
+      try {
+        var resp = await fetch("/api/items/" + id + "/related");
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
+        lastPayload = await resp.json();
+        if (fullLink) fullLink.href = lastPayload.full_url || ("/briefs/space?seed=" + id);
+        showTab(activeTab || "list");
+      } catch (err) {
+        body.innerHTML = '<p class="empty">加载失败：' + esc(err.message || err) + '</p>';
+      }
+    }
+    document.addEventListener("click", function (ev) {
+      var btn = ev.target.closest(".related-open");
+      if (btn) {
+        ev.preventDefault();
+        activeTab = "list";
+        loadRelated(btn.getAttribute("data-item-id"));
+      }
+    });
+    document.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape") closeDrawer();
+    });
+    var closeBtn = document.getElementById("related-drawer-close");
+    if (closeBtn) closeBtn.addEventListener("click", closeDrawer);
+    if (mask) mask.addEventListener("click", closeDrawer);
+    if (drawer) {
+      drawer.querySelectorAll("[data-rd-tab]").forEach(function (b) {
+        b.addEventListener("click", function () { showTab(b.getAttribute("data-rd-tab")); });
+      });
+    }
   })();
   </script>
   {% block scripts %}{% endblock %}

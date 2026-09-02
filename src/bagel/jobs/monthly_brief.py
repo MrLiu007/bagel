@@ -29,6 +29,8 @@ def run_build_monthly_briefs(
         BriefKind.NEWS,
         BriefKind.GITHUB,
         BriefKind.SCIENCE,
+        BriefKind.EDUCATION,
+        BriefKind.MODEL,
         BriefKind.MEDIA,
         BriefKind.STOCK,
     ]

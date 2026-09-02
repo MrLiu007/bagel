@@ -93,11 +93,15 @@ class AuthGateMiddleware(BaseHTTPMiddleware):
         if request.session.get("user_id"):
             return await call_next(request)
 
-        if path.startswith("/api/") or not wants_html(request):
+        # APIs stay JSON 401; page GETs always go to login (avoid console 401 on `/`).
+        if path.startswith("/api/"):
             return JSONResponse({"detail": "未登录"}, status_code=401)
 
-        nxt = quote(
-            path + (f"?{request.url.query}" if request.url.query else ""),
-            safe="/?=&",
-        )
-        return RedirectResponse(url=f"/login?next={nxt}", status_code=303)
+        if request.method in {"GET", "HEAD"}:
+            nxt = quote(
+                path + (f"?{request.url.query}" if request.url.query else ""),
+                safe="/?=&",
+            )
+            return RedirectResponse(url=f"/login?next={nxt}", status_code=303)
+
+        return JSONResponse({"detail": "未登录"}, status_code=401)

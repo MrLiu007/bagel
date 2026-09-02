@@ -94,6 +94,8 @@ class IntelKeywordRule(Base):
     rule_type: Mapped[str] = mapped_column(String(16), nullable=False)  # INCLUDE/EXCLUDE/BOOST
     weight: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Comma-separated KeywordScope values; empty = legacy defaults (see keyword_scopes).
+    scopes: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -281,4 +283,22 @@ class IntelGithubRepoSnapshot(Base):
     open_issues: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     captured_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class IntelSearchEvent(Base):
+    """User / Feishu search log for dashboard stats and keyword self-growth."""
+
+    __tablename__ = "intel_search_event"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("app_user.id"), nullable=True, index=True
+    )
+    query: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    item_types: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    hit_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    channel: Mapped[str] = mapped_column(String(64), nullable=False, default="web")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )

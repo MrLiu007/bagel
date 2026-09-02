@@ -27,21 +27,21 @@
 |:---:|:---:|:---:|
 | ![微信](./static/6.微信.png) | ![汇总](./static/7.汇总.png) | ![收藏](./static/8.收藏.png) |
 
-| 手动采集 | 过滤标签 | 新闻源 |
+| 采集 | 新闻数据源（含兴趣标签） | 论文源 |
 |:---:|:---:|:---:|
-| ![手动采集](./static/9.手动采集.png) | ![过滤标签](./static/10.系统设置-过滤标签.png) | ![新闻源](./static/11.系统设置-新闻源.png) |
+| ![采集](./static/9.手动采集.png) | ![新闻数据源](./static/11.系统设置-新闻源.png) | ![论文源](./static/12.系统设置-论文源.png) |
 
-| 论文源 | 定时任务 | 股票源 |
+| 定时任务 | 股票源 | CLI / 飞书 |
 |:---:|:---:|:---:|
-| ![论文源](./static/12.系统设置-论文源.png) | ![定时任务](./static/13.系统设置-定时任务.png) | ![股票源](./static/14.系统设置-股票源.png) |
+| ![定时任务](./static/13.系统设置-定时任务.png) | ![股票源](./static/14.系统设置-股票源.png) | ![CLI](./static/15.系统设置-CLI.png) |
 
-| CLI / 飞书 | 配置 | 用户管理 |
+| 配置 | 用户管理 | 系统状态 |
 |:---:|:---:|:---:|
-| ![CLI](./static/15.系统设置-CLI.png) | ![配置](./static/16.系统设置-配置.png) | ![用户](./static/17.系统设置-用户管理.png) |
+| ![配置](./static/16.系统设置-配置.png) | ![用户](./static/17.系统设置-用户管理.png) | ![系统状态](./static/18.系统设置-系统状态.png) |
 
-| 系统状态 | 关联依赖 |
-|:---:|:---:|
-| ![系统状态](./static/18.系统设置-系统状态.png) | ![关联](./static/19.新闻&论文&项目&自媒体等关联依赖信息.png) |
+| 关联依赖 |
+|:---:|
+| ![关联](./static/19.新闻&论文&项目&自媒体等关联依赖信息.png) |
 
 更多原图见仓库 [`static/`](./static/) 目录。
 
@@ -113,6 +113,8 @@ uv run uvicorn bagel.main:app --host 0.0.0.0 --port 8000
 | RSS / RSSHub 新闻 | 国内优先；海外源可在代理下采集，失败不阻断国内 |
 | GitHub 项目 / Release | Token 可选；网络降级友好 |
 | 论文源 | arXiv 等可配置源 |
+| 教育源 | MIT / 斯坦福 / 清北等开放课 RSS（可配置） |
+| 模型源 | Hugging Face Hub / ModelScope 魔搭 |
 | 股票资讯 | 独立源管理 + enrichment / 时间线 / 行研草稿（非荐股） |
 | 自媒体 | 对接 MediaCrawler（**本机克隆**，不进仓库；`bagel setup-media`） |
 | 微信 | Gewe 回调入库，关键词过滤 |
@@ -124,10 +126,10 @@ uv run uvicorn bagel.main:app --host 0.0.0.0 --port 8000
 
 | 路径 | 能力 |
 |------|------|
-| `/news` `/github` `/papers` `/stocks` `/media` `/wechat` | 列表、分类、收藏、关联条目 |
-| `/briefs/*` | 周 / 月度总结模板，可导出 Markdown |
+| `/news` `/github` `/papers` `/models` `/stocks` `/media` `/wechat` | 列表、分类、收藏、关联条目 |
+| `/briefs/*` | 周 / 月总结、**个人空间**（搜索统计 + ECharts GBrain）、教育总结、自定义提示词 |
 | `/favorites` | 收藏夹 |
-| `/collect` | 手动触发采集任务 + 进度 |
+| `/collect` | 采集（手动 / 定时）+ 任务详情 |
 | `/stocks/timeline` · 个股页 | 行情可视化（Yahoo OHLC，可关） |
 | 明暗主题 | 本地持久化主题切换 |
 
@@ -135,13 +137,17 @@ uv run uvicorn bagel.main:app --host 0.0.0.0 --port 8000
 
 | 页签 | 能力 |
 |------|------|
-| 过滤标签 | INCLUDE / EXCLUDE 关键词规则 |
-| 新闻 / 论文 / 股票源 | CRUD、启停 |
-| 定时任务 | 间隔 30～720 分钟 + 抖动；新闻 / GitHub / 股票可勾选 |
+| 新闻数据源 | RSS 源 CRUD、启停；**兴趣标签 INCLUDE**（本类目） |
+| GitHub | Search Query 启停；兴趣标签 INCLUDE |
+| 论文 / 教育 / 模型 / 股票源 | CRUD、启停；各页兴趣标签 INCLUDE |
+| 系统排除词 | EXCLUDE：多选类目（含自媒体/微信）、添加/删除/启停 |
+| 定时任务 | 间隔 30～720 分钟 + 抖动；采集任务 + **关键词自增长**（每日 03:15） |
 | CLI · 飞书 | Webhook / lark-cli；昨日列表 / 周汇总推送；定时后异步推送 |
 | 配置 | 可视化编辑 `.env`（路径对外相对化，不泄露本机绝对路径） |
 | 用户管理 | 多用户登录、管理员、改密 |
 | 系统状态 | DB / RSSHub / GitHub / LLM / 网络健康检查 |
+
+兴趣过滤按资源类型分散：各数据源页配置 INCLUDE；**系统排除词**统一管理 EXCLUDE（可多选类目）。详见 [docs/filter-tags.md](./docs/filter-tags.md)。
 
 ### 飞书双场景
 
@@ -176,16 +182,19 @@ uv run bagel cli feishu-ask "把8月20号到8月21号的体操方向新闻发我
 | 路径 | 说明 |
 |------|------|
 | `/` | 首页 |
-| `/news` | AI 新闻 |
+| `/news` | 新闻 |
 | `/github` | GitHub 项目 |
 | `/papers` | 论文 |
+| `/education` | 教育（高校开放课等） |
+| `/models` | 模型（HF / ModelScope，可按社区筛选） |
 | `/stocks` | 股票资讯 |
 | `/media` | 自媒体 |
 | `/wechat` | 微信 |
-| `/briefs/news` 等 | 汇总 |
+| `/briefs/news` 等 | 汇总（周/月总结 + 自定义提示词） |
+| `/briefs/space` | 个人空间：搜索统计、ECharts GBrain（`/briefs/dashboard` 已重定向） |
 | `/favorites` | 收藏 |
-| `/collect` | 手动采集 |
-| `/settings` | 系统设置 |
+| `/collect` | 采集（手动 / 定时） |
+| `/settings` | 系统设置（默认打开新闻数据源） |
 | `/health` | 存活探针 |
 | `/api/feishu/events` | 飞书事件（公网回调） |
 | `/api/feishu/command` | 飞书指令调试 API |
@@ -202,6 +211,8 @@ uv run bagel cli feishu-ask "把8月20号到8月21号的体操方向新闻发我
 | [docs/data-model.md](./docs/data-model.md) | 数据模型 |
 | [docs/network.md](./docs/network.md) | 网络与代理 |
 | [docs/default-news-sources.md](./docs/default-news-sources.md) | 默认新闻源 |
+| [docs/filter-tags.md](./docs/filter-tags.md) | 兴趣标签、排除词与各类型边界 |
+| [docs/briefs-dashboard.md](./docs/briefs-dashboard.md) | 个人空间、WikiItem/GBrain、关联侧栏、教育总结、关键词自增长 |
 | [docs/git-and-mediacrawler.md](./docs/git-and-mediacrawler.md) | MediaCrawler 克隆与 git 注意点 |
 | [docs/user-config-media-wechat.md](./docs/user-config-media-wechat.md) | 自媒体 + 微信 |
 
@@ -219,12 +230,71 @@ HTTP_PROXY=http://127.0.0.1:7890
 
 ---
 
-## Docker（可选）
+## Docker Compose 部署
+
+推荐用 Compose 一次性拉起 **Bagel + Postgres + RSSHub + FreshRSS**（后两者为隐藏基础设施，默认不对公网暴露）。
+
+### 前置
+
+- 已安装 [Docker Desktop](https://www.docker.com/products/docker-desktop/)（或 Docker Engine + Compose v2）
+- 仓库根目录有 `.env`（可从示例复制）
 
 ```bash
-# 将 STORAGE_BACKEND=postgres 并指向 compose 服务后：
-docker compose up -d
+cp .env.example .env
+# 至少修改 SESSION_SECRET；海外/GitHub/X 建议配置 HTTP(S)_PROXY
 ```
+
+### 启动
+
+```bash
+docker compose up -d --build
+```
+
+浏览器打开 **http://localhost:8000**（端口可用 `.env` 的 `APP_PORT` 覆盖）。
+
+默认账号：`liuzemin` / `123456`（可在系统设置中修改）。
+
+### Compose 会覆盖的环境变量
+
+| 变量 | Compose 值 | 说明 |
+|------|------------|------|
+| `STORAGE_BACKEND` | `postgres` | 事务库 |
+| `DATABASE_URL` | `postgresql+psycopg://bagel:bagel@postgres:5432/bagel` | 容器内网地址 |
+| `RSSHUB_BASE_URL` | `http://rsshub:1200` | X / 微博等 RSSHub 路由 |
+| `FRESHRSS_BASE_URL` | `http://freshrss` | 可选 RSS 基建 |
+| `NO_PROXY` | 含 `postgres,rsshub,freshrss` | 避免代理环回 |
+
+宿主机代理给容器用（可选，写在 `compose.yml` 的 `app.environment` 或 `.env`）：
+
+```env
+HTTP_PROXY=http://host.docker.internal:7890
+HTTPS_PROXY=http://host.docker.internal:7890
+```
+
+### 常用命令
+
+```bash
+docker compose ps
+docker compose logs -f app
+curl http://127.0.0.1:8000/health
+docker compose down          # 停服务（保留数据卷）
+docker compose down -v       # 停服务并删除 Postgres / FreshRSS 卷
+```
+
+调试 FreshRSS UI：
+
+```bash
+docker compose --profile debug up -d
+# http://localhost:8080
+```
+
+### 说明
+
+- **本地开发**仍推荐 `uv run bagel dev` + 默认 SQLite，无需 Docker。
+- 镜像入口为 `docker-entrypoint.sh`：Postgres 跑 `alembic upgrade head`；SQLite 跳过 Alembic（由启动时 `init_db` 建表）。
+- MediaCrawler **不进镜像**；自媒体采集请在宿主机执行 `bagel setup-media`，或挂载本机 `third_party/MediaCrawler`。
+- 海外新闻 / X RSS 拉取失败会**跳过该源**，国内源继续；任务记为部分成功。
+- 若 `docker compose up` 拉取 `postgres` / `rsshub` / `freshrss` 镜像超时，请配置 Docker Hub 镜像或代理后再试（应用镜像 `bagel-app` 可单独 `docker compose build app`）。
 
 ---
 
@@ -285,6 +355,10 @@ Bagel（贝果）站在开源社区肩膀上。下列为运行时/集成依赖�
 
 - [ ] `uv run bagel dev` 后打开 http://127.0.0.1:8000
 - [ ] 默认 SQLite 可采集国内新闻
-- [ ] 系统设置可管理新闻源与过滤标签
+- [ ] 系统设置 → 各数据源页可管理兴趣标签；系统排除词可多选类目并启停
+- [ ] 汇总 → 个人空间可查看搜索统计与 ECharts GBrain
+- [ ] 教育 Tab：设置源、采集、收藏、关联侧栏、教育总结
+- [ ] 列表「关联」打开侧栏（列表 + 图谱），可进完整个人空间
+- [ ] 周/月总结支持自定义提示词并显示生成所用提示词
 - [ ] 主题切换与列表页正常
 - [ ] `uv run pytest` 通过

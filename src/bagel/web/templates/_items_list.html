@@ -7,6 +7,34 @@
 </div>
 {% endif %}
 
+{% if source_tabs is defined and source_tabs %}
+  {% if source_filter_style | default('select') == 'tabs' %}
+  <div class="tabs source-school-tabs" role="tablist" aria-label="{{ source_filter_label | default('数据源') }}">
+    {% for code, label in source_tabs %}
+    <a href="{{ source_urls.get(code) }}"
+       class="{% if source_filter == code %}on{% endif %}"
+       role="tab"
+       aria-selected="{% if source_filter == code %}true{% else %}false{% endif %}">{{ label }}</a>
+    {% endfor %}
+  </div>
+  <div class="toolbar">
+    <span class="count">共 {{ total }} 条 · 第 {{ page }}/{{ total_pages }} 页{% if source_filter %} · 已按{{ source_filter_label | default('数据源') }}过滤{% endif %}</span>
+  </div>
+  {% else %}
+  <div class="toolbar source-filter">
+    <label class="src-label" for="news-source-filter">{{ source_filter_label | default('来源') }}</label>
+    <select id="news-source-filter" class="src-select"
+            onchange="if (this.value) location.href=this.value;">
+      {% for code, label in source_tabs %}
+      <option value="{{ source_urls.get(code) }}"
+              {% if source_filter == code %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <span class="count">共 {{ total }} 条 · 第 {{ page }}/{{ total_pages }} 页{% if source_filter %} · 已按源过滤{% endif %}</span>
+  </div>
+  {% endif %}
+{% endif %}
+
 {% if categories is defined and categories %}
 <div class="toolbar">
   <a href="{{ cat_all_url | default(base_path) }}" class="{% if not category %}on{% endif %}">全部</a>
@@ -14,20 +42,21 @@
   <a href="{{ category_urls.get(c) if category_urls is defined else (base_path ~ '?category=' ~ (c|urlencode) ~ '&page_size=' ~ page_size) }}"
      class="{% if category == c %}on{% endif %}">{{ c }}</a>
   {% endfor %}
-  <span class="count">共 {{ total }} 条 · 第 {{ page }}/{{ total_pages }} 页</span>
+  {% if not source_tabs %}<span class="count">共 {{ total }} 条 · 第 {{ page }}/{{ total_pages }} 页</span>{% endif %}
 </div>
-{% elif total is defined %}
+{% elif total is defined and not source_tabs %}
 <div class="toolbar"><span class="count">共 {{ total }} 条</span></div>
 {% endif %}
 
 {% if not items %}
-  <p class="empty">{{ empty_hint | default('暂无条目。请先前往 <a href="/collect">手动采集</a> 拉取数据；过滤标签可在 <a href="/settings">系统设置</a> 配置。') | safe }}</p>
+  <p class="empty">{{ empty_hint | default('暂无条目。') | safe }}</p>
 {% else %}
   {% for item in items %}
   <article class="item" data-item-id="{{ item.id }}">
     <h2><a href="{{ item.url }}" target="_blank" rel="noopener">{{ item.title }}</a></h2>
     <div class="meta">
       {% if item.is_new %}<span class="badge on">新</span>{% endif %}
+      {% if item.source_name %}<span class="badge src">{{ item.source_name }}</span>{% endif %}
       {% if item.category %}<span class="badge cat">{{ item.category }}</span>{% endif %}
       {% if item.sentiment %}
         <span class="badge sentiment {{ item.sentiment }}">
@@ -60,7 +89,7 @@
         <button type="submit">{% if item.is_favorite %}取消收藏{% else %}收藏{% endif %}</button>
       </form>
       {% if item.show_related %}
-      <a class="btn" href="/items/{{ item.id }}/related">关联</a>
+      <button type="button" class="btn related-open" data-item-id="{{ item.id }}">关联</button>
       {% endif %}
     </div>
   </article>

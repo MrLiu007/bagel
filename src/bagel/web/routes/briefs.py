@@ -11,6 +11,10 @@ from sqlalchemy.orm import Session
 
 from bagel.domain.enums import BriefKind
 from bagel.services import monthly_brief as brief_svc
+from bagel.services import brief_prompts
+from bagel.services import search_analytics
+from bagel.services.gbrain import dashboard_payload
+from bagel.services.feishu_command import search_items
 from bagel.services.monthly_brief import (
     format_period_option,
     list_available_periods,
@@ -24,10 +28,25 @@ from bagel.web.templating import templates
 
 router = APIRouter(tags=["briefs"])
 
+
+def _owner_id(request: Request):
+    raw = request.session.get("user_id")
+    if not raw:
+        return None
+    try:
+        from uuid import UUID
+
+        return UUID(str(raw))
+    except ValueError:
+        return None
+
+
 _KIND_UI: dict[str, tuple[str, str]] = {
     BriefKind.NEWS: ("news", "汇总 · 新闻总结"),
     BriefKind.GITHUB: ("github", "汇总 · 项目总结"),
     BriefKind.SCIENCE: ("papers", "汇总 · 论文总结"),
+    BriefKind.EDUCATION: ("education", "汇总 · 教育总结"),
+    BriefKind.MODEL: ("models", "汇总 · 模型总结"),
     BriefKind.MEDIA: ("media", "汇总 · 自媒体总结"),
     BriefKind.STOCK: ("stocks", "汇总 · 股票总结"),
 }
@@ -45,6 +64,10 @@ def _kind_or_404(kind: str) -> str:
         return BriefKind.GITHUB
     if key in {"SCIENCE", "PAPER", "PAPERS"}:
         return BriefKind.SCIENCE
+    if key in {"EDUCATION", "EDU", "COURSE", "COURSES"}:
+        return BriefKind.EDUCATION
+    if key in {"MODEL", "MODELS"}:
+        return BriefKind.MODEL
     if key in {"MEDIA", "MEDIA_POST"}:
         return BriefKind.MEDIA
     if key in {"STOCK", "STOCKS", "STOCK_NEWS"}:
@@ -150,6 +173,73 @@ def markdown_to_article_html(md: str) -> str:
     return "\n".join(parts)
 
 
+@router.get("/briefs/dashboard", response_class=HTMLResponse)
+async def briefs_dashboard_redirect() -> RedirectResponse:
+    return RedirectResponse(url="/briefs/space", status_code=301)
+
+
+@router.get("/briefs/space", response_class=HTMLResponse)
+async def briefs_space(
+    request: Request,
+    db: Session = Depends(get_db),
+    q: str | None = Query(None),
+    seed: str | None = Query(None),
+) -> HTMLResponse:
+    oid = _owner_id(request)
+    search_note = None
+    if q and q.strip():
+        from bagel.domain.enums import ItemType
+
+        types = (
+            ItemType.NEWS,
+            ItemType.GITHUB_REPO,
+            ItemType.PAPER,
+            ItemType.EDUCATION,
+            ItemType.MODEL,
+            ItemType.STOCK_NEWS,
+            ItemType.MEDIA_POST,
+        )
+        items = search_items(db, types=types, start=None, end=None, keyword=q.strip(), limit=8)
+        search_analytics.log_search(
+            db,
+            query=q,
+            item_types=types,
+            hit_count=len(items),
+            channel="space",
+            owner_id=oid,
+        )
+        db.commit()
+        search_note = f"已记录搜索「{q.strip()}」，命中 {len(items)} 条"
+    stats = dashboard_payload(db, owner_id=oid)
+    if seed:
+        try:
+            from uuid import UUID
+
+            from bagel.services.gbrain import build_knowledge_graph
+
+            graph = build_knowledge_graph(db, seed_id=UUID(seed))
+            stats = {**stats, "echarts": graph.echarts}
+        except Exception:
+            pass
+    return templates.TemplateResponse(
+        request,
+        "briefs_dashboard.html",
+        {
+            "title": "汇总 · 个人空间",
+            "active": "briefs",
+            "nav": NAV_ITEMS,
+            "kind": "SPACE",
+            "kind_path": "space",
+            "list_url": "/briefs/space",
+            "period": "month",
+            "current_month": "",
+            "stats": stats,
+            "search_note": search_note,
+            "search_q": q or "",
+        },
+    )
+
+
 @router.get("/briefs", response_class=HTMLResponse)
 async def briefs_hub(
     request: Request,
@@ -189,6 +279,26 @@ async def briefs_papers(
     period: str | None = Query(None),
 ) -> HTMLResponse:
     return _list_page(request, db, BriefKind.SCIENCE, month, period)
+
+
+@router.get("/briefs/education", response_class=HTMLResponse)
+async def briefs_education(
+    request: Request,
+    db: Session = Depends(get_db),
+    month: str | None = Query(None),
+    period: str | None = Query(None),
+) -> HTMLResponse:
+    return _list_page(request, db, BriefKind.EDUCATION, month, period)
+
+
+@router.get("/briefs/models", response_class=HTMLResponse)
+async def briefs_models(
+    request: Request,
+    db: Session = Depends(get_db),
+    month: str | None = Query(None),
+    period: str | None = Query(None),
+) -> HTMLResponse:
+    return _list_page(request, db, BriefKind.MODEL, month, period)
 
 
 @router.get("/briefs/science", response_class=HTMLResponse)
@@ -261,6 +371,10 @@ def _list_page(
     period_options = [{"value": p, "label": format_period_option(p)} for p in periods]
     if current not in periods:
         period_options.insert(0, {"value": current, "label": format_period_option(current)})
+    default_prompt = brief_prompts.load_default(kind)
+    prompt_used = ""
+    if brief and brief.metadata_:
+        prompt_used = str(brief.metadata_.get("prompt_used") or "")
     return templates.TemplateResponse(
         request,
         "briefs.html",
@@ -280,6 +394,8 @@ def _list_page(
             "brief": brief,
             "article_html": article_html,
             "export_url": f"/briefs/{kind_path}/{current}.md",
+            "default_prompt": default_prompt,
+            "prompt_used": prompt_used,
         },
     )
 
@@ -289,6 +405,8 @@ async def generate_brief(
     kind: str = Form(...),
     year_month: str = Form(...),
     period: str = Form("month"),
+    custom_prompt: str = Form(""),
+    save_prompt_default: str = Form("0"),
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
     resolved = _kind_or_404(kind)
@@ -296,7 +414,12 @@ async def generate_brief(
     try:
         key = parse_period(year_month, period=period_key_type)
         brief_svc.write_monthly_brief(
-            db, kind=resolved, year_month=key, period=period_key_type
+            db,
+            kind=resolved,
+            year_month=key,
+            period=period_key_type,
+            custom_prompt=custom_prompt or None,
+            save_prompt_default=save_prompt_default in {"1", "true", "on"},
         )
         db.commit()
     except ValueError as exc:

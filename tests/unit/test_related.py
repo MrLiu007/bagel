@@ -59,6 +59,7 @@ def test_supports_related_types():
     assert supports_related(ItemType.PAPER)
     assert supports_related(ItemType.GITHUB_REPO)
     assert supports_related(ItemType.MEDIA_POST)
+    assert supports_related(ItemType.MODEL)
 
 
 def test_extract_keywords_from_summary():
@@ -219,6 +220,13 @@ def test_related_page_renders(db: Session, tmp_path, monkeypatch):
         assert "摘要" in page.text
         list_page = client.get("/news")
         assert list_page.status_code == 200
-        assert f"/items/{seed.id}/related" in list_page.text
+        assert 'class="btn related-open"' in list_page.text
+        assert f'data-item-id="{seed.id}"' in list_page.text
+        api = client.get(f"/api/items/{seed.id}/related")
+        assert api.status_code == 200
+        body = api.json()
+        assert "type_groups" in body
+        assert "echarts" in body
+        assert body["full_url"].startswith("/briefs/space")
     app.dependency_overrides.clear()
     get_settings.cache_clear()

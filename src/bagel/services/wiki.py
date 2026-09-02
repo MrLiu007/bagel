@@ -17,7 +17,7 @@ def _slug(text: str, limit: int = 48) -> str:
 
 
 def ensure_wiki_layout(root: Path) -> None:
-    for sub in ("news", "github", "media", "wechat", "briefs"):
+    for sub in ("news", "github", "media", "wechat", "papers", "education", "models", "briefs"):
         (root / sub).mkdir(parents=True, exist_ok=True)
     index = root / "index.md"
     if not index.exists():
@@ -39,6 +39,9 @@ def export_item(item: IntelItem, settings: Settings | None = None) -> Path | Non
         "GITHUB_RELEASE": "github",
         "MEDIA_POST": "media",
         "WECHAT_MSG": "wechat",
+        "PAPER": "papers",
+        "EDUCATION": "education",
+        "MODEL": "models",
     }.get(str(item.item_type), "news")
     month = ""
     if item.published_at is not None:

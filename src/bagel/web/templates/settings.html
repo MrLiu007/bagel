@@ -2,10 +2,13 @@
 {% block content %}
 <h1>{{ title }}</h1>
 <div class="tabs">
-  <a href="/settings?tab=tags" class="{% if tab == 'tags' %}on{% endif %}">过滤标签</a>
-  <a href="/settings?tab=sources" class="{% if tab == 'sources' %}on{% endif %}">新闻源</a>
+  <a href="/settings?tab=sources" class="{% if tab == 'sources' %}on{% endif %}">新闻数据源</a>
+  <a href="/settings?tab=github" class="{% if tab == 'github' %}on{% endif %}">GitHub</a>
   <a href="/settings?tab=papers" class="{% if tab == 'papers' %}on{% endif %}">论文数据源</a>
+  <a href="/settings?tab=education" class="{% if tab == 'education' %}on{% endif %}">教育数据源</a>
+  <a href="/settings?tab=models" class="{% if tab == 'models' %}on{% endif %}">模型数据源</a>
   <a href="/settings?tab=stocks" class="{% if tab == 'stocks' %}on{% endif %}">股票数据源</a>
+  <a href="/settings?tab=excludes" class="{% if tab == 'excludes' %}on{% endif %}">系统排除词</a>
   <a href="/settings?tab=schedule" class="{% if tab == 'schedule' %}on{% endif %}">定时任务</a>
   <a href="/settings?tab=cli" class="{% if tab == 'cli' %}on{% endif %}">CLI</a>
   <a href="/settings?tab=config" class="{% if tab == 'config' %}on{% endif %}">配置</a>
@@ -13,48 +16,14 @@
   <a href="/settings?tab=health" class="{% if tab == 'health' %}on{% endif %}">系统状态</a>
 </div>
 
-{% if tab == 'tags' %}
-<div class="panel">
-  <p class="hint">
-    过滤标签写入关键词规则（INCLUDE）。有 INCLUDE 时，标题或摘要需至少命中一个才会进入候选。
-  </p>
-  <form class="inline" method="post" action="/settings/tags">
-    <input type="text" name="keyword" placeholder="例如：LLM, Agent, RAG" required />
-    <button type="submit">添加标签</button>
-  </form>
-  {% if include_tags %}
-    {% for rule in include_tags %}
-    <div class="row">
-      <div>
-        <div class="kw">{{ rule.keyword }}</div>
-        <div class="meta">权重 {{ rule.weight }} · {% if rule.enabled %}启用{% else %}停用{% endif %}</div>
-      </div>
-      <form method="post" action="/settings/tags/{{ rule.id }}/delete">
-        <button class="danger" type="submit">删除</button>
-      </form>
-    </div>
-    {% endfor %}
-  {% else %}
-    <p class="empty">尚未配置过滤标签。未配置 INCLUDE 时，采集会保留未命中排除词的全部内容。</p>
-  {% endif %}
-</div>
-{% if exclude_tags %}
-<div class="panel">
-  <p class="hint">系统排除词（EXCLUDE，种子数据）：命中则拒绝入库为候选。</p>
-  {% for rule in exclude_tags %}
-  <div class="row">
-    <div class="kw">{{ rule.keyword }}</div>
-    <div class="meta">排除</div>
-  </div>
-  {% endfor %}
-</div>
-{% endif %}
+{% if settings_message %}
+<p class="meta ok">{{ settings_message }}</p>
 {% endif %}
 
 {% if tab == 'sources' %}
 <div class="panel">
   <p class="hint">
-    下方为当前库内新闻源（首次启动由默认种子写入）。可启停、删除，或追加自定义 RSS。
+    下方为当前库内新闻数据源（首次启动由默认种子写入）。可启停、删除，或追加自定义 RSS。
     默认清单见 <span class="mono">docs/default-news-sources.md</span>。
   </p>
   <form class="inline" method="post" action="/settings/sources">
@@ -95,9 +64,10 @@
     </div>
     {% endfor %}
   {% else %}
-    <p class="empty">暂无新闻源。可添加，或重启应用以写入默认种子。</p>
+    <p class="empty">暂无新闻数据源。可添加，或重启应用以写入默认种子。</p>
   {% endif %}
 </div>
+
 {% if default_catalog %}
 <details class="panel">
   <summary style="cursor:pointer;font-family:var(--font-mono);color:var(--accent-2);">查看内置默认数据源清单</summary>
@@ -112,6 +82,99 @@
   {% endfor %}
 </details>
 {% endif %}
+{% include "_interest_tags.html" %}
+{% endif %}
+
+{% if tab == 'github' %}
+<div class="panel">
+  <p class="hint">
+    GitHub 采集使用下方 Search Query（种子写入）。可启停；兴趣标签对本类目单独生效，与新闻 INCLUDE 互不强制共享。
+  </p>
+</div>
+<div class="panel">
+  {% if github_queries %}
+    {% for q in github_queries %}
+    <div class="row">
+      <div>
+        <div class="kw">{{ q.name }}
+          <span class="badge {% if q.enabled %}on{% endif %}">{% if q.enabled %}ON{% else %}OFF{% endif %}</span>
+        </div>
+        <div class="meta" style="word-break:break-all;">{{ q.query }}</div>
+      </div>
+      <div class="actions">
+        <form method="post" action="/settings/github/{{ q.id }}/toggle">
+          <input type="hidden" name="enabled" value="{% if q.enabled %}0{% else %}1{% endif %}" />
+          <button type="submit">{% if q.enabled %}停用{% else %}启用{% endif %}</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <p class="empty">暂无 GitHub Query。重启应用可写入默认种子。</p>
+  {% endif %}
+</div>
+{% include "_interest_tags.html" %}
+{% endif %}
+
+{% if tab == 'excludes' %}
+<div class="panel">
+  <h2 style="font-size:1rem;margin:0 0 0.55rem;font-family:var(--font-mono);">系统排除词（EXCLUDE）</h2>
+  <p class="hint">
+    命中则拒绝入库。可多选适用类目：新闻 / GitHub / 股票 / 论文 / 模型 / 自媒体 / 微信。
+    与各页「兴趣标签」及自媒体/微信拉取关键词独立。详见 <span class="mono">docs/filter-tags.md</span>。
+  </p>
+  <form method="post" action="/settings/excludes" style="display:flex;flex-direction:column;gap:0.65rem;">
+    <div class="inline">
+      <input type="text" name="keyword" placeholder="例如：付费课程" required style="flex:1;min-width:180px;" />
+      <button type="submit">添加排除词</button>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:0.55rem 1rem;font-size:0.9rem;">
+      {% for s in all_scopes %}
+      <label style="display:inline-flex;align-items:center;gap:0.35rem;cursor:pointer;">
+        <input type="checkbox" name="scopes" value="{{ s }}" checked />
+        {{ scope_labels.get(s, s) }}
+      </label>
+      {% endfor %}
+    </div>
+  </form>
+</div>
+<div class="panel">
+  {% if exclude_scope_meta %}
+    {% for meta in exclude_scope_meta %}
+    {% set rule = meta.rule %}
+    <div class="row" style="flex-wrap:wrap;align-items:flex-start;gap:0.75rem;">
+      <div style="flex:1;min-width:140px;">
+        <div class="kw">{{ rule.keyword }}
+          <span class="badge {% if rule.enabled %}on{% endif %}">{% if rule.enabled %}ON{% else %}OFF{% endif %}</span>
+        </div>
+        <div class="meta">适用：{{ meta.labels | join(' · ') }}</div>
+      </div>
+      <form method="post" action="/settings/excludes/{{ rule.id }}/scopes" style="flex:2;min-width:220px;">
+        <div style="display:flex;flex-wrap:wrap;gap:0.4rem 0.85rem;font-size:0.85rem;margin-bottom:0.4rem;">
+          {% for s in all_scopes %}
+          <label style="display:inline-flex;align-items:center;gap:0.3rem;cursor:pointer;">
+            <input type="checkbox" name="scopes" value="{{ s }}" {% if s in meta.scopes %}checked{% endif %} />
+            {{ scope_labels.get(s, s) }}
+          </label>
+          {% endfor %}
+        </div>
+        <button type="submit">保存类目</button>
+      </form>
+      <div class="actions">
+        <form method="post" action="/settings/excludes/{{ rule.id }}/toggle">
+          <input type="hidden" name="enabled" value="{% if rule.enabled %}0{% else %}1{% endif %}" />
+          <button type="submit">{% if rule.enabled %}停用{% else %}启用{% endif %}</button>
+        </form>
+        <form method="post" action="/settings/excludes/{{ rule.id }}/delete" onsubmit="return confirm('确认删除该排除词？');">
+          <button class="danger" type="submit">删除</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <p class="empty">暂无排除词。可添加，或重启应用以写入默认种子。</p>
+  {% endif %}
+</div>
 {% endif %}
 
 {% if tab == 'papers' %}
@@ -164,12 +227,128 @@
   {% endfor %}
 </details>
 {% endif %}
+{% include "_interest_tags.html" %}
+{% endif %}
+
+{% if tab == 'education' %}
+<div class="panel">
+  <p class="hint">
+    教育 Tab 使用的高校开放学习资源（MIT OCW、Stanford AI Lab、耶鲁 OYC、Class Central、fast.ai 等）。
+    支持完整 RSS URL，或 RSSHub 相对路径。启动时会自动修复已知失效源地址。
+  </p>
+  <form class="inline" method="post" action="/settings/education">
+    <input type="text" name="name" placeholder="名称，如 MIT OCW" required />
+    <input type="text" name="url" placeholder="https://…/rss 或 /rsshub/path" required style="flex:2;min-width:220px;" />
+    <select name="region">
+      <option value="GLOBAL">海外</option>
+      <option value="CN">国内</option>
+    </select>
+    <button type="submit">添加</button>
+  </form>
+</div>
+<div class="panel">
+  {% if education_sources %}
+    {% for s in education_sources %}
+    <div class="row">
+      <div>
+        <div class="kw">{{ s.name }}
+          <span class="badge {% if s.enabled %}on{% endif %}">{% if s.enabled %}ON{% else %}OFF{% endif %}</span>
+        </div>
+        <div class="meta" style="word-break:break-all;">{{ s.region }} · {{ s.url }}</div>
+      </div>
+      <div class="actions">
+        <form method="post" action="/settings/education/{{ s.id }}/toggle">
+          <input type="hidden" name="enabled" value="{% if s.enabled %}0{% else %}1{% endif %}" />
+          <button type="submit">{% if s.enabled %}停用{% else %}启用{% endif %}</button>
+        </form>
+        <form method="post" action="/settings/education/{{ s.id }}/delete" onsubmit="return confirm('确认删除该教育源？');">
+          <button class="danger" type="submit">删除</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <p class="empty">暂无教育源。可手动添加，或重启应用以写入默认种子。</p>
+  {% endif %}
+</div>
+{% if education_catalog %}
+<details class="panel">
+  <summary style="cursor:pointer;font-family:var(--font-mono);color:var(--accent-2);">查看内置默认教育源清单</summary>
+  {% for d in education_catalog %}
+  <div class="row">
+    <div>
+      <div class="kw">{{ d.name }}</div>
+      <div class="meta">{{ d.region }} · 默认{% if d.enabled %}启用{% else %}关闭{% endif %} · {{ d.url }}</div>
+    </div>
+  </div>
+  {% endfor %}
+</details>
+{% endif %}
+{% include "_interest_tags.html" %}
+{% endif %}
+
+{% if tab == 'models' %}
+<div class="panel">
+  <p class="hint">
+    模型 Tab 使用的社区数据源。默认仅保留 Hugging Face 与 ModelScope 魔搭各一条，避免重叠拉取。
+    URL 约定：<code>hf:models</code>、<code>hf:models:downloads</code>、<code>hf:models:pipeline:text-generation</code>、
+    <code>hf:models:search:qwen</code>、<code>ms:models</code>、<code>ms:models:downloads</code>、<code>ms:models:search:Qwen</code>。
+  </p>
+  <form class="inline" method="post" action="/settings/models">
+    <input type="text" name="name" placeholder="名称，如 Hugging Face" required />
+    <input type="text" name="url" placeholder="hf:models 或 ms:models" required style="flex:2;min-width:220px;" />
+    <select name="region">
+      <option value="GLOBAL">海外 (HF)</option>
+      <option value="CN">国内 (魔搭)</option>
+    </select>
+    <button type="submit">添加</button>
+  </form>
+</div>
+<div class="panel">
+  {% if model_sources %}
+    {% for s in model_sources %}
+    <div class="row">
+      <div>
+        <div class="kw">{{ s.name }}
+          <span class="badge {% if s.enabled %}on{% endif %}">{% if s.enabled %}ON{% else %}OFF{% endif %}</span>
+        </div>
+        <div class="meta" style="word-break:break-all;">{{ s.region }} · {{ s.url }}</div>
+      </div>
+      <div class="actions">
+        <form method="post" action="/settings/models/{{ s.id }}/toggle">
+          <input type="hidden" name="enabled" value="{% if s.enabled %}0{% else %}1{% endif %}" />
+          <button type="submit">{% if s.enabled %}停用{% else %}启用{% endif %}</button>
+        </form>
+        <form method="post" action="/settings/models/{{ s.id }}/delete" onsubmit="return confirm('确认删除该模型源？');">
+          <button class="danger" type="submit">删除</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <p class="empty">暂无模型源。可手动添加，或重启应用以写入默认种子。</p>
+  {% endif %}
+</div>
+{% if model_catalog %}
+<details class="panel">
+  <summary style="cursor:pointer;font-family:var(--font-mono);color:var(--accent-2);">查看内置默认模型源清单</summary>
+  {% for d in model_catalog %}
+  <div class="row">
+    <div>
+      <div class="kw">{{ d.name }}</div>
+      <div class="meta">{{ d.region }} · 默认{% if d.enabled %}启用{% else %}关闭{% endif %} · {{ d.url }}</div>
+    </div>
+  </div>
+  {% endfor %}
+</details>
+{% endif %}
+{% include "_interest_tags.html" %}
 {% endif %}
 
 {% if tab == 'stocks' %}
 <div class="panel">
   <p class="hint">
-    股票 Tab 使用的资讯源（与 AI 新闻源隔离）。支持完整 RSS URL，或 RSSHub 相对路径（如 <code>/cls/telegraph</code>）。
+    股票 Tab 使用的资讯源（与新闻数据源隔离）。支持完整 RSS URL，或 RSSHub 相对路径（如 <code>/cls/telegraph</code>）。
     默认含 Yahoo / MarketWatch / CNBC / BBC Business 等海外源；国内 RSSHub 源默认关闭，需自建 RSSHub 后启用。
   </p>
   <form class="inline" method="post" action="/settings/stocks">
@@ -222,6 +401,7 @@
   {% endfor %}
 </details>
 {% endif %}
+{% include "_interest_tags.html" %}
 {% endif %}
 
 {% if tab == 'schedule' and schedule_cfg %}
@@ -268,6 +448,14 @@
     <label class="check" style="display:flex;align-items:center;gap:0.4rem;margin:0.35rem 0;color:var(--muted);">
       <input type="checkbox" name="schedule_collect_stocks" value="1" {% if schedule_cfg.schedule_collect_stocks %}checked{% endif %} />
       定时采集股票
+    </label>
+    <label class="check" style="display:flex;align-items:center;gap:0.4rem;margin:0.35rem 0;color:var(--muted);">
+      <input type="checkbox" name="schedule_collect_models" value="1" {% if schedule_cfg.schedule_collect_models %}checked{% endif %} />
+      定时采集模型
+    </label>
+    <label class="check" style="display:flex;align-items:center;gap:0.4rem;margin:0.35rem 0;color:var(--muted);">
+      <input type="checkbox" name="enable_keyword_growth" value="1" {% if schedule_cfg.enable_keyword_growth %}checked{% endif %} />
+      定时扩展兴趣标签 / 系统排除词（基于搜索与 REJECTED 条目，每日 03:15）
     </label>
     <div style="margin-top:0.85rem;">
       <button class="primary" type="submit">保存并重载调度</button>
@@ -345,8 +533,10 @@
 {% if tab == 'config' and env_groups is not none %}
 <div class="panel">
   <p class="hint">
-    可视化编辑 <code>.env</code> 中可对外配置项（写入项目根目录 <code>{{ env_path }}</code>）。
-    密钥类字段默认掩码显示，留空或保持掩码则不改动原值。标有「需重启」的项保存后请重启服务。
+    配置按<strong>当前登录用户</strong>隔离：未改动的项使用系统默认（.env）。
+    个人覆盖保存在 <code>data/user_config/&lt;user_id&gt;.json</code>。
+    管理员可改「应用 / 存储」等系统项（写入 <code>{{ env_path }}</code>）。
+    密钥类字段默认掩码；留空或保持掩码则不改动。
   </p>
   {% if config_message %}<p class="msg ok">{{ config_message }}</p>{% endif %}
   <form method="post" action="/settings/config">
@@ -356,12 +546,16 @@
     <div class="row" style="align-items:flex-start;">
       <div style="min-width:38%;">
         <div class="kw">{{ f.label }} <span class="badge">{{ f.key }}</span>
+          {% if f.source == 'user' %}<span class="badge on">个人</span>{% else %}<span class="badge">默认</span>{% endif %}
+          {% if f.is_system %}<span class="badge tag">系统</span>{% endif %}
           {% if f.restart_hint %}<span class="badge tag">需重启</span>{% endif %}
         </div>
         {% if f.help %}<div class="meta">{{ f.help }}</div>{% endif %}
       </div>
       <div style="flex:1;">
-        {% if f.type == 'bool' %}
+        {% if f.readonly %}
+        <div class="meta">{{ f.display or f.value or '—' }}（只读，需管理员修改系统配置）</div>
+        {% elif f.type == 'bool' %}
         <label class="check" style="display:flex;align-items:center;gap:0.4rem;color:var(--muted);">
           <input type="checkbox" name="{{ f.key }}" value="1" {% if f.value in ['true','1','True','yes','on'] %}checked{% endif %} />
           启用
@@ -382,7 +576,7 @@
     {% endfor %}
     {% endfor %}
     <div style="margin-top:1rem;">
-      <button class="primary" type="submit">保存到 .env</button>
+      <button class="primary" type="submit">保存个人配置</button>
     </div>
   </form>
 </div>

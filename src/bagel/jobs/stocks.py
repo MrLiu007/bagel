@@ -1,7 +1,8 @@
-"""Stock news collection — RSS/STOCK sources, no AI INCLUDE keyword gate."""
+"""Stock news collection — STOCK sources with stocks-scoped keyword rules."""
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -9,8 +10,10 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from bagel.collectors.rss import COLLECTOR_VERSION, RssCollector
-from bagel.domain.enums import ItemType, JobStatus, KeywordRuleType, Region, SourceType
+from bagel.domain.enums import ItemType, JobStatus, KeywordScope, Region, SourceType
+from bagel.jobs.metrics import elapsed_ms, source_stat
 from bagel.pipeline.filter import apply_keyword_rules
+from bagel.pipeline.keyword_scopes import rules_for_scope
 from bagel.pipeline.recency import is_within_lookback, sort_key_published
 from bagel.pipeline.stock_extract import enrich_stock_text
 from bagel.pipeline.textutil import strip_html, truncate
@@ -77,6 +80,8 @@ def run_collect_stocks(
             "items_created": 0,
             "items_updated": 0,
             "items_skipped": 0,
+            "duration_ms": 0,
+            "source_stats": [],
             "errors": [],
         }
 
@@ -85,17 +90,21 @@ def run_collect_stocks(
     elif not settings.enable_overseas_sources:
         sources = [s for s in sources if s.region != Region.GLOBAL]
 
-    # Stock feed must not require AI INCLUDE tags; keep EXCLUDE/BOOST only.
-    all_rules = KeywordRuleRepository(session).list_enabled()
-    rules = [r for r in all_rules if r.rule_type != KeywordRuleType.INCLUDE]
+    # Stocks-scoped INCLUDE / EXCLUDE / BOOST (settings → 股票数据源 / 系统排除词).
+    rules = rules_for_scope(
+        KeywordRuleRepository(session).list_enabled(),
+        KeywordScope.STOCKS,
+    )
     collector = RssCollector(settings)
     items_repo = ItemRepository(session)
     evidence_repo = RawEvidenceRepository(session)
 
     found = created = updated = skipped = 0
     errors: list[str] = []
+    source_stats: list[dict[str, Any]] = []
     total = len(sources)
     lookback_days = settings.collect_lookback_days
+    job_t0 = time.perf_counter()
 
     def progress(i: int, message: str) -> None:
         if on_progress:
@@ -104,6 +113,9 @@ def run_collect_stocks(
     progress(0, f"准备采集 {total} 个股票源（近 {lookback_days} 天）…")
 
     for index, source in enumerate(sources, start=1):
+        src_t0 = time.perf_counter()
+        src_found = src_created = src_updated = src_skipped = 0
+        region_tag = "CN" if source.region == Region.CN else "GLOBAL"
         progress(index - 1, f"采集中 ({index}/{total})：{source.name}")
         try:
             result = collector.collect_source(source)
@@ -111,12 +123,32 @@ def run_collect_stocks(
             session.rollback()
             SourceRepository(session).mark_error(source, "COLLECT_ERROR")
             errors.append(f"{source.name}: {exc}")
+            source_stats.append(
+                source_stat(
+                    source.name,
+                    status="failed",
+                    region=region_tag,
+                    source_id=str(source.id),
+                    duration_ms=elapsed_ms(src_t0),
+                    error=str(exc),
+                )
+            )
             progress(index, f"失败：{source.name}")
             continue
 
         if not result.ok:
             SourceRepository(session).mark_error(source, result.error_code or "UNKNOWN_ERROR")
             errors.append(f"{source.name}: {result.error_code}")
+            source_stats.append(
+                source_stat(
+                    source.name,
+                    status="failed",
+                    region=region_tag,
+                    source_id=str(source.id),
+                    duration_ms=elapsed_ms(src_t0),
+                    error=str(result.error_code),
+                )
+            )
             progress(index, f"失败：{source.name} ({result.error_code})")
             continue
 
@@ -133,8 +165,10 @@ def run_collect_stocks(
                 keep_unknown=False,
             ):
                 skipped += 1
+                src_skipped += 1
                 continue
             found += 1
+            src_found += 1
             label = _item_label(normalized.title, normalized.url)
             try:
                 with session.begin_nested():
@@ -205,10 +239,13 @@ def run_collect_stocks(
                     )
                     if was_created:
                         created += 1
+                        src_created += 1
                     else:
                         updated += 1
+                        src_updated += 1
             except (SQLAlchemyError, ValueError, TypeError) as exc:
                 skipped += 1
+                src_skipped += 1
                 errors.append(f"{source.name}/{label}: {exc.__class__.__name__}")
                 continue
         try:
@@ -216,10 +253,36 @@ def run_collect_stocks(
         except SQLAlchemyError as exc:
             session.rollback()
             errors.append(f"{source.name}: commit failed ({exc.__class__.__name__})")
+            source_stats.append(
+                source_stat(
+                    source.name,
+                    status="failed",
+                    region=region_tag,
+                    source_id=str(source.id),
+                    items_found=src_found,
+                    items_created=src_created,
+                    items_updated=src_updated,
+                    items_skipped=src_skipped,
+                    duration_ms=elapsed_ms(src_t0),
+                    error=f"commit failed ({exc.__class__.__name__})",
+                )
+            )
             progress(index, f"提交失败：{source.name}")
             continue
+        source_stats.append(
+            source_stat(
+                source.name,
+                status="success",
+                region=region_tag,
+                source_id=str(source.id),
+                items_found=src_found,
+                items_created=src_created,
+                items_updated=src_updated,
+                items_skipped=src_skipped,
+                duration_ms=elapsed_ms(src_t0),
+            )
+        )
         progress(index, f"完成：{source.name}（累计新建 {created}，跳过 {skipped}）")
-
     status = JobStatus.SUCCESS
     error_code = None
     error_message = None
@@ -252,5 +315,7 @@ def run_collect_stocks(
         "items_created": created,
         "items_updated": updated,
         "items_skipped": skipped,
+        "duration_ms": elapsed_ms(job_t0),
+        "source_stats": source_stats,
         "errors": errors,
     }

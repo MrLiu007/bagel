@@ -18,7 +18,17 @@ target_metadata = Base.metadata
 
 
 def get_url() -> str:
-    return get_settings().database_url
+    settings = get_settings()
+    url = settings.resolved_database_url
+    # Ensure SQLite parent dir exists before Alembic opens the file.
+    if url.startswith("sqlite") and ":memory:" not in url:
+        from pathlib import Path
+
+        raw = url.split(":///", 1)[-1]
+        path = Path(raw)
+        if path.parent and str(path.parent) not in {".", ""}:
+            path.parent.mkdir(parents=True, exist_ok=True)
+    return url
 
 
 def run_migrations_offline() -> None:

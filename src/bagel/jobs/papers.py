@@ -2,18 +2,22 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any, Callable
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from bagel.collectors.papers import fetch_from_source
-from bagel.domain.enums import ItemStatus, ItemType, SourceType
+from bagel.domain.enums import ItemStatus, ItemType, KeywordScope, SourceType
 from bagel.domain.models import IntelSource
+from bagel.jobs.metrics import elapsed_ms, source_stat
 from bagel.pipeline.category import classify_title
+from bagel.pipeline.filter import apply_keyword_rules
+from bagel.pipeline.keyword_scopes import rules_for_scope
 from bagel.services import wiki as wiki_svc
 from bagel.settings import get_settings
-from bagel.storage.repositories import ItemRepository
+from bagel.storage.repositories import ItemRepository, KeywordRuleRepository
 
 ProgressCallback = Callable[..., None]
 
@@ -23,6 +27,7 @@ def run_collect_papers(
     *,
     on_progress: ProgressCallback | None = None,
 ) -> dict[str, Any]:
+    job_t0 = time.perf_counter()
     sources = list(
         session.scalars(
             select(IntelSource)
@@ -39,15 +44,24 @@ def run_collect_papers(
             "error": "未配置论文数据源：请在系统设置 → 论文数据源中添加",
             "items_created": 0,
             "items_found": 0,
+            "duration_ms": 0,
+            "source_stats": [],
         }
 
     repo = ItemRepository(session)
     settings = get_settings()
+    rules = rules_for_scope(
+        KeywordRuleRepository(session).list_enabled(),
+        KeywordScope.PAPERS,
+    )
     created = 0
     found = 0
     errors: list[str] = []
+    source_stats: list[dict[str, Any]] = []
 
     for i, src in enumerate(sources, start=1):
+        src_t0 = time.perf_counter()
+        src_created = 0
         if on_progress:
             on_progress(current=i - 1, total=len(sources), message=f"拉取 {src.name}")
         try:
@@ -55,10 +69,21 @@ def run_collect_papers(
         except Exception as exc:  # noqa: BLE001
             errors.append(f"{src.name}: {exc}"[:200])
             src.last_error_code = "FETCH_ERROR"
+            source_stats.append(
+                source_stat(
+                    src.name,
+                    status="failed",
+                    source_id=str(src.id),
+                    duration_ms=elapsed_ms(src_t0),
+                    error=str(exc),
+                )
+            )
             continue
 
         found += len(papers)
         for paper in papers:
+            filt = apply_keyword_rules(paper.title, paper.summary, rules)
+            status = filt.status if filt.accepted else ItemStatus.REJECTED
             item, was_created = repo.upsert_from_normalized(
                 item_type=ItemType.PAPER,
                 source_type=SourceType.PAPER,
@@ -68,18 +93,24 @@ def run_collect_papers(
                 summary=paper.summary,
                 author=paper.authors or None,
                 published_at=paper.published_at,
-                tags=[paper.source_name, paper.venue][:8],
+                tags=list({paper.source_name, paper.venue, *filt.matched_include, *filt.matched_boost})[:12],
                 category=classify_title(paper.title, paper.summary or ""),
                 metadata={
                     "external_id": paper.external_id,
                     "venue": paper.venue,
                     "science": True,
+                    "filter": {
+                        "include": filt.matched_include,
+                        "exclude": filt.matched_exclude,
+                        "boost": filt.matched_boost,
+                    },
                 },
-                status=ItemStatus.CANDIDATE,
-                score=1.1,
+                status=status,
+                score=1.1 + filt.score,
             )
             if was_created:
                 created += 1
+                src_created += 1
                 if not item.llm_why:
                     item.llm_why = (
                         "科普落脚：该工作的核心思想能否转化为教学项目或课程案例？"
@@ -87,6 +118,17 @@ def run_collect_papers(
                     )
                 wiki_svc.export_item(item, settings)
         src.last_error_code = None
+        source_stats.append(
+            source_stat(
+                src.name,
+                status="success",
+                source_id=str(src.id),
+                items_found=len(papers),
+                items_created=src_created,
+                items_updated=len(papers) - src_created,
+                duration_ms=elapsed_ms(src_t0),
+            )
+        )
 
     if on_progress:
         on_progress(current=len(sources), total=len(sources), message=f"完成，新建 {created}")
@@ -101,5 +143,7 @@ def run_collect_papers(
         "items_found": found,
         "items_created": created,
         "sources": len(sources),
+        "duration_ms": elapsed_ms(job_t0),
+        "source_stats": source_stats,
         "errors": errors[:8],
     }

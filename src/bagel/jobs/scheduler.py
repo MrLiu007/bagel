@@ -6,6 +6,7 @@ Interval = N minutes + random jitter [0, jitter_seconds], via APScheduler Interv
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 from typing import Any, Callable
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -24,6 +25,7 @@ def _run_job(name: str, fn: Callable) -> None:
     factory = get_session_factory()
     session = factory()
     result: Any = None
+    started_at = datetime.now(UTC).isoformat()
     try:
         logger.info("job.start name=%s", name)
         result = fn(session)
@@ -35,9 +37,32 @@ def _run_job(name: str, fn: Callable) -> None:
             maybe_push_after_collect(name, result)
         except Exception:  # noqa: BLE001
             logger.exception("feishu.notify.hook_failed name=%s", name)
-    except Exception:  # noqa: BLE001
+        try:
+            from bagel.services.tasks import task_manager
+
+            task_manager.record_completed(
+                name,
+                trigger="scheduled",
+                result=result if isinstance(result, dict) else {"status": "SUCCESS"},
+                started_at=started_at,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("task.record_scheduled_failed name=%s", name)
+    except Exception as exc:  # noqa: BLE001
         session.rollback()
         logger.exception("job.failed name=%s", name)
+        try:
+            from bagel.services.tasks import task_manager
+
+            task_manager.record_completed(
+                name,
+                trigger="scheduled",
+                result={"status": "FAILED", "items_found": 0, "items_created": 0},
+                error=str(exc)[:500],
+                started_at=started_at,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("task.record_scheduled_failed name=%s", name)
     finally:
         session.close()
 
@@ -154,6 +179,17 @@ def _register_jobs(sched: BackgroundScheduler, settings: Settings, cfg) -> None:
             max_instances=1,
             coalesce=True,
         )
+    if cfg.schedule_collect_models:
+        from bagel.jobs.models import run_collect_models
+
+        sched.add_job(
+            lambda: _run_job("collect_models", run_collect_models),
+            IntervalTrigger(minutes=minutes, jitter=jitter),
+            id="collect_models",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
     sched.add_job(
         lambda: _run_job("summarize_selected", run_summarize_selected),
         IntervalTrigger(minutes=max(30, minutes), jitter=jitter),
@@ -170,3 +206,14 @@ def _register_jobs(sched: BackgroundScheduler, settings: Settings, cfg) -> None:
         max_instances=1,
         coalesce=True,
     )
+    if cfg.enable_keyword_growth:
+        from bagel.jobs.keyword_growth import run_expand_keywords_from_search
+
+        sched.add_job(
+            lambda: _run_job("keyword_growth", run_expand_keywords_from_search),
+            CronTrigger(hour=3, minute=15),
+            id="keyword_growth",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )

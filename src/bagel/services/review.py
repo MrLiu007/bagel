@@ -101,6 +101,8 @@ def list_candidates(
     item_type: str | None = None,
     category: str | None = None,
     platform: str | None = None,
+    source_id: UUID | None = None,
+    source_ids: list[UUID] | None = None,
     owner_id=None,
     page: int = 1,
     page_size: int = DEFAULT_PAGE_SIZE,
@@ -113,6 +115,8 @@ def list_candidates(
             item_type=item_type,
             category=category or None,
             platform=platform or None,
+            source_id=source_id,
+            source_ids=source_ids,
             owner_id=owner_id,
             limit=page_size,
             offset=offset,
@@ -124,6 +128,8 @@ def list_candidates(
         item_type=item_type,
         category=category or None,
         platform=platform or None,
+        source_id=source_id,
+        source_ids=source_ids,
         owner_id=owner_id,
     )
     categories = list(
@@ -131,6 +137,8 @@ def list_candidates(
             ItemStatus.CANDIDATE,
             item_type=item_type,
             platform=platform or None,
+            source_id=source_id,
+            source_ids=source_ids,
             owner_id=owner_id,
         )
     )

@@ -410,8 +410,27 @@ def _same_type_family(item_type: str) -> list[str]:
     return [item_type]
 
 
-def _pool_for(session: Session, seed: IntelItem, *, limit: int = 360) -> list[IntelItem]:
-    types = _same_type_family(seed.item_type)
+def _pool_for(
+    session: Session,
+    seed: IntelItem,
+    *,
+    limit: int = 360,
+    cross_type: bool = False,
+) -> list[IntelItem]:
+    if cross_type:
+        types = [
+            ItemType.NEWS,
+            ItemType.PAPER,
+            ItemType.MODEL,
+            ItemType.STOCK_NEWS,
+            ItemType.EDUCATION,
+            ItemType.GITHUB_REPO,
+            ItemType.GITHUB_RELEASE,
+            ItemType.MEDIA_POST,
+            ItemType.WECHAT_MSG,
+        ]
+    else:
+        types = _same_type_family(seed.item_type)
     stmt = (
         select(IntelItem)
         .where(
@@ -527,13 +546,14 @@ def find_related(
     item_id: UUID,
     *,
     limit: int = 20,
+    cross_type: bool = False,
 ) -> RelatedBundle:
     seed = ItemRepository(session).get(item_id)
     if seed is None:
         raise LookupError("条目不存在")
 
     seed_keys = extract_core_keywords(_summary_text(seed))
-    pool = _pool_for(session, seed)
+    pool = _pool_for(session, seed, cross_type=cross_type)
     scored: list[RelatedHit] = []
     for other in pool:
         hit = _score_pair(seed, other, seed_keys=seed_keys)
@@ -544,6 +564,54 @@ def find_related(
     return RelatedBundle(seed=seed, groups=_group_hits(top), total=len(top))
 
 
+def find_related_drawer(session: Session, item_id: UUID, *, limit: int = 36) -> dict:
+    """Payload for side-drawer: type-grouped list + ECharts subgraph."""
+    from bagel.services.gbrain import item_subgraph
+    from bagel.web.templating import present_item
+
+    _TYPE_LABELS = {
+        ItemType.NEWS: "新闻",
+        ItemType.PAPER: "论文",
+        ItemType.MODEL: "模型",
+        ItemType.STOCK_NEWS: "股票",
+        ItemType.EDUCATION: "教育",
+        ItemType.GITHUB_REPO: "GitHub 项目",
+        ItemType.GITHUB_RELEASE: "GitHub Release",
+        ItemType.MEDIA_POST: "自媒体",
+        ItemType.WECHAT_MSG: "微信",
+    }
+
+    bundle = find_related(session, item_id, limit=limit, cross_type=True)
+    seed = bundle.seed
+    flat: list[RelatedHit] = []
+    for _title, hits in bundle.groups:
+        flat.extend(hits)
+
+    by_type: dict[str, list] = {}
+    for hit in flat:
+        label = _TYPE_LABELS.get(hit.item.item_type, hit.item.item_type)
+        by_type.setdefault(label, []).append(
+            {
+                "score": hit.score,
+                "reasons": hit.reasons,
+                "item": present_item(hit.item, preview=False),
+            }
+        )
+    type_groups = [
+        {"type_label": k, "count": len(v), "hits": v}
+        for k, v in sorted(by_type.items(), key=lambda x: -len(x[1]))
+    ]
+    echarts = item_subgraph(session, seed, [h.item for h in flat])
+    return {
+        "seed": present_item(seed, preview=False),
+        "type_label": _TYPE_LABELS.get(seed.item_type, seed.item_type),
+        "type_groups": type_groups,
+        "total": bundle.total,
+        "echarts": echarts,
+        "full_url": f"/briefs/space?seed={seed.id}",
+    }
+
+
 def supports_related(item_type: str | None) -> bool:
     return item_type in {
         ItemType.NEWS,
@@ -552,6 +620,8 @@ def supports_related(item_type: str | None) -> bool:
         ItemType.GITHUB_REPO,
         ItemType.GITHUB_RELEASE,
         ItemType.MEDIA_POST,
+        ItemType.MODEL,
+        ItemType.EDUCATION,
     }
 
 

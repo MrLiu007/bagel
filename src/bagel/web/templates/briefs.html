@@ -90,10 +90,35 @@
   <a class="btn primary" href="{{ export_url }}">导出 Markdown</a>
 </div>
 
+<div class="panel" style="margin-bottom:1rem;">
+  <h2 style="font-size:1rem;margin:0 0 0.55rem;">自定义提示词（周 / 月总结通用）</h2>
+  <p class="hint" style="margin:0 0 0.55rem;">
+    可选：填写后将优先用于本次生成（条目排序与开篇聚焦），并写入生成记录。留空则使用系统默认提示词。
+  </p>
+  <form method="post" action="/briefs/generate">
+    <input type="hidden" name="kind" value="{{ kind }}" />
+    <input type="hidden" name="year_month" value="{{ current_month }}" />
+    <input type="hidden" name="period" value="{{ period }}" />
+    <textarea name="custom_prompt" rows="4" style="width:100%;margin-bottom:0.5rem;font-family:inherit;"
+              placeholder="例如：重点讲 LLM 推理成本与教育场景落地，避免营销口吻…">{{ default_prompt }}</textarea>
+    <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.88rem;margin-right:0.75rem;">
+      <input type="checkbox" name="save_prompt_default" value="1" />
+      保存为本类型默认提示词
+    </label>
+    <button type="submit">按自定义提示词生成</button>
+  </form>
+</div>
+
 {% if brief %}
   <p class="meta">
     {{ brief.title }} · 纳入 {{ brief.item_count }} 条 · 生成于 {{ brief.generated_at }}
   </p>
+  {% if prompt_used %}
+  <details class="panel" style="margin-bottom:1rem;">
+    <summary style="cursor:pointer;font-family:var(--font-mono);color:var(--accent-2);">查看本次生成使用的提示词</summary>
+    <pre style="white-space:pre-wrap;font-size:0.82rem;margin:0.65rem 0 0;color:var(--summary);">{{ prompt_used }}</pre>
+  </details>
+  {% endif %}
   <article class="brief-body">{{ article_html | safe }}</article>
 {% else %}
   <p class="empty">

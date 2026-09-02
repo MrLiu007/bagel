@@ -18,6 +18,8 @@ Postgres  (RSS infra)    (feed adapter)
 - LLM output never overwrites raw evidence (`IntelRawEvidence`).
 - FreshRSS / RSSHub are hidden infrastructure (no public ports by default).
 - Network mode `AUTO` / `DIRECT` / `PROXY`: overseas / GitHub failures must not stop CN collection.
+- Interest filters are **per channel**: INCLUDE on each data-source settings tab; EXCLUDE on **系统排除词** with multi-select scopes ([filter-tags.md](./filter-tags.md)).
+- Media/wechat keep env crawl keywords; EXCLUDE can still apply after ingest when scoped.
 - In-process APScheduler for scheduled jobs (idempotent; prefer single worker).
 - Optional Markdown **wiki export** (`WIKI_ENABLED`) is a read-only side channel for Obsidian / RAG — not a DB replacement.
 

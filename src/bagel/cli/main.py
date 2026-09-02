@@ -98,15 +98,30 @@ def dev(
     host: str | None = None,
     port: int | None = None,
     reload: bool = True,
+    auto_port: bool = typer.Option(
+        False,
+        "--auto-port",
+        help="If the preferred port cannot bind, try nearby free ports",
+    ),
 ) -> None:
     """Start the FastAPI app for local development."""
-    import logging
+    from bagel.cli.ports import resolve_bind_port
 
     settings = get_settings()
     bind_host = host or settings.app_host
-    bind_port = port or settings.app_port
+    requested = port if port is not None else settings.app_port
+    try:
+        bind_port, port_warning = resolve_bind_port(
+            bind_host, requested, auto_port=auto_port
+        )
+    except OSError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
     url = f"http://{bind_host}:{bind_port}"
     console.print(f"[bold]Starting Bagel[/bold] on {url}")
+    if port_warning:
+        console.print(f"[yellow]{port_warning}[/yellow]")
     if settings.auth_required:
         console.print(
             "[dim]Auth on — open the URL and sign in "
@@ -116,30 +131,7 @@ def dev(
     else:
         console.print("[dim]Auth off (AUTH_REQUIRED=false).[/dim]")
 
-    # Drop CDP / favicon probe noise from the access log (common on Windows IDE browsers).
-    class _QuietProbeFilter(logging.Filter):
-        def filter(self, record: logging.LogRecord) -> bool:
-            try:
-                msg = record.getMessage()
-            except Exception:  # noqa: BLE001
-                return True
-            # uvicorn access lines: '127.0.0.1:1234 - "GET /json/version HTTP/1.1" 404'
-            return not any(
-                marker in msg
-                for marker in (
-                    "/json/version",
-                    "/json/list",
-                    '"GET /json ',
-                    "/favicon.ico",
-                    "/robots.txt",
-                    "/.well-known/",
-                )
-            )
-
-    logging.getLogger("uvicorn.access").addFilter(_QuietProbeFilter())
-
-    # Exclude MediaCrawler / data / venvs — startup may touch bagel_entry.py and
-    # MediaCrawler writes runtime files; watching them causes infinite reload loops.
+    # Probe noise is filtered in create_app() so --reload child processes also quiet it.
     reload_excludes = [
         "third_party/MediaCrawler/*",
         "third_party\\MediaCrawler\\*",
@@ -152,14 +144,21 @@ def dev(
         ".idea/*",
         ".pytest_cache/*",
     ]
-    uvicorn.run(
-        "bagel.main:app",
-        host=bind_host,
-        port=bind_port,
-        reload=reload,
-        reload_excludes=reload_excludes if reload else None,
-        log_level=settings.log_level.lower(),
-    )
+    try:
+        uvicorn.run(
+            "bagel.main:app",
+            host=bind_host,
+            port=bind_port,
+            reload=reload,
+            reload_excludes=reload_excludes if reload else None,
+            log_level=settings.log_level.lower(),
+        )
+    except OSError as exc:
+        from bagel.cli.ports import diagnose_bind_failure
+
+        console.print(f"[red]Bind failed[/red] {exc}")
+        console.print(diagnose_bind_failure(bind_host, bind_port))
+        raise typer.Exit(code=1) from exc
 
 
 @cli_app.command("status")

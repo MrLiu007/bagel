@@ -4,13 +4,16 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+# Prefer PyPI over ghcr.io (more mirror-friendly in restricted networks).
+RUN pip install --no-cache-dir -U pip uv
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
-    PATH="/app/.venv/bin:$PATH"
+    PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1
 
 COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
@@ -21,6 +24,9 @@ RUN uv sync --frozen --no-dev
 
 COPY . .
 
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN sed -i 's/\r$//' /app/docker-entrypoint.sh && chmod +x /app/docker-entrypoint.sh
+
 EXPOSE 8000
 
-CMD ["sh", "-c", "uv run alembic upgrade head && uv run uvicorn intel_center.main:app --host 0.0.0.0 --port 8000"]
+ENTRYPOINT ["sh", "/app/docker-entrypoint.sh"]

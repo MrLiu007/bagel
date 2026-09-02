@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<style>
+  .dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+  .dash-card { border: 1px solid var(--line); border-radius: var(--radius); padding: 0.85rem 1rem; background: var(--soft-bg); }
+  .dash-card .num { font-size: 1.6rem; font-weight: 700; color: var(--accent-2); font-family: var(--font-mono); }
+  .dash-card .lbl { font-size: 0.82rem; color: var(--muted); margin-top: 0.2rem; }
+  .bar-row { display: flex; align-items: center; gap: 0.5rem; margin: 0.35rem 0; font-size: 0.88rem; }
+  .bar-row .label { min-width: 7rem; color: var(--fg); }
+  .bar-row .bar { flex: 1; height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
+  .bar-row .bar span { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+  .bar-row .cnt { min-width: 2.5rem; text-align: right; color: var(--muted); font-family: var(--font-mono); font-size: 0.8rem; }
+  #gbrain-chart { width: 100%; height: 520px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--brief-inset); }
+  table.kg-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  table.kg-table th, table.kg-table td { border: 1px solid var(--line); padding: 0.4rem 0.55rem; text-align: left; }
+  table.kg-table th { background: var(--brief-inset); }
+</style>
+{% endblock %}
+{% block content %}
+<h1>汇总 · 个人空间</h1>
+{% include "briefs_tabs.html" %}
+
+<p class="hint">
+  搜索行为会写入统计，并驱动<strong>兴趣标签 / 系统排除词</strong>定时自增长。
+  GBrain 通过 WikiItem 适配层统一新闻 / 论文 / 教育 / 模型等资源，再用 ECharts 关系图交互浏览。
+  图谱以<strong>可点击资源节点</strong>为主（绿边框=可打开原文），概念节点可跳转分类列表或试搜。
+</p>
+
+{% if search_note %}
+<p class="meta ok">{{ search_note }}</p>
+{% endif %}
+
+<form class="inline panel" method="get" action="/briefs/space" style="margin-bottom:1rem;">
+  <input type="text" name="q" value="{{ search_q }}" placeholder="试搜：LLM、Agent、开放课…" style="flex:1;min-width:200px;" />
+  <button type="submit">搜索并记录</button>
+</form>
+
+<div class="dash-grid">
+  <div class="dash-card">
+    <div class="num">{{ stats.search_count }}</div>
+    <div class="lbl">近 90 天搜索次数</div>
+  </div>
+  <div class="dash-card">
+    <div class="num">{{ stats.type_stats | length }}</div>
+    <div class="lbl">活跃数据类型</div>
+  </div>
+  <div class="dash-card">
+    <div class="num">{{ stats.source_stats | length }}</div>
+    <div class="lbl">活跃数据源</div>
+  </div>
+  <div class="dash-card">
+    <div class="num">{{ stats.graph_links | length }}</div>
+    <div class="lbl">深度关联对（Top）</div>
+  </div>
+</div>
+
+<div class="panel">
+  <h2 style="font-size:1rem;margin:0 0 0.65rem;">搜索关键词排名</h2>
+  {% if stats.keyword_rankings %}
+  <table class="kg-table">
+    <thead><tr><th>#</th><th>关键词</th><th>搜索次数</th><th>命中条目</th></tr></thead>
+    <tbody>
+      {% for row in stats.keyword_rankings %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ row.keyword }}</td>
+        <td>{{ row.searches }}</td>
+        <td>{{ row.hits }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">暂无搜索记录。可在上方试搜，或通过飞书指令查询。</p>
+  {% endif %}
+</div>
+
+<div class="panel">
+  <h2 style="font-size:1rem;margin:0 0 0.65rem;">常用数据类型（近 90 天入库）</h2>
+  {% set max_type = stats.type_stats[0].count if stats.type_stats else 1 %}
+  {% for row in stats.type_stats %}
+  <div class="bar-row">
+    <span class="label">{{ row.label }}</span>
+    <div class="bar"><span style="width:{{ (row.count * 100 / max_type) | int }}%;"></span></div>
+    <span class="cnt">{{ row.count }}</span>
+  </div>
+  {% else %}
+  <p class="empty">暂无数据。</p>
+  {% endfor %}
+</div>
+
+<div class="panel">
+  <h2 style="font-size:1rem;margin:0 0 0.65rem;">常用数据源</h2>
+  {% set max_src = stats.source_stats[0].count if stats.source_stats else 1 %}
+  {% for row in stats.source_stats %}
+  <div class="bar-row">
+    <span class="label">{{ row.name }}</span>
+    <div class="bar"><span style="width:{{ (row.count * 100 / max_src) | int }}%;"></span></div>
+    <span class="cnt">{{ row.count }}</span>
+  </div>
+  {% else %}
+  <p class="empty">暂无绑定数据源的条目。</p>
+  {% endfor %}
+</div>
+
+<div class="panel">
+  <h2 style="font-size:1rem;margin:0 0 0.35rem;">GBrain 知识图谱</h2>
+  <p class="hint" style="margin:0 0 0.65rem;">
+    红色节点=具体资源（绿边框可点开原文）；紫/青/蓝=分类·标签·类型（跳转到列表或试搜）。
+    拖拽节点 · 滚轮缩放 · 点击即可查阅学习。
+    {% if stats.echarts.stats %}
+    <span class="mono">节点 {{ stats.echarts.stats.nodes }} · 资源 {{ stats.echarts.stats.items }} · 可点击 {{ stats.echarts.stats.clickable }}</span>
+    {% endif %}
+  </p>
+  <div id="gbrain-chart"></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  var data = {{ stats.echarts | tojson }};
+  if (!data || !data.nodes || !data.nodes.length) return;
+  var el = document.getElementById('gbrain-chart');
+  if (!el || typeof echarts === 'undefined') return;
+  var chart = echarts.init(el);
+  chart.setOption({
+    backgroundColor: 'transparent',
+    tooltip: {
+      formatter: function (p) {
+        if (p.dataType === 'edge') return '共现 ' + (p.data.value || 1);
+        var d = p.data || {};
+        var lines = [d.name || ''];
+        lines.push((d.kind_label || d.kind || '') + ' · 权重 ' + (d.value || 0));
+        if (d.hint) lines.push(d.hint);
+        else if (d.url) lines.push('点击打开详情');
+        return lines.join('<br/>');
+      }
+    },
+    legend: [{
+      data: (data.categories || []).map(function (c) { return c.name; }),
+      formatter: function (name) {
+        var cat = (data.categories || []).find(function (c) { return c.name === name; });
+        return (cat && cat.label) || name;
+      },
+      bottom: 0
+    }],
+    series: [{
+      type: 'graph',
+      layout: 'force',
+      roam: true,
+      draggable: true,
+      categories: data.categories || [],
+      data: data.nodes || [],
+      links: data.links || [],
+      label: { show: true, position: 'right', fontSize: 11 },
+      force: { repulsion: 200, edgeLength: [40, 130], gravity: 0.06 },
+      emphasis: { focus: 'adjacency', scale: true },
+      lineStyle: { color: 'source', curveness: 0.15, opacity: 0.55 }
+    }]
+  });
+  chart.on('click', function (p) {
+    if (p.dataType === 'node' && p.data && p.data.url) {
+      window.open(p.data.url, '_blank', 'noopener');
+    }
+  });
+  window.addEventListener('resize', function () { chart.resize(); });
+})();
+</script>
+{% endblock %}

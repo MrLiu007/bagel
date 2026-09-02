@@ -24,6 +24,8 @@ class RuntimeConfig:
     schedule_collect_news: bool = True
     schedule_collect_github: bool = True
     schedule_collect_stocks: bool = False
+    schedule_collect_models: bool = False
+    enable_keyword_growth: bool = True
     enable_feishu_cli: bool = False
     feishu_cli_bin: str = "lark-cli"
     feishu_webhook_url: str = ""
@@ -41,6 +43,8 @@ class RuntimeConfig:
             schedule_collect_news=bool(self.schedule_collect_news),
             schedule_collect_github=bool(self.schedule_collect_github),
             schedule_collect_stocks=bool(self.schedule_collect_stocks),
+            schedule_collect_models=bool(self.schedule_collect_models),
+            enable_keyword_growth=bool(self.enable_keyword_growth),
             enable_feishu_cli=bool(self.enable_feishu_cli),
             feishu_cli_bin=(self.feishu_cli_bin or "lark-cli").strip() or "lark-cli",
             feishu_webhook_url=(self.feishu_webhook_url or "").strip(),

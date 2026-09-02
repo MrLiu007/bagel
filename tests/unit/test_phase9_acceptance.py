@@ -98,9 +98,14 @@ def test_candidates_page_with_sqlite(tmp_path, no_auth) -> None:
         resp = client.get("/news")
         assert resp.status_code == 200
         assert "暂无" in resp.text or "新闻" in resp.text
-        settings = client.get("/settings")
+        settings = client.get("/settings?tab=sources")
         assert settings.status_code == 200
-        assert "过滤标签" in settings.text
+        assert "兴趣标签" in settings.text
+        assert "新闻数据源" in settings.text
+        assert "系统排除词" in settings.text
+        excludes = client.get("/settings?tab=excludes")
+        assert excludes.status_code == 200
+        assert "EXCLUDE" in excludes.text or "排除词" in excludes.text
     finally:
         app.dependency_overrides.clear()
         session.close()

@@ -36,6 +36,8 @@ _TYPE_MAP: dict[str, tuple[str, tuple[str, ...]]] = {
     "github": ("GitHub", (ItemType.GITHUB_REPO, ItemType.GITHUB_RELEASE)),
     "项目": ("GitHub", (ItemType.GITHUB_REPO, ItemType.GITHUB_RELEASE)),
     "论文": ("论文", (ItemType.PAPER,)),
+    "教育": ("教育", (ItemType.EDUCATION,)),
+    "开放课": ("教育", (ItemType.EDUCATION,)),
     "股票": ("股票", (ItemType.STOCK_NEWS,)),
     "自媒体": ("自媒体", (ItemType.MEDIA_POST,)),
     "微信": ("微信", (ItemType.WECHAT_MSG,)),
@@ -220,6 +222,18 @@ def handle_command(session: Session, text: str, *, now: datetime | None = None) 
                 note = f"（已补采，新建 {crawl_created} 条）"
 
     body = format_query_result(parsed, items, note=note)
+    try:
+        from bagel.services import search_analytics
+
+        search_analytics.log_search(
+            session,
+            query=parsed.keyword or parsed.raw,
+            item_types=parsed.item_types,
+            hit_count=len(items),
+            channel="feishu",
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("feishu.command.search_log_failed")
     return CommandResult(
         ok=True,
         text=body,
