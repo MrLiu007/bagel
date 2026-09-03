@@ -13,11 +13,13 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Sequence
 
+from urllib.parse import urlparse
+
 from bagel.domain.enums import BriefKind, ItemType
 from bagel.domain.models import IntelItem
 from bagel.pipeline.textutil import strip_html, truncate
 
-TEMPLATE_VERSION = "share-period-v10-stock"
+TEMPLATE_VERSION = "share-period-v11-deck"
 
 # Old LLM / template leftovers that must not reappear as “关键点”.
 _BAD_WHY_RE = re.compile(
@@ -481,6 +483,14 @@ def _entry_blocks(slot: BriefSlotItem, *, kind: str) -> list[str]:
     return _entry_news(slot)
 
 
+def _link_host(url: str) -> str:
+    try:
+        host = (urlparse(url).netloc or "").removeprefix("www.")
+    except Exception:  # noqa: BLE001
+        host = ""
+    return host or "打开"
+
+
 def _link_table(items: Sequence[IntelItem]) -> list[str]:
     lines = [
         "## 原文链接清单",
@@ -496,7 +506,9 @@ def _link_table(items: Sequence[IntelItem]) -> list[str]:
     for idx, item in enumerate(ordered[:40], start=1):
         s = to_slot(item)
         title = s.title.replace("|", "/")
-        lines.append(f"| {idx} | {s.published} | {s.category} | {title} | {s.url} |")
+        # Short label — raw URLs blow out presentation table width.
+        link = f"[{_link_host(s.url)}]({s.url})" if s.url else ""
+        lines.append(f"| {idx} | {s.published} | {s.category} | {title} | {link} |")
     if not ordered:
         lines.append("|  |  |  | （暂无） |  |")
     lines.append("")

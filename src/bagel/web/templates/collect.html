@@ -2,8 +2,8 @@
 {% block content %}
 <h1>{{ title }}</h1>
 <div class="tabs">
-  <a href="/collect?tab=manual" class="{% if tab == 'manual' %}on{% endif %}">手动采集</a>
-  <a href="/collect?tab=scheduled" class="{% if tab == 'scheduled' %}on{% endif %}">定时采集</a>
+  <a href="{{ u('/collect?tab=manual') }}" class="{% if tab == 'manual' %}on{% endif %}">手动采集</a>
+  <a href="{{ u('/collect?tab=scheduled') }}" class="{% if tab == 'scheduled' %}on{% endif %}">定时采集</a>
 </div>
 
 {% if tab == 'manual' %}
@@ -42,7 +42,7 @@
     </tr></thead>
     <tbody id="recent">
       {% for t in recent %}
-      <tr class="task-row" data-href="/collect/tasks/{{ t.id }}" style="cursor:pointer;">
+      <tr class="task-row" data-href="{{ u('/collect/tasks/' ~ t.id) }}" style="cursor:pointer;">
         <td style="padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);color:var(--muted);">{{ t.kind }}</td>
         <td style="padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);color:var(--muted);">{{ t.status }}</td>
         <td style="padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);color:var(--muted);">{{ t.percent }}%</td>
@@ -104,7 +104,7 @@
 
   function resultLink(kind) {
     const info = KIND_META[kind] || KIND_META.collect_news;
-    return `<a href="${info.href}">查看${info.label}</a>`;
+    return `<a href="${bagelUrl(info.href)}">查看${info.label}</a>`;
   }
 
   function render(state) {
@@ -123,7 +123,7 @@
       setBusy(false);
       if (timer) { clearInterval(timer); timer = null; }
       if (state.id) {
-        meta.innerHTML += ` · <a href="/collect/tasks/${state.id}">查看详情</a>`;
+        meta.innerHTML += ` · <a href="${bagelUrl('/collect/tasks/' + state.id)}">查看详情</a>`;
       }
       if (state.status === 'success') {
         meta.innerHTML += ` · ${resultLink(kind)}`;
@@ -133,7 +133,7 @@
   }
 
   async function poll(id) {
-    const resp = await fetch('/api/tasks/' + id);
+    const resp = await fetch(bagelUrl('/api/tasks/' + id));
     if (resp.status === 404) {
       meta.textContent = '任务不存在或已过期';
       setBusy(false);
@@ -152,7 +152,7 @@
     bar.style.width = '0%';
     const body = new FormData();
     body.append('kind', kind);
-    const resp = await fetch('/api/tasks/start', { method: 'POST', body });
+    const resp = await fetch(bagelUrl('/api/tasks/start'), { method: 'POST', body });
     const state = await resp.json();
     if (!resp.ok) {
       meta.textContent = state.detail || '启动失败';
@@ -166,7 +166,7 @@
   }
 
   async function refreshRecent() {
-    const resp = await fetch('/api/tasks?trigger=' + encodeURIComponent(TRIGGER));
+    const resp = await fetch(bagelUrl('/api/tasks?trigger=' + encodeURIComponent(TRIGGER)));
     if (!resp.ok) return;
     const data = await resp.json();
     if (!data.tasks.length) {
@@ -174,7 +174,7 @@
       return;
     }
     recentBody.innerHTML = data.tasks.map(t =>
-      `<tr class="task-row" data-href="/collect/tasks/${t.id}" style="cursor:pointer;">
+      `<tr class="task-row" data-href="${bagelUrl('/collect/tasks/' + t.id)}" style="cursor:pointer;">
         <td style="padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);color:var(--muted);">${t.kind}</td>
         <td style="padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);color:var(--muted);">${t.status}</td>
         <td style="padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);color:var(--muted);">${t.percent}%</td>

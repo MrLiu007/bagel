@@ -15,7 +15,7 @@
 {% include "_stock_disclaimer.html" %}
 <p class="hint">
   多视角草稿仅引用站内资讯证据链。
-  <a href="/stocks/symbol/{{ symbol }}">← 返回标的页</a>
+  <a href="{{ u('/stocks/symbol/' ~ symbol) }}">← 返回标的页</a>
 </p>
 {% if draft.error %}
 <p class="msg warn">{{ draft.error }}</p>

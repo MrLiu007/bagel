@@ -53,9 +53,9 @@
   <p class="hint">
     二期已上线：标的/主题抽取、情绪标签、事件时间线、只读行情对齐、行研草稿、股票周/月汇总。
     三期（真回测 / 多 Agent 实盘级）仍明确不做。
-    <a href="/stocks">← 股票列表</a> ·
-    <a href="/stocks/timeline">时间线</a> ·
-    <a href="/briefs/stocks">股票汇总</a>
+    <a href="{{ u('/stocks') }}">← 股票列表</a> ·
+    <a href="{{ u('/stocks/timeline') }}">时间线</a> ·
+    <a href="{{ u('/briefs/stocks') }}">股票汇总</a>
   </p>
 </div>
 
@@ -118,8 +118,8 @@
 </section>
 
 <div class="actions">
-  <a class="btn primary" href="/stocks/timeline">打开时间线</a>
-  <a class="btn" href="/stocks">股票列表</a>
-  <a class="btn" href="/settings?tab=stocks">配置股票源</a>
+  <a class="btn primary" href="{{ u('/stocks/timeline') }}">打开时间线</a>
+  <a class="btn" href="{{ u('/stocks') }}">股票列表</a>
+  <a class="btn" href="{{ u('/settings?tab=stocks') }}">配置股票源</a>
 </div>
 {% endblock %}

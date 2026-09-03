@@ -5,7 +5,7 @@
 
 <div class="tabs">
   {% for key, label in fav_kinds %}
-  <a href="/favorites?kind={{ key }}{% if category %}&category={{ category|urlencode }}{% endif %}&page_size={{ page_size }}"
+  <a href="{{ u('/favorites?kind=' ~ key ~ (category and ('&category=' ~ (category|urlencode)) or '') ~ '&page_size=' ~ page_size) }}"
      class="{% if fav_kind == key %}on{% endif %}">{{ label }}</a>
   {% endfor %}
 </div>

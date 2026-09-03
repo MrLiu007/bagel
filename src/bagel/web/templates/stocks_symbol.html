@@ -11,8 +11,8 @@
 {% include "_stock_disclaimer.html" %}
 <p class="hint">
   近 {{ days }} 天关联资讯 <strong>{{ bundle.count }}</strong> 条 · {{ bundle.exchange }}
-  · <a href="/stocks/timeline">时间线</a>
-  · <a href="/stocks">列表</a>
+  · <a href="{{ u('/stocks/timeline') }}">时间线</a>
+  · <a href="{{ u('/stocks') }}">列表</a>
 </p>
 
 <div class="viz-strip">
@@ -47,11 +47,11 @@
 
 <div class="actions" style="margin-bottom:1rem;">
   {% if research_enabled %}
-  <form method="post" action="/stocks/symbol/{{ bundle.symbol }}/research?days={{ days }}">
+  <form method="post" action="{{ u('/stocks/symbol/' ~ bundle.symbol ~ '/research?days=' ~ days) }}">
     <button class="primary" type="submit">生成行研草稿</button>
   </form>
   {% endif %}
-  <a class="btn" href="/briefs/stocks">股票汇总</a>
+  <a class="btn" href="{{ u('/briefs/stocks') }}">股票汇总</a>
 </div>
 
 {% for item in items %}

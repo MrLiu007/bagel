@@ -6,8 +6,11 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from fastapi.templating import Jinja2Templates
+from jinja2 import pass_context
+from starlette.requests import Request
 
 from bagel.domain.enums import ItemType
+from bagel.web.proxy_prefix import app_url
 from bagel.pipeline.textutil import (
     format_datetime,
     split_title_and_body,
@@ -20,6 +23,17 @@ TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 templates.env.filters["plain"] = truncate
 templates.env.filters["fmt_dt"] = format_datetime
+
+
+@pass_context
+def _url_with_prefix(ctx: dict, path: str) -> str:
+    request = ctx.get("request")
+    if not isinstance(request, Request):
+        return path
+    return app_url(request, path)
+
+
+templates.env.globals["u"] = _url_with_prefix
 
 
 def present_item(item, *, preview: bool | None = None, source_name: str | None = None) -> dict:

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <p class="hint" style="margin-bottom:0.75rem;">
-  <a href="/collect?tab={{ back_tab }}">← 返回{% if back_tab == 'scheduled' %}定时采集{% else %}手动采集{% endif %}</a>
+  <a href="{{ u('/collect?tab=' ~ back_tab) }}">← 返回{% if back_tab == 'scheduled' %}定时采集{% else %}手动采集{% endif %}</a>
 </p>
 <h1>{{ title }}</h1>
 <p class="hint">{{ task.kind }} · {{ task.trigger }} · {{ task.created_at }}</p>

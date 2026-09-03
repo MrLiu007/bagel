@@ -77,6 +77,56 @@ def _add(db: Session, **kwargs):
     return item
 
 
+def test_markdown_mermaid_becomes_div():
+    from bagel.web.routes.briefs import markdown_to_article_html
+
+    html = markdown_to_article_html("```mermaid\npie title T\n  \"A\" : 1\n```\n")
+    assert 'class="mermaid"' in html
+    assert "<pre>" not in html
+    assert "pie title T" in html
+
+
+def test_markdown_lists_wrap_ul():
+    from bagel.web.routes.briefs import markdown_to_article_html
+
+    html = markdown_to_article_html("- one\n- two\n\nDone\n")
+    assert "<ul>" in html and "</ul>" in html
+    assert "<li>one</li>" in html
+
+
+def test_markdown_table_scroll_and_bare_url():
+    from bagel.web.routes.briefs import markdown_to_article_html
+
+    md = (
+        "| # | 链接 |\n| --- | --- |\n"
+        "| 1 | https://www.infoq.cn/article/ztbou1CqjAdzrT6GNSKV?utm_source=rss |\n"
+    )
+    html = markdown_to_article_html(md)
+    assert 'class="table-scroll"' in html
+    assert "infoq.cn" in html
+    assert "utm_source" not in html.split(">", 1)[-1] or "infoq.cn" in html
+    assert 'href="https://www.infoq.cn/article/' in html
+
+
+def test_link_table_uses_short_markdown_links():
+    from bagel.domain.models import IntelItem
+    from bagel.services.monthly_templates import _link_table
+
+    item = IntelItem(
+        title="Cloudflare OS",
+        url="https://www.infoq.cn/article/ztbou1CqjAdzrT6GNSKV?utm_source=rss",
+        canonical_url="https://www.infoq.cn/article/ztbou1CqjAdzrT6GNSKV?utm_source=rss",
+        item_type="NEWS",
+        source_type="RSS",
+        content_hash="h1",
+        status="CANDIDATE",
+    )
+    lines = _link_table([item])
+    joined = "\n".join(lines)
+    assert "[infoq.cn](https://www.infoq.cn/article/" in joined
+    assert joined.count("utm_source") == 1  # only inside URL target, not as cell text alone
+
+
 def test_template_news_structure():
     md = render_monthly_brief(kind=BriefKind.NEWS, year_month="2026-08", items=[])
     assert "讲解口径（新闻）" in md
@@ -227,6 +277,17 @@ def test_write_and_export_monthly_brief(client: TestClient, db: Session, tmp_pat
     export = client.get("/briefs/news/2026-08.md")
     assert export.status_code == 200
     assert "发生了什么" in export.text
+
+    present = client.get("/briefs/news/2026-08/present")
+    assert present.status_code == 200
+    assert "brief-body" in present.text
+    assert "开源大模型发布" in present.text
+    assert "mermaid" in present.text.lower() or "发生了什么" in present.text
+
+    html_export = client.get("/briefs/news/2026-08.html")
+    assert html_export.status_code == 200
+    assert "attachment" in (html_export.headers.get("content-disposition") or "")
+    assert "brief-body" in html_export.text
 
     gen = client.post(
         "/briefs/generate",

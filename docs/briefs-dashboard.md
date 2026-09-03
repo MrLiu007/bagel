@@ -73,6 +73,19 @@ API：`GET /api/items/{id}/related`（JSON）。全页 `/items/{id}/related` 仍
 - 周 / 月共用自定义提示词；可保存为 `data/brief_prompts.json` 默认
 - 生成后可展开「本次使用的提示词」
 
+## 投屏视图与 HTML 导出
+
+各类型总结页在生成结果后提供：
+
+| 入口 | 路径 | 说明 |
+|------|------|------|
+| 投屏视图 | `/briefs/{kind}/{period}/present` | 全屏讲解稿：大字号、独立样式、Mermaid 饼图、打印/PDF、Esc 返回 |
+| 导出 HTML | `/briefs/{kind}/{period}.html` | 同结构自包含 HTML 附件，便于离线投屏或分享 |
+| 导出 Markdown | `/briefs/{kind}/{period}.md` | 原稿（仍保留） |
+
+HTML 由 `markdown_to_article_html` 即时渲染（不落库）；` ```mermaid ` 块在投屏/导出中渲染为图表。  
+链接清单使用短域名锚点（如 `[infoq.cn](…)`），表格 `table-layout:fixed` + 横向滚动，避免长 URL 撑破版心。投屏页为墨青编辑风（Fraunces + Source Sans 3），非塑料蓝白卡片。
+
 ## 数据表
 
 - `intel_search_event` — 搜索日志（迁移 `0005_search_event`）

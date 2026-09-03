@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{% block title %}{{ title }} · 贝果{% endblock %}</title>
   <script>
+    window.__BAGEL_ROOT__ = {{ (request.scope.get('root_path') or '')|tojson }};
+    function bagelUrl(p) {
+      var root = window.__BAGEL_ROOT__ || "";
+      if (!p) return root || "/";
+      return root + (p.charAt(0) === "/" ? p : "/" + p);
+    }
     (function () {
       try {
         var t = localStorage.getItem("intel-theme");
@@ -14,15 +20,15 @@
       } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="/static/css/theme.css" />
+  <link rel="stylesheet" href="{{ u('/static/css/theme.css') }}" />
   {% block head %}{% endblock %}
 </head>
 <body>
   <header class="site-header">
-    <a class="brand" href="/">AI INTEL</a>
+    <a class="brand" href="{{ u('/') }}">AI INTEL</a>
     <nav class="site-nav">
       {% for label, href, key in nav %}
-      <a href="{{ href }}" class="{% if active == key %}active{% endif %}">{{ label }}</a>
+      <a href="{{ u(href) }}" class="{% if active == key %}active{% endif %}">{{ label }}</a>
       {% endfor %}
     </nav>
     <div class="header-right">
@@ -33,7 +39,7 @@
       {% if request is defined and request.session.get('username') %}
       <div class="user-chip">
         <span>{{ request.session.get('username') }}</span>
-        <a href="/logout">退出</a>
+        <a href="{{ u('/logout') }}">退出</a>
       </div>
       {% endif %}
     </div>
@@ -55,7 +61,7 @@
     </div>
     <div id="related-drawer-body" class="related-drawer-body"></div>
     <footer class="related-drawer-ft">
-      <a id="related-full-link" class="btn primary" href="/briefs/space?view=graph" target="_blank" rel="noopener">在新页面打开完整 GBrain</a>
+      <a id="related-full-link" class="btn primary" href="{{ u('/briefs/space?view=graph') }}" target="_blank" rel="noopener">在新页面打开完整 GBrain</a>
     </footer>
   </aside>
 
@@ -267,10 +273,10 @@
       openDrawer();
       body.innerHTML = '<p class="empty">加载关联中…</p>';
       try {
-        var resp = await fetch("/api/items/" + id + "/related");
+        var resp = await fetch(bagelUrl("/api/items/" + id + "/related"));
         if (!resp.ok) throw new Error("HTTP " + resp.status);
         lastPayload = await resp.json();
-        if (fullLink) fullLink.href = lastPayload.full_url || ("/briefs/space?view=graph&seed=" + id);
+        if (fullLink) fullLink.href = bagelUrl(lastPayload.full_url || ("/briefs/space?view=graph&seed=" + id));
         showTab(activeTab || "list");
       } catch (err) {
         body.innerHTML = '<p class="empty">加载失败：' + esc(err.message || err) + '</p>';
