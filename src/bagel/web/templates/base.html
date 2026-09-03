@@ -55,7 +55,7 @@
     </div>
     <div id="related-drawer-body" class="related-drawer-body"></div>
     <footer class="related-drawer-ft">
-      <a id="related-full-link" class="btn primary" href="/briefs/space" target="_blank" rel="noopener">在新页面打开完整 GBrain</a>
+      <a id="related-full-link" class="btn primary" href="/briefs/space?view=graph" target="_blank" rel="noopener">在新页面打开完整 GBrain</a>
     </footer>
   </aside>
 
@@ -85,6 +85,7 @@
     var lastPayload = null;
     var activeTab = "list";
     var echartsLoading = null;
+    var force3dLoading = null;
 
     function loadEcharts() {
       if (typeof echarts !== "undefined") return Promise.resolve();
@@ -100,13 +101,38 @@
       return echartsLoading;
     }
 
+    function loadForceGraph3D() {
+      if (typeof ForceGraph3D !== "undefined") return Promise.resolve();
+      if (force3dLoading) return force3dLoading;
+      force3dLoading = new Promise(function (resolve, reject) {
+        var s = document.createElement("script");
+        s.src = "https://cdn.jsdelivr.net/npm/3d-force-graph@1.73.3/dist/3d-force-graph.min.js";
+        s.async = true;
+        s.onload = function () { resolve(); };
+        s.onerror = function () { reject(new Error("3D Force Graph 加载失败")); };
+        document.head.appendChild(s);
+      });
+      return force3dLoading;
+    }
+
+    function destroyGraph() {
+      if (!chartInst) return;
+      try {
+        if (typeof chartInst._destructor === "function") chartInst._destructor();
+        else if (typeof chartInst.dispose === "function") chartInst.dispose();
+      } catch (e) {}
+      chartInst = null;
+      var host = document.getElementById("related-echarts");
+      if (host) host.innerHTML = "";
+    }
+
     function closeDrawer() {
       if (!drawer) return;
       drawer.classList.remove("open");
       drawer.hidden = true;
       drawer.setAttribute("aria-hidden", "true");
       if (mask) { mask.hidden = true; }
-      if (chartInst) { try { chartInst.dispose(); } catch (e) {} chartInst = null; }
+      destroyGraph();
       if (body) body.innerHTML = "";
       lastPayload = null;
     }
@@ -163,13 +189,15 @@
     }
     async function renderGraph(payload) {
       var stats = (payload.echarts && payload.echarts.stats) || {};
+      var resourceN = stats.resources != null ? stats.resources : (stats.items || 0);
       body.innerHTML =
-        '<p class="related-graph-meta">资源节点 ' + (stats.items || 0) +
+        '<p class="related-graph-meta">资源节点 ' + resourceN +
+        ' · 主题 ' + (stats.topics || 0) +
         ' · 可点击 ' + (stats.clickable || 0) +
-        ' · 绿边框=可打开详情 · 拖拽/滚轮缩放</p>' +
-        '<div id="related-echarts" style="width:100%;height:560px;"></div>';
+        ' · 高度=资源/概念层 · 拖拽旋转 / 滚轮缩放</p>' +
+        '<div id="related-echarts" style="width:100%;height:560px;background:#0b1220;border-radius:8px;overflow:hidden;"></div>';
       try {
-        await loadEcharts();
+        await loadForceGraph3D();
       } catch (err) {
         body.innerHTML = '<p class="empty">' + esc(err.message || err) + '</p>';
         return;
@@ -180,41 +208,49 @@
         body.innerHTML = '<p class="empty">图谱数据不足。请先采集更多新闻/论文等资源。</p>';
         return;
       }
-      chartInst = echarts.init(el);
-      chartInst.setOption({
-        backgroundColor: "transparent",
-        tooltip: { formatter: graphTooltip },
-        legend: [{
-          data: (data.categories || []).map(function (c) { return c.name; }),
-          formatter: function (name) {
-            var cat = (data.categories || []).find(function (c) { return c.name === name; });
-            return (cat && cat.label) || name;
-          },
-          bottom: 0,
-          textStyle: { fontSize: 11 }
-        }],
-        series: [{
-          type: "graph",
-          layout: "force",
-          roam: true,
-          draggable: true,
-          data: data.nodes,
-          links: data.links,
-          categories: data.categories || [],
-          label: { show: true, position: "right", fontSize: 10, color: "inherit" },
-          force: { repulsion: 160, edgeLength: [36, 110], gravity: 0.08 },
-          emphasis: { focus: "adjacency", scale: true },
-          lineStyle: { color: "source", curveness: 0.12, opacity: 0.45 }
-        }]
+      if (chartInst && chartInst._destructor) {
+        try { chartInst._destructor(); } catch (e) {}
+        chartInst = null;
+      }
+      var nodes = (data.nodes || []).map(function (n) {
+        return Object.assign({}, n, {
+          fy: (typeof n.fy === "number") ? n.fy : (n.height || 0),
+          val: n.val || Math.max(2, Math.min(10, 3 + (n.value || 1)))
+        });
       });
-      chartInst.on("click", function (p) {
-        if (p.dataType === "node" && p.data && p.data.url) {
-          window.open(p.data.url, "_blank", "noopener");
-        }
+      var links = (data.links || []).map(function (l) {
+        return { source: l.source, target: l.target, relation: l.relation || "about", value: l.value || 1 };
       });
-      chartInst.getZr().on("mousemove", function (ev) {
-        // cursor hint via tooltip only; ECharts handles node hover
-      });
+      var Graph = ForceGraph3D()(el)
+        .graphData({ nodes: nodes, links: links })
+        .backgroundColor("#0b1220")
+        .showNavInfo(false)
+        .nodeId("id")
+        .nodeLabel(function (n) {
+          return [n.name || "", (n.kind_label || n.kind || "")].join("\n");
+        })
+        .nodeVal("val")
+        .nodeColor(function (n) { return n.color || "#64748b"; })
+        .linkColor(function (l) { return l.relation === "prerequisite" ? "#94a3b8" : "#334155"; })
+        .linkWidth(1)
+        .linkOpacity(0.5)
+        .onNodeClick(function (n) {
+          if (n && n.url) window.open(n.url, "_blank", "noopener");
+        })
+        .onNodeDragEnd(function (node) {
+          node.fy = node.height != null ? node.height : node.fy;
+        });
+      Graph.d3Force("charge").strength(-90);
+      Graph.d3Force("y", null);
+      var controls = Graph.controls();
+      if (controls) { controls.autoRotate = true; controls.autoRotateSpeed = 0.45; }
+      Graph.cameraPosition({ x: 0, y: 140, z: 320 });
+      Graph.width(el.clientWidth || 360).height(560);
+      chartInst = Graph;
+      chartInst._destructor = function () {
+        try { Graph.pauseAnimation(); } catch (e) {}
+        try { if (el) el.innerHTML = ""; } catch (e2) {}
+      };
     }
     function showTab(tab) {
       activeTab = tab;
@@ -223,7 +259,7 @@
         b.classList.toggle("on", b.getAttribute("data-rd-tab") === tab);
       });
       if (!lastPayload) return;
-      if (chartInst) { try { chartInst.dispose(); } catch (e) {} chartInst = null; }
+      destroyGraph();
       if (tab === "graph") renderGraph(lastPayload);
       else renderList(lastPayload);
     }
@@ -234,7 +270,7 @@
         var resp = await fetch("/api/items/" + id + "/related");
         if (!resp.ok) throw new Error("HTTP " + resp.status);
         lastPayload = await resp.json();
-        if (fullLink) fullLink.href = lastPayload.full_url || ("/briefs/space?seed=" + id);
+        if (fullLink) fullLink.href = lastPayload.full_url || ("/briefs/space?view=graph&seed=" + id);
         showTab(activeTab || "list");
       } catch (err) {
         body.innerHTML = '<p class="empty">加载失败：' + esc(err.message || err) + '</p>';

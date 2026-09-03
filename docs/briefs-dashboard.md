@@ -16,14 +16,16 @@
 
 ## GBrain（WikiItem 适配层）
 
-进程内轻量图谱（无 Neo4j / 向量库 / AntV 必需依赖；前端用 ECharts CDN）：
+进程内轻量图谱（无 Neo4j / 向量库）：
 
-1. **Adapter**：各资源类型映射为统一 `WikiItem`（`title` / `text_content` / `tags` / `file_url`）
-2. **Core**：`build_gbrain_graph` 以 **资源节点（item）优先** 构图，边为 item↔概念 星型；概念节点带站内深链
-3. **交互**：绿边框 = 可点击；条目 → 原文 URL；分类 → 列表过滤；标签 → 个人空间试搜
-4. **渲染**：ECharts 力导向；侧栏图谱按需懒加载 CDN（不全站常驻）
+1. **Adapter**：各资源类型 → 统一 `WikiItem`（含 `topic_ids`）
+2. **Taxonomy**：包内 seed（topics / dependencies / clusters），结构对齐 os-taxonomy，内容自有
+3. **Core**：资源优先；边为 `about` / `prerequisite` / `contains` / `typed_as` 等；可选合并 `wiki_edge`
+4. **Wiki 编译**：MD 正文 + DB 索引（见 [wiki-taxonomy-gbrain.md](./wiki-taxonomy-gbrain.md)）
+5. **可视化**：个人空间使用 **3d-force-graph**（高度 `fy` = 资源/概念层）；统计文案对齐 micro-topics / deps / clusters；`stats.resources`（勿用 `items`，Jinja 会撞上 `dict.items`）
+6. **交互**：点击节点打开 URL；先修边虚线粒子；自动慢旋
 
-关联抽屉默认 `hidden`，仅点击列表「关联」时打开，关闭后清空内容，避免污染各页底部。
+关联抽屉默认 `hidden`，仅点击列表「关联」时打开。
 
 ## 关联侧栏（列表 + 图谱）
 

@@ -608,7 +608,7 @@ def find_related_drawer(session: Session, item_id: UUID, *, limit: int = 36) -> 
         "type_groups": type_groups,
         "total": bundle.total,
         "echarts": echarts,
-        "full_url": f"/briefs/space?seed={seed.id}",
+        "full_url": f"/briefs/space?view=graph&seed={seed.id}",
     }
 
 

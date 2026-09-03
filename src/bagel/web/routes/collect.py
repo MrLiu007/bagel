@@ -20,6 +20,7 @@ ALLOWED_KINDS = {
     "collect_stocks",
     "collect_all",
     "summarize",
+    "compile_wiki",
 }
 
 

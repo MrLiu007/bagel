@@ -6,7 +6,7 @@ import html
 import re
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from bagel.domain.enums import BriefKind
@@ -184,8 +184,12 @@ async def briefs_space(
     db: Session = Depends(get_db),
     q: str | None = Query(None),
     seed: str | None = Query(None),
+    view: str | None = Query("board"),
 ) -> HTMLResponse:
     oid = _owner_id(request)
+    space_view = "graph" if (view or "").lower() in {"graph", "gbrain", "kg"} else "board"
+    if seed:
+        space_view = "graph"
     search_note = None
     if q and q.strip():
         from bagel.domain.enums import ItemType
@@ -198,6 +202,7 @@ async def briefs_space(
             ItemType.MODEL,
             ItemType.STOCK_NEWS,
             ItemType.MEDIA_POST,
+            ItemType.WECHAT_MSG,
         )
         items = search_items(db, types=types, start=None, end=None, keyword=q.strip(), limit=8)
         search_analytics.log_search(
@@ -236,6 +241,7 @@ async def briefs_space(
             "stats": stats,
             "search_note": search_note,
             "search_q": q or "",
+            "space_view": space_view,
         },
     )
 
@@ -432,6 +438,69 @@ async def generate_brief(
     return RedirectResponse(
         url=f"/briefs/{kind_path}?month={key}&period={period_key_type}", status_code=303
     )
+
+
+@router.get("/api/gbrain/card")
+async def api_gbrain_card(
+    request: Request,
+    db: Session = Depends(get_db),
+    key: str = Query(..., min_length=3, max_length=160),
+) -> JSONResponse:
+    from bagel.services.gbrain_learn import knowledge_card, record_learn
+
+    card = knowledge_card(db, key)
+    if card is None:
+        raise HTTPException(status_code=404, detail="知识点不存在")
+    oid = _owner_id(request)
+    try:
+        record_learn(db, node_key=key, action="view", owner_id=oid)
+        db.commit()
+    except Exception:
+        db.rollback()
+    return JSONResponse(card)
+
+
+@router.post("/api/gbrain/learn")
+async def api_gbrain_learn(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> JSONResponse:
+    from bagel.services.gbrain_learn import record_learn
+
+    body = await request.json()
+    key = str(body.get("key") or "").strip()
+    action = str(body.get("action") or "focus").strip() or "focus"
+    if not key:
+        raise HTTPException(status_code=400, detail="缺少 key")
+    oid = _owner_id(request)
+    record_learn(db, node_key=key, action=action, owner_id=oid, metadata={"via": "space"})
+    db.commit()
+    return JSONResponse({"ok": True, "key": key, "action": action})
+
+
+@router.get("/api/gbrain/review")
+async def api_gbrain_review(
+    request: Request,
+    db: Session = Depends(get_db),
+    days: int = Query(14, ge=1, le=90),
+) -> JSONResponse:
+    from bagel.services.gbrain_learn import review_summary
+
+    try:
+        data = review_summary(db, owner_id=_owner_id(request), days=days)
+    except Exception:
+        # Degraded when migration not applied.
+        db.rollback()
+        data = {
+            "days": days,
+            "event_count": 0,
+            "unique_nodes": 0,
+            "recent": [],
+            "hot": [],
+            "suggestions": [],
+            "degraded": True,
+        }
+    return JSONResponse(data)
 
 
 @router.get("/briefs/{kind_path}/{year_month}.md", response_class=PlainTextResponse)

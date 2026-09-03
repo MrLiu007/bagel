@@ -519,6 +519,7 @@ async def save_schedule(
     schedule_collect_stocks: str | None = Form(None),
     schedule_collect_models: str | None = Form(None),
     enable_keyword_growth: str | None = Form(None),
+    enable_wiki_compile: str | None = Form(None),
 ) -> RedirectResponse:
     from bagel.jobs.scheduler import reload_scheduler_jobs
     from bagel.services.runtime_config import (
@@ -539,6 +540,7 @@ async def save_schedule(
         schedule_collect_stocks=schedule_collect_stocks in {"1", "true", "on"},
         schedule_collect_models=schedule_collect_models in {"1", "true", "on"},
         enable_keyword_growth=enable_keyword_growth in {"1", "true", "on"},
+        enable_wiki_compile=enable_wiki_compile in {"1", "true", "on"},
     )
     reload_scheduler_jobs()
     return RedirectResponse(url="/settings?tab=schedule", status_code=303)

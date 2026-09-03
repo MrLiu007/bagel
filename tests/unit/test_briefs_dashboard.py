@@ -82,7 +82,9 @@ def test_gbrain_builds_links(db: Session) -> None:
     assert all(n.url for n in item_nodes)
     clickable = [n for n in graph.nodes if n.url]
     assert len(clickable) >= len(item_nodes)
-    assert graph.echarts.get("stats", {}).get("items", 0) >= 3
+    assert graph.echarts.get("stats", {}).get("resources", 0) >= 3
+    assert "items" not in (graph.echarts.get("stats") or {})
+    assert any(n.get("fy") is not None for n in graph.echarts.get("nodes") or [])
 
 
 def test_briefs_space_hides_related_drawer(monkeypatch: pytest.MonkeyPatch, db: Session) -> None:

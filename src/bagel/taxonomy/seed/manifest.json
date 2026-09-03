@@ -1,0 +1,10 @@
+{
+  "version": "v1",
+  "name": "Bagel AI Intel Taxonomy",
+  "description": "Domain taxonomy structure for Bagel GBrain / wiki compile. Architecture inspired by os-taxonomy; content is Bagel-owned (not Marble curriculum).",
+  "files": {
+    "topics.json": {"role": "nodes"},
+    "dependencies.json": {"role": "edges"},
+    "clusters.json": {"role": "summaries"}
+  }
+}

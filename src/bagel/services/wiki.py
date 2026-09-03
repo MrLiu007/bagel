@@ -17,17 +17,13 @@ def _slug(text: str, limit: int = 48) -> str:
 
 
 def ensure_wiki_layout(root: Path) -> None:
-    for sub in ("news", "github", "media", "wechat", "papers", "education", "models", "briefs"):
-        (root / sub).mkdir(parents=True, exist_ok=True)
-    index = root / "index.md"
-    if not index.exists():
-        index.write_text(
-            "# AI Intel Wiki\n\n由 贝果自动导出。事务数据仍在 SQLite/Postgres。\n",
-            encoding="utf-8",
-        )
+    from bagel.services.wiki_compile import ensure_wiki_layout as _ensure
+
+    _ensure(root)
 
 
 def export_item(item: IntelItem, settings: Settings | None = None) -> Path | None:
+    """Legacy single-item MD export. Prefer `wiki_compile.compile_wiki` for index+edges."""
     settings = settings or get_settings()
     if not settings.wiki_enabled:
         return None
@@ -42,8 +38,8 @@ def export_item(item: IntelItem, settings: Settings | None = None) -> Path | Non
         "PAPER": "papers",
         "EDUCATION": "education",
         "MODEL": "models",
+        "STOCK_NEWS": "stocks",
     }.get(str(item.item_type), "news")
-    month = ""
     if item.published_at is not None:
         month = item.published_at.strftime("%Y-%m")
     else:
@@ -53,6 +49,12 @@ def export_item(item: IntelItem, settings: Settings | None = None) -> Path | Non
     fname = f"{_slug(item.title)}-{str(item.id)[:8]}.md"
     path = folder / fname
     tags = ", ".join(str(t) for t in (item.tags or []))
+    try:
+        from bagel.services.wiki_compile import topics_for_item
+
+        topic_bits = ", ".join(t.id for t in topics_for_item(item))
+    except Exception:
+        topic_bits = ""
     body = item.llm_summary or item.summary or item.content or ""
     published = item.published_at.isoformat() if item.published_at else ""
     md = (
@@ -61,11 +63,13 @@ def export_item(item: IntelItem, settings: Settings | None = None) -> Path | Non
         f"- category: `{item.category or ''}`\n"
         f"- published: `{published}`\n"
         f"- url: {item.url}\n"
-        f"- tags: {tags}\n\n"
+        f"- tags: {tags}\n"
+        f"- topics: {topic_bits or '—'}\n\n"
         f"## Summary\n\n{body}\n"
     )
     path.write_text(md, encoding="utf-8")
     return path
+
 
 
 def export_monthly_brief(brief: IntelMonthlyBrief, settings: Settings | None = None) -> Path | None:

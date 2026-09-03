@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% block head %}
-<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+{% if space_view == 'graph' %}
+<script src="https://cdn.jsdelivr.net/npm/3d-force-graph@1.73.3/dist/3d-force-graph.min.js"></script>
+{% endif %}
 <style>
   .dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
   .dash-card { border: 1px solid var(--line); border-radius: var(--radius); padding: 0.85rem 1rem; background: var(--soft-bg); }
@@ -11,7 +13,92 @@
   .bar-row .bar { flex: 1; height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
   .bar-row .bar span { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
   .bar-row .cnt { min-width: 2.5rem; text-align: right; color: var(--muted); font-family: var(--font-mono); font-size: 0.8rem; }
-  #gbrain-chart { width: 100%; height: 520px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--brief-inset); }
+  .space-subtabs { display: flex; gap: 0.35rem; margin: 0.75rem 0 1rem; flex-wrap: wrap; }
+  .space-subtabs a {
+    padding: 0.4rem 0.9rem; border-radius: 999px; border: 1px solid var(--line);
+    color: var(--muted); text-decoration: none; font-size: 0.88rem;
+  }
+  .space-subtabs a.on { background: var(--accent); color: #fff; border-color: transparent; }
+  .gbrain-meta {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.35rem 0.85rem;
+    margin: 0 0 0.55rem; font-size: 0.88rem; color: var(--muted);
+  }
+  .gbrain-meta .chip {
+    font-family: var(--font-mono); font-weight: 700; color: var(--accent-2); font-size: 0.95rem;
+  }
+  .gbrain-meta .sep { opacity: 0.35; }
+  .gbrain-stage {
+    position: relative;
+    height: min(88vh, 960px);
+    min-height: 640px;
+    margin: 0 -0.75rem;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    overflow: hidden;
+  }
+  #gbrain-chart { width: 100%; height: 100%; background: transparent; }
+  .gbrain-stage canvas { outline: none !important; display: block; }
+  .gbrain-subjects {
+    position: absolute; left: 0.6rem; bottom: 1.75rem; z-index: 3;
+    width: min(210px, 38%); max-height: 48%; overflow: auto;
+    padding: 0.55rem 0.6rem; border-radius: 12px;
+    background: rgba(8,12,22,0.55); border: 1px solid rgba(148,163,184,0.14);
+    backdrop-filter: blur(10px);
+  }
+  .gbrain-subjects-title { font-size: 0.66rem; letter-spacing: 0.06em; color: #94a3b8; margin-bottom: 0.4rem; }
+  .gbrain-sub-btn {
+    display: flex; align-items: center; gap: 0.45rem; width: 100%;
+    background: transparent; border: 0; color: #cbd5e1; padding: 0.26rem 0.1rem;
+    cursor: pointer; font-size: 0.8rem; opacity: 0.4;
+  }
+  .gbrain-sub-btn.on { opacity: 1; }
+  .gbrain-sub-btn i { width: 0.5rem; height: 0.5rem; border-radius: 50%; flex: 0 0 auto; }
+  .gbrain-sub-btn span { flex: 1; text-align: left; }
+  .gbrain-sub-btn b { font-family: var(--font-mono); color: #94a3b8; font-weight: 600; }
+  .gbrain-card {
+    position: absolute; top: 0.75rem; right: 0.75rem; z-index: 4;
+    width: min(380px, 94%); max-height: calc(100% - 1.5rem); overflow: auto;
+    padding: 0.85rem 0.95rem 1rem; border-radius: 12px;
+    background: rgba(10,14,24,0.94); border: 1px solid rgba(148,163,184,0.3);
+    color: #e2e8f0; backdrop-filter: blur(10px);
+  }
+  .gbrain-card-bar { display: flex; justify-content: space-between; margin-bottom: 0.35rem; }
+  .gbrain-card .ghost { background: transparent; border: 0; color: #94a3b8; cursor: pointer; }
+  .gbrain-card-kicker { font-size: 0.7rem; letter-spacing: 0.04em; color: #94a3b8; text-transform: uppercase; }
+  .gbrain-card h3 { margin: 0.25rem 0 0.5rem; font-size: 1.15rem; line-height: 1.3; color: #f8fafc; }
+  .gbrain-card-desc { font-size: 0.86rem; line-height: 1.55; color: #cbd5e1; margin: 0 0 0.65rem; white-space: pre-wrap; }
+  .gbrain-card-stat { margin: 0 0 0.65rem; font-size: 0.88rem; color: #94a3b8; }
+  .gbrain-card-stat strong { font-size: 1.25rem; color: #7dd3fc; font-family: var(--font-mono); margin-right: 0.3rem; }
+  .gbrain-card-section { margin-bottom: 0.65rem; }
+  .gbrain-card-section .sec-title { font-size: 0.66rem; letter-spacing: 0.05em; color: #64748b; margin-bottom: 0.3rem; }
+  .gbrain-card-section .rel {
+    display: block; width: 100%;
+    background: rgba(30,41,59,0.55); border: 1px solid rgba(71,85,105,0.5);
+    border-radius: 10px; color: #e2e8f0; padding: 0.55rem 0.6rem; margin: 0.3rem 0;
+    cursor: pointer; text-align: left; font-size: 0.8rem;
+  }
+  .gbrain-card-section .rel .rel-top { display: flex; align-items: center; gap: 0.4rem; }
+  .gbrain-card-section .rel i { width: 0.42rem; height: 0.42rem; border-radius: 50%; background: #38bdf8; flex: 0 0 auto; }
+  .gbrain-card-section .rel .rel-title { flex: 1; font-weight: 600; color: #f1f5f9; }
+  .gbrain-card-section .rel em { font-style: normal; color: #64748b; font-size: 0.7rem; }
+  .gbrain-card-section .rel .rel-sum { margin: 0.35rem 0 0.4rem; color: #94a3b8; line-height: 1.4; font-size: 0.78rem; }
+  .gbrain-card-section .rel .rel-url {
+    display: inline-block; color: #7dd3fc; font-size: 0.76rem; text-decoration: none;
+    border: 1px solid rgba(125,211,252,0.35); border-radius: 6px; padding: 0.15rem 0.45rem;
+  }
+  .gbrain-card-actions { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.55rem; flex-wrap: wrap; }
+  .gbrain-card-actions a.primary-link {
+    display: inline-block; background: #0ea5e9; color: #fff; text-decoration: none;
+    border-radius: 8px; padding: 0.4rem 0.75rem; font-size: 0.85rem; font-weight: 600;
+  }
+  .gbrain-hint { position: absolute; right: 0.75rem; bottom: 0.45rem; z-index: 2; font-size: 0.7rem; color: rgba(148,163,184,0.65); }
+  .gbrain-review { margin-top: 0.55rem; font-size: 0.88rem; }
+  .gbrain-review ul { list-style: none; padding: 0; margin: 0.45rem 0 0; }
+  .gbrain-review li { padding: 0.45rem 0; border-bottom: 1px solid var(--line); }
+  .gbrain-review button { background: transparent; border: 0; color: var(--accent-2); cursor: pointer; font-weight: 600; padding: 0; }
+  .gbrain-review .why { color: var(--muted); font-size: 0.8rem; margin-top: 0.15rem; }
+  .gbrain-review a.ext { margin-left: 0.45rem; font-size: 0.8rem; color: #0ea5e9; }
   table.kg-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
   table.kg-table th, table.kg-table td { border: 1px solid var(--line); padding: 0.4rem 0.55rem; text-align: left; }
   table.kg-table th { background: var(--brief-inset); }
@@ -21,38 +108,28 @@
 <h1>汇总 · 个人空间</h1>
 {% include "briefs_tabs.html" %}
 
-<p class="hint">
-  搜索行为会写入统计，并驱动<strong>兴趣标签 / 系统排除词</strong>定时自增长。
-  GBrain 通过 WikiItem 适配层统一新闻 / 论文 / 教育 / 模型等资源，再用 ECharts 关系图交互浏览。
-  图谱以<strong>可点击资源节点</strong>为主（绿边框=可打开原文），概念节点可跳转分类列表或试搜。
-</p>
+<div class="space-subtabs">
+  <a href="/briefs/space?view=board{% if search_q %}&q={{ search_q|urlencode }}{% endif %}" class="{% if space_view != 'graph' %}on{% endif %}">看板</a>
+  <a href="/briefs/space?view=graph{% if search_q %}&q={{ search_q|urlencode }}{% endif %}" class="{% if space_view == 'graph' %}on{% endif %}">图谱</a>
+</div>
 
-{% if search_note %}
-<p class="meta ok">{{ search_note }}</p>
-{% endif %}
+{% if space_view != 'graph' %}
+<p class="hint">
+  看板汇总搜索与入库习惯；兴趣标签 / 系统排除词会据此自增长。切换到<strong>图谱</strong>用 GBrain 浏览全类型资源（摘要 + 原文 URL）。
+</p>
+{% if search_note %}<p class="meta ok">{{ search_note }}</p>{% endif %}
 
 <form class="inline panel" method="get" action="/briefs/space" style="margin-bottom:1rem;">
+  <input type="hidden" name="view" value="board" />
   <input type="text" name="q" value="{{ search_q }}" placeholder="试搜：LLM、Agent、开放课…" style="flex:1;min-width:200px;" />
   <button type="submit">搜索并记录</button>
 </form>
 
 <div class="dash-grid">
-  <div class="dash-card">
-    <div class="num">{{ stats.search_count }}</div>
-    <div class="lbl">近 90 天搜索次数</div>
-  </div>
-  <div class="dash-card">
-    <div class="num">{{ stats.type_stats | length }}</div>
-    <div class="lbl">活跃数据类型</div>
-  </div>
-  <div class="dash-card">
-    <div class="num">{{ stats.source_stats | length }}</div>
-    <div class="lbl">活跃数据源</div>
-  </div>
-  <div class="dash-card">
-    <div class="num">{{ stats.graph_links | length }}</div>
-    <div class="lbl">深度关联对（Top）</div>
-  </div>
+  <div class="dash-card"><div class="num">{{ stats.search_count }}</div><div class="lbl">近 90 天搜索次数</div></div>
+  <div class="dash-card"><div class="num">{{ stats.type_stats | length }}</div><div class="lbl">活跃数据类型</div></div>
+  <div class="dash-card"><div class="num">{{ stats.source_stats | length }}</div><div class="lbl">活跃数据源</div></div>
+  <div class="dash-card"><div class="num">{{ stats.graph_links | length }}</div><div class="lbl">深度关联对（Top）</div></div>
 </div>
 
 <div class="panel">
@@ -62,12 +139,7 @@
     <thead><tr><th>#</th><th>关键词</th><th>搜索次数</th><th>命中条目</th></tr></thead>
     <tbody>
       {% for row in stats.keyword_rankings %}
-      <tr>
-        <td>{{ loop.index }}</td>
-        <td>{{ row.keyword }}</td>
-        <td>{{ row.searches }}</td>
-        <td>{{ row.hits }}</td>
-      </tr>
+      <tr><td>{{ loop.index }}</td><td>{{ row.keyword }}</td><td>{{ row.searches }}</td><td>{{ row.hits }}</td></tr>
       {% endfor %}
     </tbody>
   </table>
@@ -85,9 +157,7 @@
     <div class="bar"><span style="width:{{ (row.count * 100 / max_type) | int }}%;"></span></div>
     <span class="cnt">{{ row.count }}</span>
   </div>
-  {% else %}
-  <p class="empty">暂无数据。</p>
-  {% endfor %}
+  {% else %}<p class="empty">暂无数据。</p>{% endfor %}
 </div>
 
 <div class="panel">
@@ -99,72 +169,371 @@
     <div class="bar"><span style="width:{{ (row.count * 100 / max_src) | int }}%;"></span></div>
     <span class="cnt">{{ row.count }}</span>
   </div>
-  {% else %}
-  <p class="empty">暂无绑定数据源的条目。</p>
-  {% endfor %}
+  {% else %}<p class="empty">暂无绑定数据源的条目。</p>{% endfor %}
 </div>
 
-<div class="panel">
-  <h2 style="font-size:1rem;margin:0 0 0.35rem;">GBrain 知识图谱</h2>
-  <p class="hint" style="margin:0 0 0.65rem;">
-    红色节点=具体资源（绿边框可点开原文）；紫/青/蓝=分类·标签·类型（跳转到列表或试搜）。
-    拖拽节点 · 滚轮缩放 · 点击即可查阅学习。
-    {% if stats.echarts.stats %}
-    <span class="mono">节点 {{ stats.echarts.stats.nodes }} · 资源 {{ stats.echarts.stats.items }} · 可点击 {{ stats.echarts.stats.clickable }}</span>
-    {% endif %}
-  </p>
-  <div id="gbrain-chart"></div>
+{% else %}
+{# ===== 图谱 tab：全幅 GBrain ===== #}
+{% set ov = stats.overview or {} %}
+<p class="hint" style="margin-bottom:0.45rem;">
+  点<strong>资源</strong>看摘要并可开原文；主题是枢纽。左下 SUBJECTS 筛选 8 类资源频道。
+</p>
+<div class="gbrain-meta" aria-label="图谱规模">
+  <span><span class="chip">{{ ov.resources | default(0) }}</span> 资源</span>
+  <span class="sep">·</span>
+  <span><span class="chip">{{ ov.graph_topics | default(0) }}</span> 主题</span>
+  <span class="sep">·</span>
+  <span><span class="chip">{{ ov.graph_links | default(0) }}</span> 关联</span>
 </div>
+
+<div class="gbrain-stage">
+  <div id="gbrain-chart"></div>
+  <aside class="gbrain-subjects" id="gbrain-subjects">
+    <div class="gbrain-subjects-title">SUBJECTS · CLICK TO TOGGLE</div>
+    <div id="gbrain-subject-list"></div>
+  </aside>
+  <aside class="gbrain-card" id="gbrain-card" hidden>
+    <div class="gbrain-card-bar">
+      <button type="button" id="gbrain-card-back" class="ghost">← Back</button>
+      <button type="button" id="gbrain-card-close" class="ghost" aria-label="关闭">×</button>
+    </div>
+    <div class="gbrain-card-kicker" id="gbrain-card-kicker"></div>
+    <h3 id="gbrain-card-title"></h3>
+    <p class="gbrain-card-desc" id="gbrain-card-desc"></p>
+    <div class="gbrain-card-stat" id="gbrain-card-stat"></div>
+    <div class="gbrain-card-section" id="gbrain-card-resources"></div>
+    <div class="gbrain-card-section" id="gbrain-card-related"></div>
+    <div class="gbrain-card-section" id="gbrain-card-builds"></div>
+    <div class="gbrain-card-section" id="gbrain-card-unlocks"></div>
+    <div class="gbrain-card-actions">
+      <a id="gbrain-card-url" class="primary-link" href="#" target="_blank" rel="noopener" hidden>打开原文</a>
+      <button type="button" id="gbrain-card-review" class="primary">标记复习</button>
+    </div>
+  </aside>
+  <div class="gbrain-hint">Drag to spin · Scroll to zoom · Tap a resource for summary + URL</div>
+</div>
+
+<div class="gbrain-review" id="gbrain-review">
+  <strong>学习记录</strong>
+  <span id="gbrain-review-meta" class="mono">加载中…</span>
+  <ul id="gbrain-review-list"></ul>
+</div>
+{% endif %}
 {% endblock %}
+
 {% block scripts %}
+{% if space_view == 'graph' %}
 <script>
 (function () {
   var data = {{ stats.echarts | tojson }};
   if (!data || !data.nodes || !data.nodes.length) return;
   var el = document.getElementById('gbrain-chart');
-  if (!el || typeof echarts === 'undefined') return;
-  var chart = echarts.init(el);
-  chart.setOption({
-    backgroundColor: 'transparent',
-    tooltip: {
-      formatter: function (p) {
-        if (p.dataType === 'edge') return '共现 ' + (p.data.value || 1);
-        var d = p.data || {};
-        var lines = [d.name || ''];
-        lines.push((d.kind_label || d.kind || '') + ' · 权重 ' + (d.value || 0));
-        if (d.hint) lines.push(d.hint);
-        else if (d.url) lines.push('点击打开详情');
-        return lines.join('<br/>');
-      }
-    },
-    legend: [{
-      data: (data.categories || []).map(function (c) { return c.name; }),
-      formatter: function (name) {
-        var cat = (data.categories || []).find(function (c) { return c.name === name; });
-        return (cat && cat.label) || name;
-      },
-      bottom: 0
-    }],
-    series: [{
-      type: 'graph',
-      layout: 'force',
-      roam: true,
-      draggable: true,
-      categories: data.categories || [],
-      data: data.nodes || [],
-      links: data.links || [],
-      label: { show: true, position: 'right', fontSize: 11 },
-      force: { repulsion: 200, edgeLength: [40, 130], gravity: 0.06 },
-      emphasis: { focus: 'adjacency', scale: true },
-      lineStyle: { color: 'source', curveness: 0.15, opacity: 0.55 }
-    }]
+  if (!el || typeof ForceGraph3D === 'undefined') return;
+
+  var allNodes = (data.nodes || []).map(function (n, i) {
+    var h = (typeof n.fy === 'number') ? n.fy : (n.height || 0);
+    var ang = (i * 2.399963) % (Math.PI * 2);
+    var r0 = 4 + Math.random() * 8;
+    return Object.assign({}, n, {
+      __rawH: h,
+      __targetFy: h,
+      fy: 0,
+      x: Math.cos(ang) * r0, z: Math.sin(ang) * r0,
+      val: n.val || Math.max(2, Math.min(12, 3 + (n.value || 1))),
+      __visible: true
+    });
   });
-  chart.on('click', function (p) {
-    if (p.dataType === 'node' && p.data && p.data.url) {
-      window.open(p.data.url, '_blank', 'noopener');
+  var allLinks = (data.links || []).map(function (l) {
+    return { source: l.source, target: l.target, relation: l.relation || 'about', value: l.value || 1 };
+  });
+  var maxH = Math.max.apply(null, allNodes.map(function (n) { return n.__rawH || 1; })) || 1;
+  // Shift cone so geometric mid-height sits at world origin (centered in viewport).
+  var midY = maxH * 0.5;
+  allNodes.forEach(function (n) {
+    n.__targetFy = (n.__rawH || 0) - midY;
+    n.fy = -midY;
+  });
+  var enabledFilters = {};
+  (data.stats && data.stats.subjects || []).forEach(function (s) { enabledFilters[s.key] = true; });
+  var focusKeys = null;
+  var cardHistory = [];
+  var currentKey = null;
+
+  var pageBg = (window.getComputedStyle(document.body).backgroundColor || '').trim() || '#0b1220';
+  var Graph = ForceGraph3D()(el)
+    .graphData({ nodes: allNodes.slice(), links: allLinks.slice() })
+    .backgroundColor(pageBg)
+    .showNavInfo(false)
+    .nodeId('id')
+    .nodeLabel(function (n) {
+      return [n.name || '', (n.kind_label || n.kind || '') + (n.type_label ? (' · ' + n.type_label) : '')].join('\n');
+    })
+    .nodeVal('val')
+    .nodeColor(function (n) {
+      if (focusKeys && focusKeys[n.id]) return '#38bdf8';
+      return n.color || '#64748b';
+    })
+    .nodeOpacity(0.95)
+    .linkColor(function (l) {
+      var sid = (l.source && l.source.id) || l.source;
+      var tid = (l.target && l.target.id) || l.target;
+      if (focusKeys && focusKeys[sid] && focusKeys[tid]) return '#7dd3fc';
+      return l.relation === 'prerequisite' ? '#64748b' : '#1e293b';
+    })
+    .linkWidth(function (l) {
+      var sid = (l.source && l.source.id) || l.source;
+      var tid = (l.target && l.target.id) || l.target;
+      if (focusKeys && focusKeys[sid] && focusKeys[tid]) return 2.4;
+      return Math.min(1.8, 0.4 + (l.value || 1) * 0.2);
+    })
+    .linkOpacity(0.5)
+    .linkDirectionalParticles(function (l) { return l.relation === 'prerequisite' ? 1 : 0; })
+    .linkDirectionalParticleWidth(1.1)
+    .linkDirectionalParticleSpeed(0.005)
+    .onNodeClick(function (n) { if (n) openCard(n.id, true); })
+    .onNodeDragEnd(function (node) { node.fy = node.__targetFy != null ? node.__targetFy : node.fy; });
+
+  Graph.d3Force('charge').strength(-88);
+  var linkForce = Graph.d3Force('link');
+  if (linkForce) linkForce.distance(40);
+  Graph.d3Force('y', null);
+  Graph.onEngineTick(function () {
+    allNodes.forEach(function (n) {
+      if (!n.__visible) return;
+      var t = Math.max(0, Math.min(1, (n.__rawH || 0) / maxH));
+      var targetR = 12 + t * 155;
+      var r = Math.hypot(n.x || 0, n.z || 0) || 0.001;
+      var k = 0.045;
+      n.vx = (n.vx || 0) + ((n.x || 0) * (targetR / r) - (n.x || 0)) * k;
+      n.vz = (n.vz || 0) + ((n.z || 0) * (targetR / r) - (n.z || 0)) * k;
+    });
+  });
+  var controls = Graph.controls();
+  if (controls) {
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 0.38;
+    controls.enableDamping = true;
+  }
+
+  function frameCone(ms) {
+    try {
+      Graph.zoomToFit(ms || 0, 48);
+    } catch (e) {
+      var look = { x: 0, y: 0, z: 0 };
+      var cam = { x: 0, y: maxH * 0.05, z: Math.max(300, maxH * 1.45) };
+      Graph.cameraPosition(cam, look, 0);
+    }
+  }
+  frameCone(0);
+
+  var t0 = performance.now();
+  (function grow() {
+    var t = Math.min(1, (performance.now() - t0) / 3600);
+    var eased = 1 - Math.pow(1 - t, 3);
+    allNodes.forEach(function (n) {
+      n.fy = -midY + ((n.__rawH || 0) * eased);
+    });
+    if (t < 1) requestAnimationFrame(grow);
+    else {
+      allNodes.forEach(function (n) { n.fy = n.__targetFy; });
+      frameCone(700);
+    }
+  })();
+
+  function fit() {
+    Graph.width(el.clientWidth || 900).height(el.clientHeight || 720);
+  }
+  fit();
+  window.addEventListener('resize', function () {
+    fit();
+    frameCone(0);
+  });
+
+  var listEl = document.getElementById('gbrain-subject-list');
+  function renderSubjects() {
+    var subjects = (data.stats && data.stats.subjects) || [];
+    listEl.innerHTML = subjects.map(function (s) {
+      var on = enabledFilters[s.key] !== false;
+      return '<button type="button" class="gbrain-sub-btn' + (on ? ' on' : '') + '" data-key="' + s.key + '">' +
+        '<i style="background:' + (s.color || '#64748b') + '"></i>' +
+        '<span>' + s.label + '</span><b>' + s.count + '</b></button>';
+    }).join('');
+    listEl.querySelectorAll('.gbrain-sub-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var k = btn.getAttribute('data-key');
+        enabledFilters[k] = !enabledFilters[k];
+        applyVisibility();
+        renderSubjects();
+      });
+    });
+  }
+  renderSubjects();
+
+  function nodePassesFilter(n) {
+    if (focusKeys) return !!focusKeys[n.id];
+    // SUBJECTS only gates resource channels (item / type hubs).
+    if (n.kind === 'item') {
+      var fk = n.filter_key || n.category || n.type_label || '';
+      return enabledFilters[fk] !== false;
+    }
+    if (n.kind === 'type') {
+      return enabledFilters[n.label || n.filter_key] !== false;
+    }
+    // Topics / clusters / sources stay as hubs.
+    return true;
+  }
+
+  function applyVisibility() {
+    allNodes.forEach(function (n) { n.__visible = nodePassesFilter(n); });
+    var nodes = allNodes.filter(function (n) { return n.__visible; });
+    var idset = {};
+    nodes.forEach(function (n) { idset[n.id] = true; });
+    var links = allLinks.filter(function (l) {
+      var s = typeof l.source === 'object' ? l.source.id : l.source;
+      var t = typeof l.target === 'object' ? l.target.id : l.target;
+      return idset[s] && idset[t];
+    });
+    Graph.graphData({ nodes: nodes, links: links });
+  }
+
+  function esc(s) {
+    return String(s || '').replace(/[&<>"']/g, function (c) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+    });
+  }
+
+  function openCard(nodeKey, pushHistory) {
+    currentKey = nodeKey;
+    if (pushHistory) cardHistory.push(nodeKey);
+    fetch('/api/gbrain/card?key=' + encodeURIComponent(nodeKey))
+      .then(function (r) { return r.json(); })
+      .then(function (card) {
+        if (card.detail) return;
+        showCard(card);
+        focusKeys = {};
+        (card.focus_keys || [card.key]).forEach(function (k) { focusKeys[k] = true; });
+        applyVisibility();
+        fetch('/api/gbrain/learn', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: card.key, action: 'focus' })
+        }).catch(function () {});
+        loadReview();
+      })
+      .catch(function () {});
+  }
+
+  function renderRelSection(elId, title, items) {
+    var el = document.getElementById(elId);
+    if (!items || !items.length) { el.innerHTML = ''; return; }
+    el.innerHTML = '<div class="sec-title">' + esc(title) + '</div>' + items.map(function (it) {
+      var sum = it.summary || it.reason || '';
+      var url = it.url || '';
+      var badge = it.type_label || it.subject || '';
+      return '<div class="rel" data-key="' + esc(it.key) + '">' +
+        '<div class="rel-top"><i></i><span class="rel-title">' + esc(it.name || it.title || it.key) + '</span>' +
+        (badge ? '<em>' + esc(badge) + '</em>' : '') + '</div>' +
+        (sum ? '<div class="rel-sum">' + esc(sum) + '</div>' : '') +
+        (url ? '<a class="rel-url" href="' + esc(url) + '" target="_blank" rel="noopener" data-ext="1">打开原文 ↗</a>' : '') +
+        '</div>';
+    }).join('');
+    el.querySelectorAll('.rel').forEach(function (row) {
+      row.addEventListener('click', function (ev) {
+        if (ev.target && ev.target.getAttribute && ev.target.getAttribute('data-ext')) {
+          ev.stopPropagation();
+          return;
+        }
+        openCard(row.getAttribute('data-key'), true);
+      });
+      var a = row.querySelector('a.rel-url');
+      if (a) a.addEventListener('click', function (ev) { ev.stopPropagation(); });
+    });
+  }
+
+  function showCard(card) {
+    var panel = document.getElementById('gbrain-card');
+    panel.hidden = false;
+    document.getElementById('gbrain-card-kicker').textContent = card.subtitle || card.kind || '';
+    document.getElementById('gbrain-card-title').textContent = card.title || '';
+    document.getElementById('gbrain-card-desc').textContent = card.summary || card.description || '';
+    var stat = document.getElementById('gbrain-card-stat');
+    if (card.kind === 'item' && card.url) {
+      stat.innerHTML = '资源卡片 · 可打开原文继续阅读';
+      stat.hidden = false;
+    } else if (card.resource_count) {
+      stat.innerHTML = '<strong>' + card.resource_count + '</strong> 条挂载资源（摘要 + URL）';
+      stat.hidden = false;
+    } else if (card.prereq_total) {
+      stat.innerHTML = '<strong>' + card.prereq_total + '</strong> prerequisites in total';
+      stat.hidden = false;
+    } else {
+      stat.hidden = true;
+    }
+    var res = card.related_resources && card.related_resources.length
+      ? card.related_resources
+      : (card.resources || []);
+    renderRelSection('gbrain-card-resources',
+      card.kind === 'item' ? 'RELATED RESOURCES ' + res.length : 'RESOURCES ' + res.length,
+      card.kind === 'item' ? res : (card.resources || res));
+    renderRelSection('gbrain-card-related', '', []);
+    renderRelSection('gbrain-card-builds',
+      card.kind === 'item' ? 'TOPICS ' + ((card.builds_on || []).length) : 'BUILDS ON ' + ((card.builds_on || []).length),
+      card.builds_on);
+    renderRelSection('gbrain-card-unlocks', 'UNLOCKS / NEXT ' + ((card.unlocks || []).length), card.unlocks);
+    var url = document.getElementById('gbrain-card-url');
+    if (card.url) { url.href = card.url; url.hidden = false; url.textContent = '打开原文 ↗'; }
+    else { url.hidden = true; }
+  }
+
+  document.getElementById('gbrain-card-close').addEventListener('click', function () {
+    document.getElementById('gbrain-card').hidden = true;
+    focusKeys = null;
+    applyVisibility();
+  });
+  document.getElementById('gbrain-card-back').addEventListener('click', function () {
+    if (cardHistory.length > 1) {
+      cardHistory.pop();
+      openCard(cardHistory[cardHistory.length - 1], false);
     }
   });
-  window.addEventListener('resize', function () { chart.resize(); });
+  document.getElementById('gbrain-card-review').addEventListener('click', function () {
+    if (!currentKey) return;
+    fetch('/api/gbrain/learn', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: currentKey, action: 'review' })
+    }).then(loadReview);
+  });
+
+  function loadReview() {
+    fetch('/api/gbrain/review')
+      .then(function (r) { return r.json(); })
+      .then(function (rev) {
+        document.getElementById('gbrain-review-meta').textContent =
+          (rev.event_count || 0) + ' events · ' + (rev.unique_nodes || 0) + ' nodes · ' + (rev.days || 14) + 'd';
+        var ul = document.getElementById('gbrain-review-list');
+        var sugg = rev.suggestions || [];
+        if (!sugg.length) {
+          ul.innerHTML = '<li class="empty">暂无复习建议。点击红色资源点开始：读摘要 → 开原文 → 标记复习。</li>';
+          return;
+        }
+        ul.innerHTML = sugg.map(function (s) {
+          return '<li><button type="button" data-key="' + s.key + '">' + esc(s.title) +
+            '</button>' +
+            (s.url ? ' <a class="ext" href="' + esc(s.url) + '" target="_blank" rel="noopener">原文</a>' : '') +
+            ' <span class="mono">views ' + s.views + '</span>' +
+            '<div class="why">' + esc(s.why || '') + '</div></li>';
+        }).join('');
+        ul.querySelectorAll('button[data-key]').forEach(function (b) {
+          b.addEventListener('click', function () { openCard(b.getAttribute('data-key'), true); });
+        });
+      })
+      .catch(function () {
+        document.getElementById('gbrain-review-meta').textContent = '学习记录暂不可用（需迁移）';
+      });
+  }
+  loadReview();
 })();
 </script>
+{% endif %}
 {% endblock %}

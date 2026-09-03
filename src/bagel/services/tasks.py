@@ -407,7 +407,18 @@ class TaskManager:
                     year_month=options.get("year_month"),
                     on_progress=on_progress,
                 )
+            elif kind == "compile_wiki":
+                from bagel.jobs.wiki_compile import run_compile_wiki
+
+                on_progress(current=0, total=1, message="编译 Wiki（MD + 索引）…")
+                result = run_compile_wiki(
+                    session,
+                    limit=int(options.get("limit") or 400),
+                    force=bool(options.get("force")),
+                )
+                on_progress(current=1, total=1, message="Wiki 编译完成")
             elif kind == "collect_all":
+
                 on_progress(current=0, total=2, message="采集新闻…")
                 news = run_collect_news(
                     session,

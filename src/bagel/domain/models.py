@@ -302,3 +302,78 @@ class IntelSearchEvent(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )
+
+
+class WikiPage(Base):
+    """Transactional index for compiled wiki Markdown (content lives on disk)."""
+
+    __tablename__ = "wiki_page"
+    __table_args__ = (UniqueConstraint("rel_path", name="uq_wiki_page_rel_path"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("app_user.id"), nullable=True, index=True
+    )
+    slug: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    rel_path: Mapped[str] = mapped_column(String(512), nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(512), nullable=False, default="")
+    intel_item_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("intel_item.id"), nullable=True, index=True
+    )
+    topic_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    compiled_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class WikiEdge(Base):
+    """Queryable wiki / taxonomy links (MD bodies stay on disk)."""
+
+    __tablename__ = "wiki_edge"
+    __table_args__ = (
+        UniqueConstraint(
+            "source_key",
+            "target_key",
+            "relation",
+            name="uq_wiki_edge_src_tgt_rel",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("app_user.id"), nullable=True, index=True
+    )
+    source_key: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    target_key: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    relation: Mapped[str] = mapped_column(String(32), nullable=False, default="about")
+    weight: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
+    reason: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class GbrainLearnEvent(Base):
+    """Flashcard-style learning log for GBrain nodes (view / focus / review)."""
+
+    __tablename__ = "gbrain_learn_event"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("app_user.id"), nullable=True, index=True
+    )
+    node_key: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False, default="topic")
+    action: Mapped[str] = mapped_column(String(32), nullable=False, default="view", index=True)
+    metadata_: Mapped[dict[str, Any]] = mapped_column("metadata", JSONType, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )

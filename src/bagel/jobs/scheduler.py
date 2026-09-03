@@ -217,3 +217,15 @@ def _register_jobs(sched: BackgroundScheduler, settings: Settings, cfg) -> None:
             max_instances=1,
             coalesce=True,
         )
+    if cfg.enable_wiki_compile:
+        from bagel.jobs.wiki_compile import run_compile_wiki
+
+        sched.add_job(
+            lambda: _run_job("compile_wiki", run_compile_wiki),
+            CronTrigger(hour=4, minute=10),
+            id="compile_wiki",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+
