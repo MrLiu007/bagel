@@ -338,6 +338,52 @@ h1 .mono {
 }
 .count { color: var(--muted); font-size: 0.82rem; margin-left: auto; font-variant-numeric: tabular-nums; }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.title-search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0 0.85rem;
+}
+.title-search input[type="search"] {
+  flex: 1 1 12rem;
+  min-width: 10rem;
+  max-width: 28rem;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft-bg);
+  color: var(--fg);
+  font-size: 0.9rem;
+}
+.title-search button {
+  padding: 0.4rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+.title-search .clear-q {
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-decoration: none;
+}
+.title-search .clear-q:hover { color: var(--accent); }
+
 .item {
   padding: 1rem 1.05rem;
   margin-bottom: 0.7rem;

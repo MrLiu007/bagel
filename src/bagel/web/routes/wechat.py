@@ -2,32 +2,45 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 
-from bagel.domain.enums import ItemStatus, ItemType
+from bagel.domain.enums import ItemType
 from bagel.integrations.gewe import GeweClient, GeweError, status as gewe_status
 from bagel.jobs.wechat import ingest_wechat_payload
+from bagel.services import review as review_svc
 from bagel.settings import get_settings
 from bagel.storage.database import get_db
-from bagel.storage.repositories import ItemRepository
-from bagel.web.nav import NAV_ITEMS
-from bagel.web.templating import present_item, templates
+from bagel.web.routes.review import _log_list_search, _owner_id, _page
 
 router = APIRouter(tags=["wechat"])
 
 
 @router.get("/wechat", response_class=HTMLResponse)
-async def wechat_page(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+async def wechat_page(
+    request: Request,
+    db: Session = Depends(get_db),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    category: str | None = Query(None),
+    q: str | None = Query(None, description="Title keyword"),
+) -> HTMLResponse:
     st = gewe_status()
-    repo = ItemRepository(db)
-    items = repo.list_by_status(
-        [ItemStatus.CANDIDATE, ItemStatus.SELECTED, ItemStatus.SUMMARIZED],
+    owner = _owner_id(request)
+    result = review_svc.list_candidates(
+        db,
         item_type=ItemType.WECHAT_MSG,
-        limit=40,
-        offset=0,
+        category=category,
+        owner_id=owner,
+        q=q,
+        page=page,
+        page_size=page_size,
     )
+    _log_list_search(
+        db, q=q, item_type=ItemType.WECHAT_MSG, hit_count=result.total, owner_id=owner
+    )
+
     online = None
     online_error = None
     if st.enabled and st.configured:
@@ -36,20 +49,18 @@ async def wechat_page(request: Request, db: Session = Depends(get_db)) -> HTMLRe
         except (GeweError, Exception) as exc:  # noqa: BLE001
             online_error = str(exc)[:200]
 
-    return templates.TemplateResponse(
+    return _page(
         request,
-        "wechat.html",
-        {
-            "title": "微信",
-            "active": "wechat",
-            "nav": NAV_ITEMS,
+        title="微信",
+        result=result,
+        active="wechat",
+        category=category,
+        q=q,
+        template="wechat.html",
+        extra={
             "status": st,
             "online": online,
             "online_error": online_error,
-            "items": [present_item(i) for i in items],
-            "total": len(items),
-            "base_path": "/wechat",
-            "return_url": "/wechat",
             "empty_hint": "暂无微信条目。配置回调后，含关键词的消息会出现在此。",
             "callback_url": get_settings().gewe_callback_url,
             "docs_hint": "配置说明见仓库 docs/user-config-media-wechat.md",

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from bagel.domain.enums import ItemStatus
 from bagel.domain.models import IntelItem
 from bagel.pipeline.category import classify_title
-from bagel.storage.repositories import ItemRepository
+from bagel.storage.repositories import ItemRepository, normalize_title_q
 
 DEFAULT_PAGE_SIZE = 20
 
@@ -104,10 +104,12 @@ def list_candidates(
     source_id: UUID | None = None,
     source_ids: list[UUID] | None = None,
     owner_id=None,
+    q: str | None = None,
     page: int = 1,
     page_size: int = DEFAULT_PAGE_SIZE,
 ) -> PageResult:
     page, page_size, offset = _page_args(page, page_size)
+    title_q = normalize_title_q(q)
     repo = ItemRepository(session)
     items = list(
         repo.list_by_status(
@@ -118,6 +120,7 @@ def list_candidates(
             source_id=source_id,
             source_ids=source_ids,
             owner_id=owner_id,
+            q=title_q,
             limit=page_size,
             offset=offset,
         )
@@ -131,6 +134,7 @@ def list_candidates(
         source_id=source_id,
         source_ids=source_ids,
         owner_id=owner_id,
+        q=title_q,
     )
     categories = list(
         repo.list_categories(
@@ -140,6 +144,7 @@ def list_candidates(
             source_id=source_id,
             source_ids=source_ids,
             owner_id=owner_id,
+            q=title_q,
         )
     )
     return PageResult(
