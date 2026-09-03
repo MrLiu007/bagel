@@ -1,11 +1,31 @@
+{% if title_search | default(true) %}
+<form class="title-search" method="get" action="{{ base_path }}" role="search">
+  {% if kind %}<input type="hidden" name="kind" value="{{ kind }}" />{% endif %}
+  {% if platform_filter %}<input type="hidden" name="platform" value="{{ platform_filter }}" />{% endif %}
+  {% if category %}<input type="hidden" name="category" value="{{ category }}" />{% endif %}
+  {% if source_id %}<input type="hidden" name="source_id" value="{{ source_id }}" />{% endif %}
+  {% if school %}<input type="hidden" name="school" value="{{ school }}" />{% endif %}
+  <input type="hidden" name="page_size" value="{{ page_size | default(20) }}" />
+  <label class="sr-only" for="list-title-q">标题关键词</label>
+  <input id="list-title-q" type="search" name="q" value="{{ q | default('') }}"
+         placeholder="标题关键词" maxlength="128" autocomplete="off" />
+  <button type="submit">搜索</button>
+  {% if q %}
+  <a class="clear-q" href="{{ clear_q_url | default(base_path) }}">清除</a>
+  {% endif %}
+</form>
+{% endif %}
+
 {% if platform_tabs is defined and platform_tabs %}
 <div class="tabs">
   {% for code, label in platform_tabs %}
-  <a href="{{ base_path }}?{% if kind %}kind={{ kind }}&{% endif %}{% if code %}platform={{ code }}&{% endif %}{% if category %}category={{ category|urlencode }}&{% endif %}page_size={{ page_size }}"
+  <a href="{{ platform_urls.get(code) }}"
      class="{% if platform_filter == code %}on{% endif %}">{{ label }}</a>
   {% endfor %}
 </div>
 {% endif %}
+
+{% set q_note = (' · 标题含「' ~ q ~ '」') if q else '' %}
 
 {% if source_tabs is defined and source_tabs %}
   {% if source_filter_style | default('select') == 'tabs' %}
@@ -18,7 +38,7 @@
     {% endfor %}
   </div>
   <div class="toolbar">
-    <span class="count">共 {{ total }} 条 · 第 {{ page }}/{{ total_pages }} 页{% if source_filter %} · 已按{{ source_filter_label | default('数据源') }}过滤{% endif %}</span>
+    <span class="count">共 {{ total }} 条 · 第 {{ page }}/{{ total_pages }} 页{% if source_filter %} · 已按{{ source_filter_label | default('数据源') }}过滤{% endif %}{{ q_note }}</span>
   </div>
   {% else %}
   <div class="toolbar source-filter">
@@ -30,7 +50,7 @@
               {% if source_filter == code %}selected{% endif %}>{{ label }}</option>
       {% endfor %}
     </select>
-    <span class="count">共 {{ total }} 条 · 第 {{ page }}/{{ total_pages }} 页{% if source_filter %} · 已按源过滤{% endif %}</span>
+    <span class="count">共 {{ total }} 条 · 第 {{ page }}/{{ total_pages }} 页{% if source_filter %} · 已按源过滤{% endif %}{{ q_note }}</span>
   </div>
   {% endif %}
 {% endif %}
@@ -39,17 +59,21 @@
 <div class="toolbar">
   <a href="{{ cat_all_url | default(base_path) }}" class="{% if not category %}on{% endif %}">全部</a>
   {% for c in categories %}
-  <a href="{{ category_urls.get(c) if category_urls is defined else (base_path ~ '?category=' ~ (c|urlencode) ~ '&page_size=' ~ page_size) }}"
+  <a href="{{ category_urls.get(c) if category_urls is defined else (base_path ~ '?category=' ~ (c|urlencode) ~ '&page_size=' ~ page_size ~ (q and ('&q=' ~ (q|urlencode)) or '')) }}"
      class="{% if category == c %}on{% endif %}">{{ c }}</a>
   {% endfor %}
-  {% if not source_tabs %}<span class="count">共 {{ total }} 条 · 第 {{ page }}/{{ total_pages }} 页</span>{% endif %}
+  {% if not source_tabs %}<span class="count">共 {{ total }} 条 · 第 {{ page }}/{{ total_pages }} 页{{ q_note }}</span>{% endif %}
 </div>
 {% elif total is defined and not source_tabs %}
-<div class="toolbar"><span class="count">共 {{ total }} 条</span></div>
+<div class="toolbar"><span class="count">共 {{ total }} 条{{ q_note }}</span></div>
 {% endif %}
 
 {% if not items %}
+  {% if q %}
+  <p class="empty">没有标题包含「{{ q }}」的条目。{% if clear_q_url %}<a href="{{ clear_q_url }}">清除搜索</a>{% endif %}</p>
+  {% else %}
   <p class="empty">{{ empty_hint | default('暂无条目。') | safe }}</p>
+  {% endif %}
 {% else %}
   {% for item in items %}
   <article class="item" data-item-id="{{ item.id }}">

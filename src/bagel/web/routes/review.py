@@ -38,6 +38,7 @@ def _page_url(
     platform: str | None = None,
     source_id: str | None = None,
     school: str | None = None,
+    q: str | None = None,
 ) -> str:
     params: dict[str, str | int] = {"page": page, "page_size": page_size}
     if category:
@@ -50,6 +51,8 @@ def _page_url(
         params["source_id"] = source_id
     if school:
         params["school"] = school
+    if q:
+        params["q"] = q
     return f"{path}?{urlencode(params)}"
 
 
@@ -62,6 +65,7 @@ def _list_nav(
     platform: str | None = None,
     source_id: str | None = None,
     school: str | None = None,
+    q: str | None = None,
 ) -> dict:
     """Shared pagination / return / category URLs that preserve list filters."""
     total_pages = result.total_pages
@@ -81,6 +85,7 @@ def _list_nav(
                     platform=platform,
                     source_id=source_id,
                     school=school,
+                    q=q,
                 ),
                 "active": p == result.page,
             }
@@ -94,6 +99,7 @@ def _list_nav(
         platform=platform,
         source_id=source_id,
         school=school,
+        q=q,
     )
     cat_all_url = _page_url(
         path,
@@ -103,6 +109,7 @@ def _list_nav(
         platform=platform,
         source_id=source_id,
         school=school,
+        q=q,
     )
     category_urls = {
         c: _page_url(
@@ -114,6 +121,7 @@ def _list_nav(
             platform=platform,
             source_id=source_id,
             school=school,
+            q=q,
         )
         for c in result.categories
     }
@@ -127,6 +135,7 @@ def _list_nav(
             platform=platform,
             source_id=source_id,
             school=school,
+            q=q,
         )
         if result.page > 1
         else None
@@ -141,9 +150,20 @@ def _list_nav(
             platform=platform,
             source_id=source_id,
             school=school,
+            q=q,
         )
         if result.page < total_pages
         else None
+    )
+    clear_q_url = _page_url(
+        path,
+        page=1,
+        page_size=result.page_size,
+        category=category,
+        kind=kind,
+        platform=platform,
+        source_id=source_id,
+        school=school,
     )
     return {
         "base_path": path,
@@ -158,6 +178,8 @@ def _list_nav(
         "platform": platform or "",
         "source_id": source_id or "",
         "school": school or "",
+        "q": q or "",
+        "clear_q_url": clear_q_url,
     }
 
 
@@ -177,6 +199,53 @@ def _safe_redirect(next_url: str | None, *, fallback: str = "/news") -> str:
     return urlunsplit(("", "", parts.path or "/", urlencode(query), ""))
 
 
+def _log_list_search(
+    db: Session,
+    *,
+    q: str | None,
+    item_type: str,
+    hit_count: int,
+    owner_id,
+) -> None:
+    from bagel.services.search_analytics import log_search
+    from bagel.storage.repositories import normalize_title_q
+
+    cleaned = normalize_title_q(q)
+    if not cleaned:
+        return
+    log_search(
+        db,
+        query=cleaned,
+        item_types=(item_type,),
+        hit_count=hit_count,
+        channel="list",
+        owner_id=owner_id,
+    )
+
+
+def _platform_urls(
+    path: str,
+    *,
+    page_size: int,
+    tabs: list[tuple[str, str]],
+    category: str | None = None,
+    kind: str | None = None,
+    q: str | None = None,
+) -> dict[str, str]:
+    return {
+        code: _page_url(
+            path,
+            page=1,
+            page_size=page_size,
+            category=category,
+            kind=kind,
+            platform=code or None,
+            q=q,
+        )
+        for code, _label in tabs
+    }
+
+
 def _page(
     request: Request,
     *,
@@ -188,11 +257,15 @@ def _page(
     platform: str | None = None,
     source_id: str | None = None,
     school: str | None = None,
+    q: str | None = None,
     message: str | None = None,
     template: str = "items.html",
     extra: dict | None = None,
 ) -> HTMLResponse:
+    from bagel.storage.repositories import normalize_title_q
+
     path = request.url.path
+    title_q = normalize_title_q(q)
     nav = _list_nav(
         path,
         result=result,
@@ -201,6 +274,7 @@ def _page(
         platform=platform,
         source_id=source_id,
         school=school,
+        q=title_q,
     )
     source_names = (extra or {}).get("source_names") or {}
     ctx: dict = {
@@ -224,6 +298,16 @@ def _page(
     }
     if extra:
         ctx.update(extra)
+        tabs = extra.get("platform_tabs")
+        if tabs and "platform_urls" not in ctx:
+            ctx["platform_urls"] = _platform_urls(
+                path,
+                page_size=result.page_size,
+                tabs=list(tabs),
+                category=category,
+                kind=kind,
+                q=title_q,
+            )
     return templates.TemplateResponse(
         request,
         template,
@@ -244,10 +328,11 @@ async def news(
     page_size: int = Query(20, ge=1, le=100),
     category: str | None = Query(None),
     source_id: str | None = Query(None, description="Filter by intel_source.id"),
+    q: str | None = Query(None, description="Title keyword"),
 ) -> HTMLResponse:
     from bagel.domain.enums import SourceType
     from bagel.domain.enums import ItemStatus
-    from bagel.storage.repositories import ItemRepository, SourceRepository
+    from bagel.storage.repositories import ItemRepository, SourceRepository, normalize_title_q
 
     sid: UUID | None = None
     if source_id:
@@ -257,15 +342,18 @@ async def news(
             sid = None
 
     owner = _owner_id(request)
+    title_q = normalize_title_q(q)
     result = review_svc.list_candidates(
         db,
         item_type=ItemType.NEWS,
         category=category,
         source_id=sid,
         owner_id=owner,
+        q=title_q,
         page=page,
         page_size=page_size,
     )
+    _log_list_search(db, q=title_q, item_type=ItemType.NEWS, hit_count=result.total, owner_id=owner)
 
     # Source filter options: sources that already have NEWS candidates, plus all enabled news feeds.
     used_ids = set(
@@ -291,6 +379,7 @@ async def news(
             page_size=page_size,
             category=category,
             source_id=code or None,
+            q=title_q,
         )
         for code, _label in source_tabs
     }
@@ -302,6 +391,7 @@ async def news(
         active="news",
         category=category,
         source_id=str(sid) if sid else None,
+        q=title_q,
         extra={
             "source_tabs": source_tabs,
             "source_filter": str(sid) if sid else "",
@@ -318,16 +408,24 @@ async def github(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     category: str | None = Query(None),
+    q: str | None = Query(None, description="Title keyword"),
 ) -> HTMLResponse:
+    owner = _owner_id(request)
     result = review_svc.list_candidates(
         db,
         item_type=ItemType.GITHUB_REPO,
         category=category,
-        owner_id=_owner_id(request),
+        owner_id=owner,
+        q=q,
         page=page,
         page_size=page_size,
     )
-    return _page(request, title="GitHub项目", result=result, active="github", category=category)
+    _log_list_search(
+        db, q=q, item_type=ItemType.GITHUB_REPO, hit_count=result.total, owner_id=owner
+    )
+    return _page(
+        request, title="GitHub项目", result=result, active="github", category=category, q=q
+    )
 
 
 @router.get("/papers", response_class=HTMLResponse)
@@ -337,16 +435,20 @@ async def papers(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     category: str | None = Query(None),
+    q: str | None = Query(None, description="Title keyword"),
 ) -> HTMLResponse:
+    owner = _owner_id(request)
     result = review_svc.list_candidates(
         db,
         item_type=ItemType.PAPER,
         category=category,
-        owner_id=_owner_id(request),
+        owner_id=owner,
+        q=q,
         page=page,
         page_size=page_size,
     )
-    return _page(request, title="论文", result=result, active="papers", category=category)
+    _log_list_search(db, q=q, item_type=ItemType.PAPER, hit_count=result.total, owner_id=owner)
+    return _page(request, title="论文", result=result, active="papers", category=category, q=q)
 
 
 @router.get("/education", response_class=HTMLResponse)
@@ -357,12 +459,14 @@ async def education(
     page_size: int = Query(20, ge=1, le=100),
     category: str | None = Query(None),
     school: str | None = Query(None, description="Institution key, e.g. mit / stanford"),
+    q: str | None = Query(None, description="Title keyword"),
 ) -> HTMLResponse:
     from bagel.domain.enums import ItemStatus, SourceType
     from bagel.pipeline.education_orgs import institution_for_source
-    from bagel.storage.repositories import ItemRepository, SourceRepository
+    from bagel.storage.repositories import ItemRepository, SourceRepository, normalize_title_q
 
     owner = _owner_id(request)
+    title_q = normalize_title_q(q)
     used_ids = set(
         ItemRepository(db).list_source_ids_for_status(
             ItemStatus.CANDIDATE,
@@ -398,8 +502,12 @@ async def education(
         category=category,
         source_ids=filter_ids,
         owner_id=owner,
+        q=title_q,
         page=page,
         page_size=page_size,
+    )
+    _log_list_search(
+        db, q=title_q, item_type=ItemType.EDUCATION, hit_count=result.total, owner_id=owner
     )
 
     source_tabs = [("", "全部")] + [(b["key"], b["label"]) for b in ordered]
@@ -410,6 +518,7 @@ async def education(
             page_size=page_size,
             category=category,
             school=code or None,
+            q=title_q,
         )
         for code, _label in source_tabs
     }
@@ -421,6 +530,7 @@ async def education(
         active="education",
         category=category,
         school=school_key,
+        q=title_q,
         extra={
             "source_tabs": source_tabs,
             "source_filter": school_key or "",
@@ -444,21 +554,25 @@ async def models(
     page_size: int = Query(20, ge=1, le=100),
     category: str | None = Query(None),
     platform: str | None = Query(None),
+    q: str | None = Query(None, description="Title keyword"),
 ) -> HTMLResponse:
     from bagel.collectors.models import COMMUNITY_HUGGINGFACE, COMMUNITY_LABELS, COMMUNITY_MODELSCOPE
 
     community = (platform or "").strip().lower() or None
     if community and community not in COMMUNITY_LABELS:
         community = None
+    owner = _owner_id(request)
     result = review_svc.list_candidates(
         db,
         item_type=ItemType.MODEL,
         category=category,
         platform=community,
-        owner_id=_owner_id(request),
+        owner_id=owner,
+        q=q,
         page=page,
         page_size=page_size,
     )
+    _log_list_search(db, q=q, item_type=ItemType.MODEL, hit_count=result.total, owner_id=owner)
     return _page(
         request,
         title="模型",
@@ -466,6 +580,7 @@ async def models(
         active="models",
         category=category,
         platform=community,
+        q=q,
         extra={
             "empty_hint": "暂无模型条目。",
             "platform_tabs": [
@@ -485,14 +600,20 @@ async def stocks(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     category: str | None = Query(None),
+    q: str | None = Query(None, description="Title keyword"),
 ) -> HTMLResponse:
+    owner = _owner_id(request)
     result = review_svc.list_candidates(
         db,
         item_type=ItemType.STOCK_NEWS,
         category=category,
-        owner_id=_owner_id(request),
+        owner_id=owner,
+        q=q,
         page=page,
         page_size=page_size,
+    )
+    _log_list_search(
+        db, q=q, item_type=ItemType.STOCK_NEWS, hit_count=result.total, owner_id=owner
     )
     return _page(
         request,
@@ -500,6 +621,7 @@ async def stocks(
         result=result,
         active="stocks",
         category=category,
+        q=q,
         extra={
             "empty_hint": "暂无股票资讯。",
         },
@@ -665,33 +787,47 @@ async def media(
     page_size: int = Query(20, ge=1, le=100),
     category: str | None = Query(None),
     platform: str | None = Query(None),
+    q: str | None = Query(None, description="Title keyword"),
     fragment: str | None = Query(None),
 ) -> HTMLResponse:
     from bagel.integrations.mediacrawler import MEDIA_PLATFORMS, PLATFORM_LABELS, status_dict
     from bagel.services.tasks import task_manager
     from bagel.settings import get_settings
+    from bagel.storage.repositories import normalize_title_q
 
     settings = get_settings()
     platform_key = (platform or "").strip().lower() or None
     if platform_key and platform_key not in PLATFORM_LABELS:
         platform_key = None
+    title_q = normalize_title_q(q)
     # One-shot heal for older Weibo rows with title == content.
     from bagel.jobs.media import repair_media_duplicate_titles
 
     if repair_media_duplicate_titles(db):
         db.commit()
+    owner = _owner_id(request)
     result = review_svc.list_candidates(
         db,
         item_type=ItemType.MEDIA_POST,
         category=category,
         platform=platform_key,
-        owner_id=_owner_id(request),
+        owner_id=owner,
+        q=title_q,
         page=page,
         page_size=page_size,
     )
+    _log_list_search(
+        db, q=title_q, item_type=ItemType.MEDIA_POST, hit_count=result.total, owner_id=owner
+    )
+    platform_tabs = [
+        ("", "全部"),
+        *[(code, label) for code, label in MEDIA_PLATFORMS],
+    ]
     if (fragment or "").strip().lower() == "items":
         path = request.url.path
-        nav = _list_nav(path, result=result, category=category, platform=platform_key)
+        nav = _list_nav(
+            path, result=result, category=category, platform=platform_key, q=title_q
+        )
         return templates.TemplateResponse(
             request,
             "_items_list.html",
@@ -704,11 +840,15 @@ async def media(
                 "page_size": result.page_size,
                 "total": result.total,
                 "empty_hint": "暂无自媒体条目。请在本页选择平台与关键词后点击「开始抓取」。",
-                "platform_tabs": [
-                    ("", "全部"),
-                    *[(code, label) for code, label in MEDIA_PLATFORMS],
-                ],
+                "platform_tabs": platform_tabs,
                 "platform_filter": platform_key or "",
+                "platform_urls": _platform_urls(
+                    path,
+                    page_size=page_size,
+                    tabs=platform_tabs,
+                    category=category,
+                    q=title_q,
+                ),
                 **nav,
             },
         )
@@ -720,6 +860,7 @@ async def media(
         active="media",
         category=category,
         platform=platform_key,
+        q=title_q,
         template="media.html",
         extra={
             "status": status_dict(settings),
@@ -729,10 +870,7 @@ async def media(
             "docs_hint": "配置说明见仓库 docs/user-config-media-wechat.md",
             "latest_task": latest.to_dict() if latest else None,
             "empty_hint": "暂无自媒体条目。请在本页选择平台与关键词后点击「开始抓取」。",
-            "platform_tabs": [
-                ("", "全部"),
-                *[(code, label) for code, label in MEDIA_PLATFORMS],
-            ],
+            "platform_tabs": platform_tabs,
             "platform_filter": platform_key or "",
         },
     )
@@ -745,12 +883,28 @@ async def releases(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     category: str | None = Query(None),
+    q: str | None = Query(None, description="Title keyword"),
 ) -> HTMLResponse:
+    owner = _owner_id(request)
     result = review_svc.list_candidates(
-        db, item_type=ItemType.GITHUB_RELEASE, category=category, page=page, page_size=page_size
+        db,
+        item_type=ItemType.GITHUB_RELEASE,
+        category=category,
+        owner_id=owner,
+        q=q,
+        page=page,
+        page_size=page_size,
+    )
+    _log_list_search(
+        db, q=q, item_type=ItemType.GITHUB_RELEASE, hit_count=result.total, owner_id=owner
     )
     return _page(
-        request, title="GitHub Release", result=result, active="releases", category=category
+        request,
+        title="GitHub Release",
+        result=result,
+        active="releases",
+        category=category,
+        q=q,
     )
 
 
@@ -815,6 +969,7 @@ async def favorites(
             ("wechat", "微信"),
         ],
         "empty_hint": "暂无收藏。可在各列表页点击「收藏」。",
+        "title_search": False,
     }
     if kind_key == "media":
         from bagel.integrations.mediacrawler import MEDIA_PLATFORMS

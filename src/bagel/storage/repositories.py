@@ -34,6 +34,15 @@ from bagel.pipeline.textutil import clip
 
 _ARXIV_ID_RE = re.compile(r"(\d{4}\.\d{4,5})(?:v\d+)?", re.I)
 _DOI_RE = re.compile(r"10\.\d{4,9}/[-._;()/:A-Z0-9]+", re.I)
+_TITLE_Q_MAX = 128
+
+
+def normalize_title_q(raw: str | None) -> str | None:
+    """Strip and cap list-page title keyword (`q`); empty → None."""
+    text = (raw or "").strip()
+    if not text:
+        return None
+    return text[:_TITLE_Q_MAX]
 
 
 def extract_arxiv_id(text: str | None) -> str | None:
@@ -315,6 +324,15 @@ class ItemRepository:
             return None
         return or_(IntelItem.owner_id == owner_id, IntelItem.owner_id.is_(None))
 
+    @staticmethod
+    def _title_q_clause(q: str | None):
+        """Title keyword: match `title` or Chinese display title `llm_title_zh`."""
+        cleaned = normalize_title_q(q)
+        if not cleaned:
+            return None
+        like = f"%{cleaned}%"
+        return or_(IntelItem.title.ilike(like), IntelItem.llm_title_zh.ilike(like))
+
     def _status_filter(
         self,
         status: str | Sequence[str],
@@ -325,6 +343,7 @@ class ItemRepository:
         source_id: uuid.UUID | None = None,
         source_ids: Sequence[uuid.UUID] | None = None,
         owner_id=None,
+        q: str | None = None,
     ):
         statuses = [status] if isinstance(status, str) else list(status)
         stmt = select(IntelItem).where(IntelItem.status.in_(statuses))
@@ -342,6 +361,9 @@ class ItemRepository:
         own = self._owner_clause(owner_id)
         if own is not None:
             stmt = stmt.where(own)
+        title_q = self._title_q_clause(q)
+        if title_q is not None:
+            stmt = stmt.where(title_q)
         return stmt
 
     def list_by_status(
@@ -354,6 +376,7 @@ class ItemRepository:
         source_id: uuid.UUID | None = None,
         source_ids: Sequence[uuid.UUID] | None = None,
         owner_id=None,
+        q: str | None = None,
         limit: int = 20,
         offset: int = 0,
     ) -> Sequence[IntelItem]:
@@ -366,6 +389,7 @@ class ItemRepository:
                 source_id=source_id,
                 source_ids=source_ids,
                 owner_id=owner_id,
+                q=q,
             )
             .order_by(
                 func.coalesce(IntelItem.published_at, IntelItem.first_seen_at).desc(),
@@ -386,24 +410,19 @@ class ItemRepository:
         source_id: uuid.UUID | None = None,
         source_ids: Sequence[uuid.UUID] | None = None,
         owner_id=None,
+        q: str | None = None,
     ) -> int:
-        statuses = [status] if isinstance(status, str) else list(status)
-        stmt = select(func.count()).select_from(IntelItem).where(IntelItem.status.in_(statuses))
-        if item_type:
-            stmt = stmt.where(IntelItem.item_type == item_type)
-        if category:
-            stmt = stmt.where(IntelItem.category == category)
-        if source_ids:
-            stmt = stmt.where(IntelItem.source_id.in_(list(source_ids)))
-        elif source_id is not None:
-            stmt = stmt.where(IntelItem.source_id == source_id)
-        plat = self._platform_clause(platform or "")
-        if plat is not None:
-            stmt = stmt.where(plat)
-        own = self._owner_clause(owner_id)
-        if own is not None:
-            stmt = stmt.where(own)
-        return int(self.session.scalar(stmt) or 0)
+        filtered = self._status_filter(
+            status,
+            item_type=item_type,
+            category=category,
+            platform=platform,
+            source_id=source_id,
+            source_ids=source_ids,
+            owner_id=owner_id,
+            q=q,
+        ).subquery()
+        return int(self.session.scalar(select(func.count()).select_from(filtered)) or 0)
 
     def list_categories(
         self,
@@ -414,29 +433,24 @@ class ItemRepository:
         source_id: uuid.UUID | None = None,
         source_ids: Sequence[uuid.UUID] | None = None,
         owner_id=None,
+        q: str | None = None,
     ) -> Sequence[str]:
-        statuses = [status] if isinstance(status, str) else list(status)
+        base = self._status_filter(
+            status,
+            item_type=item_type,
+            platform=platform,
+            source_id=source_id,
+            source_ids=source_ids,
+            owner_id=owner_id,
+            q=q,
+        ).subquery()
         stmt = (
-            select(IntelItem.category)
-            .where(
-                IntelItem.status.in_(statuses),
-                IntelItem.category.is_not(None),
-            )
+            select(base.c.category)
+            .where(base.c.category.is_not(None))
             .distinct()
+            .order_by(base.c.category)
         )
-        if item_type:
-            stmt = stmt.where(IntelItem.item_type == item_type)
-        if source_ids:
-            stmt = stmt.where(IntelItem.source_id.in_(list(source_ids)))
-        elif source_id is not None:
-            stmt = stmt.where(IntelItem.source_id == source_id)
-        plat = self._platform_clause(platform or "")
-        if plat is not None:
-            stmt = stmt.where(plat)
-        own = self._owner_clause(owner_id)
-        if own is not None:
-            stmt = stmt.where(own)
-        rows = self.session.scalars(stmt.order_by(IntelItem.category)).all()
+        rows = self.session.scalars(stmt).all()
         return [c for c in rows if c]
 
     def list_source_ids_for_status(
@@ -445,22 +459,20 @@ class ItemRepository:
         *,
         item_type: str | None = None,
         owner_id=None,
+        q: str | None = None,
     ) -> Sequence[uuid.UUID]:
         """Distinct source_id values present in the filtered item set (for news source tabs)."""
-        statuses = [status] if isinstance(status, str) else list(status)
+        base = self._status_filter(
+            status,
+            item_type=item_type,
+            owner_id=owner_id,
+            q=q,
+        ).subquery()
         stmt = (
-            select(IntelItem.source_id)
-            .where(
-                IntelItem.status.in_(statuses),
-                IntelItem.source_id.is_not(None),
-            )
+            select(base.c.source_id)
+            .where(base.c.source_id.is_not(None))
             .distinct()
         )
-        if item_type:
-            stmt = stmt.where(IntelItem.item_type == item_type)
-        own = self._owner_clause(owner_id)
-        if own is not None:
-            stmt = stmt.where(own)
         return [sid for sid in self.session.scalars(stmt).all() if sid is not None]
 
     def list_favorites(

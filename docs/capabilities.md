@@ -22,7 +22,7 @@
 
 | 路径 | 能力 |
 |------|------|
-| `/news` `/github` `/papers` `/models` `/stocks` `/media` `/wechat` `/education` | 列表、分类、收藏、关联条目 |
+| `/news` `/github` `/papers` `/models` `/stocks` `/media` `/wechat` `/education` | 列表、**标题关键词搜索**（`q`）、分类、收藏、关联条目 |
 | `/briefs/*` | 周 / 月总结、**个人空间**（看板 + 3D GBrain）、教育总结、自定义提示词 |
 | `/favorites` | 收藏夹 |
 | `/collect` | 采集（手动 / 定时）+ 任务详情 + Wiki 编译 |
