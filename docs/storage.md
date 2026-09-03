@@ -33,9 +33,12 @@ WIKI_DIR=data/wiki
 启动时：
 
 1. 解析 `STORAGE_BACKEND` + `DATABASE_URL`
-2. SQLite：自动 `create_all`（无外部 migrate 也可跑通 MVP）
-3. Postgres：建议 `alembic upgrade head`
-4. `WIKI_ENABLED=true`：生成日报/月报时同步写 wiki
+2. SQLite：`init_db` → `ensure_schema`（`create_all` 幂等，表不存在才建）+ seed
+3. Postgres（Compose）：`docker-entrypoint` 先 `alembic upgrade head`，再 `ensure_schema` 补齐缺失表
+4. **注意**：`app_user` 在迁移 `0005a_app_user` 中创建；`wiki_page` / `gbrain_learn_event` 外键依赖它。若只有旧库且停在 `0005`，升级会先补 `app_user` 再跑 `0006`
+5. `WIKI_ENABLED=true`：生成日报/月报时同步写 wiki
+
+重新部署 Postgres 若曾出现 `relation "app_user" does not exist`：拉取含 `0005a_app_user` 的版本后 `docker compose up -d --build` 即可；入口会对缺失表做 create-if-not-exists 兜底。
 
 ## LLM Wiki 目录约定
 

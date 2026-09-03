@@ -130,7 +130,7 @@ docker compose up -d --build
 本地开发仍推荐 `uv run bagel dev` + SQLite。Compose 变量、代理、排障见下方要点：
 
 - Compose 覆盖 `STORAGE_BACKEND=postgres` 与容器内 `DATABASE_URL` / RSSHub / FreshRSS  
-- 镜像入口对 Postgres 跑 `alembic upgrade head`；SQLite 由 `init_db` 建表  
+- 镜像入口对 Postgres 跑 `alembic upgrade head`（含 `0005a_app_user`），失败时 `ensure_schema` 幂等补表后再重试；SQLite 由启动时 `init_db` 建表
 - MediaCrawler **不进镜像**；自媒体请在宿主机 `bagel setup-media` 或挂载本机目录  
 - 拉取基础镜像超时：配置 Docker Hub 镜像或代理后再试  
 
