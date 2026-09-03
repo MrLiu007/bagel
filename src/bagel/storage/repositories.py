@@ -208,6 +208,14 @@ class GithubQueryRepository:
             select(IntelGithubQuery).where(IntelGithubQuery.enabled.is_(True))
         ).all()
 
+    def list_all(self) -> Sequence[IntelGithubQuery]:
+        return self.session.scalars(
+            select(IntelGithubQuery).order_by(IntelGithubQuery.name)
+        ).all()
+
+    def get(self, query_id: uuid.UUID) -> IntelGithubQuery | None:
+        return self.session.get(IntelGithubQuery, query_id)
+
     def add(self, query: IntelGithubQuery) -> IntelGithubQuery:
         self.session.add(query)
         self.session.flush()
@@ -295,9 +303,17 @@ class ItemRepository:
         if not code:
             return None
         meta_plat = cast(IntelItem.metadata_["platform"], String)
-        # tags is a JSON array; platform code is also stored as first tag on ingest
+        meta_comm = cast(IntelItem.metadata_["community"], String)
+        # tags is a JSON array; platform/community code is also stored as a tag on ingest
         tag_match = cast(IntelItem.tags, String).like(f'%"{code}"%')
-        return or_(meta_plat == code, tag_match)
+        return or_(meta_plat == code, meta_comm == code, tag_match)
+
+    @staticmethod
+    def _owner_clause(owner_id):
+        """Match the user's items plus unassigned (shared) rows from collectors."""
+        if owner_id is None:
+            return None
+        return or_(IntelItem.owner_id == owner_id, IntelItem.owner_id.is_(None))
 
     def _status_filter(
         self,
@@ -306,6 +322,8 @@ class ItemRepository:
         item_type: str | None = None,
         category: str | None = None,
         platform: str | None = None,
+        source_id: uuid.UUID | None = None,
+        source_ids: Sequence[uuid.UUID] | None = None,
         owner_id=None,
     ):
         statuses = [status] if isinstance(status, str) else list(status)
@@ -314,11 +332,16 @@ class ItemRepository:
             stmt = stmt.where(IntelItem.item_type == item_type)
         if category:
             stmt = stmt.where(IntelItem.category == category)
+        if source_ids:
+            stmt = stmt.where(IntelItem.source_id.in_(list(source_ids)))
+        elif source_id is not None:
+            stmt = stmt.where(IntelItem.source_id == source_id)
         plat = self._platform_clause(platform or "")
         if plat is not None:
             stmt = stmt.where(plat)
-        if owner_id is not None:
-            stmt = stmt.where(IntelItem.owner_id == owner_id)
+        own = self._owner_clause(owner_id)
+        if own is not None:
+            stmt = stmt.where(own)
         return stmt
 
     def list_by_status(
@@ -328,6 +351,8 @@ class ItemRepository:
         item_type: str | None = None,
         category: str | None = None,
         platform: str | None = None,
+        source_id: uuid.UUID | None = None,
+        source_ids: Sequence[uuid.UUID] | None = None,
         owner_id=None,
         limit: int = 20,
         offset: int = 0,
@@ -338,6 +363,8 @@ class ItemRepository:
                 item_type=item_type,
                 category=category,
                 platform=platform,
+                source_id=source_id,
+                source_ids=source_ids,
                 owner_id=owner_id,
             )
             .order_by(
@@ -356,6 +383,8 @@ class ItemRepository:
         item_type: str | None = None,
         category: str | None = None,
         platform: str | None = None,
+        source_id: uuid.UUID | None = None,
+        source_ids: Sequence[uuid.UUID] | None = None,
         owner_id=None,
     ) -> int:
         statuses = [status] if isinstance(status, str) else list(status)
@@ -364,11 +393,16 @@ class ItemRepository:
             stmt = stmt.where(IntelItem.item_type == item_type)
         if category:
             stmt = stmt.where(IntelItem.category == category)
+        if source_ids:
+            stmt = stmt.where(IntelItem.source_id.in_(list(source_ids)))
+        elif source_id is not None:
+            stmt = stmt.where(IntelItem.source_id == source_id)
         plat = self._platform_clause(platform or "")
         if plat is not None:
             stmt = stmt.where(plat)
-        if owner_id is not None:
-            stmt = stmt.where(IntelItem.owner_id == owner_id)
+        own = self._owner_clause(owner_id)
+        if own is not None:
+            stmt = stmt.where(own)
         return int(self.session.scalar(stmt) or 0)
 
     def list_categories(
@@ -377,6 +411,8 @@ class ItemRepository:
         *,
         item_type: str | None = None,
         platform: str | None = None,
+        source_id: uuid.UUID | None = None,
+        source_ids: Sequence[uuid.UUID] | None = None,
         owner_id=None,
     ) -> Sequence[str]:
         statuses = [status] if isinstance(status, str) else list(status)
@@ -387,16 +423,45 @@ class ItemRepository:
                 IntelItem.category.is_not(None),
             )
             .distinct()
-            .order_by(IntelItem.category)
         )
         if item_type:
             stmt = stmt.where(IntelItem.item_type == item_type)
+        if source_ids:
+            stmt = stmt.where(IntelItem.source_id.in_(list(source_ids)))
+        elif source_id is not None:
+            stmt = stmt.where(IntelItem.source_id == source_id)
         plat = self._platform_clause(platform or "")
         if plat is not None:
             stmt = stmt.where(plat)
-        if owner_id is not None:
-            stmt = stmt.where(IntelItem.owner_id == owner_id)
-        return [c for c in self.session.scalars(stmt).all() if c]
+        own = self._owner_clause(owner_id)
+        if own is not None:
+            stmt = stmt.where(own)
+        rows = self.session.scalars(stmt.order_by(IntelItem.category)).all()
+        return [c for c in rows if c]
+
+    def list_source_ids_for_status(
+        self,
+        status: str | Sequence[str],
+        *,
+        item_type: str | None = None,
+        owner_id=None,
+    ) -> Sequence[uuid.UUID]:
+        """Distinct source_id values present in the filtered item set (for news source tabs)."""
+        statuses = [status] if isinstance(status, str) else list(status)
+        stmt = (
+            select(IntelItem.source_id)
+            .where(
+                IntelItem.status.in_(statuses),
+                IntelItem.source_id.is_not(None),
+            )
+            .distinct()
+        )
+        if item_type:
+            stmt = stmt.where(IntelItem.item_type == item_type)
+        own = self._owner_clause(owner_id)
+        if own is not None:
+            stmt = stmt.where(own)
+        return [sid for sid in self.session.scalars(stmt).all() if sid is not None]
 
     def list_favorites(
         self,
@@ -416,8 +481,9 @@ class ItemRepository:
         plat = self._platform_clause(platform or "")
         if plat is not None:
             stmt = stmt.where(plat)
-        if owner_id is not None:
-            stmt = stmt.where(IntelItem.owner_id == owner_id)
+        own = self._owner_clause(owner_id)
+        if own is not None:
+            stmt = stmt.where(own)
         stmt = stmt.order_by(
             func.coalesce(IntelItem.published_at, IntelItem.updated_at).desc()
         ).offset(offset).limit(limit)
@@ -439,8 +505,9 @@ class ItemRepository:
         plat = self._platform_clause(platform or "")
         if plat is not None:
             stmt = stmt.where(plat)
-        if owner_id is not None:
-            stmt = stmt.where(IntelItem.owner_id == owner_id)
+        own = self._owner_clause(owner_id)
+        if own is not None:
+            stmt = stmt.where(own)
         return int(self.session.scalar(stmt) or 0)
 
     def upsert_from_normalized(

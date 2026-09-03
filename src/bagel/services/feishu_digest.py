@@ -24,6 +24,8 @@ _TYPE_SPECS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("新闻", "news", (ItemType.NEWS,)),
     ("GitHub项目", "github", (ItemType.GITHUB_REPO, ItemType.GITHUB_RELEASE)),
     ("论文", "papers", (ItemType.PAPER,)),
+    ("教育", "education", (ItemType.EDUCATION,)),
+    ("模型", "models", (ItemType.MODEL,)),
     ("股票", "stocks", (ItemType.STOCK_NEWS,)),
     ("自媒体", "media", (ItemType.MEDIA_POST,)),
     ("微信", "wechat", (ItemType.WECHAT_MSG,)),
@@ -33,6 +35,8 @@ _BRIEF_KINDS: tuple[tuple[str, str], ...] = (
     ("新闻总结", BriefKind.NEWS),
     ("项目总结", BriefKind.GITHUB),
     ("论文总结", BriefKind.SCIENCE),
+    ("教育总结", BriefKind.EDUCATION),
+    ("模型总结", BriefKind.MODEL),
     ("股票总结", BriefKind.STOCK),
     ("自媒体总结", BriefKind.MEDIA),
 )

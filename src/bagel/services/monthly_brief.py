@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from bagel.domain.enums import BriefKind, ItemStatus
 from bagel.domain.models import IntelItem, IntelMonthlyBrief
+from bagel.services.brief_prompts import resolve_prompt_used
 from bagel.services.monthly_templates import (
     TEMPLATE_VERSION,
     item_types_for_kind,
@@ -244,12 +245,16 @@ def write_monthly_brief(
     year_month: str | None = None,
     period: PeriodType | None = None,
     settings: Settings | None = None,
+    custom_prompt: str | None = None,
+    save_prompt_default: bool = False,
 ) -> MonthlyBriefBundle:
     settings = settings or get_settings()
     if kind not in {
         BriefKind.NEWS,
         BriefKind.GITHUB,
         BriefKind.SCIENCE,
+        BriefKind.EDUCATION,
+        BriefKind.MODEL,
         BriefKind.MEDIA,
         BriefKind.STOCK,
     }:
@@ -262,17 +267,25 @@ def write_monthly_brief(
 
     items = collect_period_items(session, kind=kind, period_key=ym)
     now = datetime.now(UTC)
+    user_prompt, system_prompt, prompt_used = resolve_prompt_used(kind, custom_prompt)
+    if save_prompt_default and user_prompt:
+        from bagel.services import brief_prompts as bp
+
+        bp.save_default(kind, user_prompt)
     md = render_monthly_brief(
         kind=kind,
         year_month=ym,
         items=items,
         generated_at=now,
         period_type=ptype,
+        custom_prompt=user_prompt or None,
     )
     kind_labels = {
         BriefKind.NEWS: "新闻总结",
         BriefKind.GITHUB: "项目总结",
         BriefKind.SCIENCE: "论文总结",
+        BriefKind.EDUCATION: "教育总结",
+        BriefKind.MODEL: "模型总结",
         BriefKind.MEDIA: "自媒体总结",
         BriefKind.STOCK: "股票总结",
     }
@@ -287,6 +300,10 @@ def write_monthly_brief(
         "top_titles": [(i.llm_title_zh or i.title) for i in items[:8]],
         "time_basis": "published_at",
         "period_type": ptype,
+        "user_prompt": user_prompt,
+        "system_prompt": system_prompt,
+        "prompt_used": prompt_used,
+        "prompt_version": TEMPLATE_VERSION,
     }
     if brief is None:
         brief = IntelMonthlyBrief(

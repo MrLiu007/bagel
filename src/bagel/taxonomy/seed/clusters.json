@@ -1,0 +1,54 @@
+{
+  "version": "v1",
+  "clusterCount": 6,
+  "clusters": [
+    {
+      "id": "cl_foundation",
+      "subject": "AI",
+      "domain": "Foundation Models",
+      "name": "基础模型与交互",
+      "summary": "围绕大模型能力、提示工程与安全对齐的核心概念簇。",
+      "topicIds": ["tp_llm", "tp_prompt", "tp_safety", "tp_training", "tp_eval", "tp_llm_pretrain", "tp_llm_posttrain", "tp_train_lora", "tp_train_infer"]
+    },
+    {
+      "id": "cl_systems",
+      "subject": "AI",
+      "domain": "Systems",
+      "name": "系统与应用范式",
+      "summary": "RAG、Agent、多模态与具身等系统级范式。",
+      "topicIds": ["tp_rag", "tp_agent", "tp_multimodal", "tp_embodied", "tp_rag_hybrid", "tp_rag_graph", "tp_agent_tools", "tp_agent_multi", "tp_vlm"]
+    },
+    {
+      "id": "cl_ecosystem",
+      "subject": "AI",
+      "domain": "Ecosystem",
+      "name": "开源与社区",
+      "summary": "开源发布、GitHub 工程与模型社区分发。",
+      "topicIds": ["tp_opensource", "tp_github", "tp_model_hub"]
+    },
+    {
+      "id": "cl_education",
+      "subject": "Education",
+      "domain": "Learning",
+      "name": "教育与开放课",
+      "summary": "AI 教育应用与大学开放课程资源。",
+      "topicIds": ["tp_edu_ai", "tp_ocw", "tp_tutor"]
+    },
+    {
+      "id": "cl_market",
+      "subject": "Market",
+      "domain": "Signals",
+      "name": "产业与市场信号",
+      "summary": "行业动态、AI 相关股市与自媒体观察。",
+      "topicIds": ["tp_industry", "tp_stock_ai", "tp_media"]
+    },
+    {
+      "id": "cl_research",
+      "subject": "Research",
+      "domain": "Literature",
+      "name": "研究文献",
+      "summary": "论文与预印本跟踪，服务方法与 SOTA 洞察。",
+      "topicIds": ["tp_paper"]
+    }
+  ]
+}

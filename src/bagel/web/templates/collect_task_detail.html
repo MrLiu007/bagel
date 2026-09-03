@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="hint" style="margin-bottom:0.75rem;">
+  <a href="/collect?tab={{ back_tab }}">← 返回{% if back_tab == 'scheduled' %}定时采集{% else %}手动采集{% endif %}</a>
+</p>
+<h1>{{ title }}</h1>
+<p class="hint">{{ task.kind }} · {{ task.trigger }} · {{ task.created_at }}</p>
+
+<div class="panel">
+  <div class="actions" style="gap:1rem;flex-wrap:wrap;">
+    <div>
+      <div class="meta">状态</div>
+      <div><span class="{% if task.status == 'failed' %}warn{% elif task.status == 'success' %}ok{% endif %}">{{ task.status }}</span></div>
+    </div>
+    <div>
+      <div class="meta">进度</div>
+      <div>{{ task.percent }}%</div>
+    </div>
+    <div>
+      <div class="meta">耗时</div>
+      <div>{{ task.duration_label or '—' }}</div>
+    </div>
+    <div>
+      <div class="meta">发现</div>
+      <div>{{ result.items_found if result.items_found is defined else '—' }}</div>
+    </div>
+    <div>
+      <div class="meta">新建</div>
+      <div>{{ result.items_created if result.items_created is defined else '—' }}</div>
+    </div>
+    <div>
+      <div class="meta">更新</div>
+      <div>{{ result.items_updated if result.items_updated is defined else '—' }}</div>
+    </div>
+    <div>
+      <div class="meta">跳过</div>
+      <div>{{ result.items_skipped if result.items_skipped is defined else '—' }}</div>
+    </div>
+  </div>
+  <p style="margin:0.85rem 0 0;color:var(--muted);font-size:0.9rem;">{{ task.message }}</p>
+  {% if task.error %}
+  <p class="warn" style="margin:0.5rem 0 0;font-size:0.85rem;">{{ task.error }}</p>
+  {% endif %}
+</div>
+
+<div class="panel">
+  <h2 style="font-size:1rem;margin:0 0 0.75rem;font-family:var(--font-mono);">数据源明细</h2>
+  {% if source_stats %}
+  <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
+    <thead><tr>
+      <th style="text-align:left;padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);">数据源</th>
+      <th style="text-align:left;padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);">区域</th>
+      <th style="text-align:left;padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);">结果</th>
+      <th style="text-align:right;padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);">新建</th>
+      <th style="text-align:right;padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);">更新</th>
+      <th style="text-align:right;padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);">跳过</th>
+      <th style="text-align:right;padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);">发现</th>
+      <th style="text-align:right;padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);">耗时</th>
+      <th style="text-align:left;padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);">错误</th>
+    </tr></thead>
+    <tbody>
+      {% for s in source_stats %}
+      <tr>
+        <td style="padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);">{{ s.name }}</td>
+        <td style="padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);color:var(--muted);">{{ s.region or '—' }}</td>
+        <td style="padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);">
+          <span class="{% if s.status in ['failed', 'rate_limited'] %}warn{% elif s.status == 'success' %}ok{% endif %}">{{ s.status }}</span>
+        </td>
+        <td style="padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);text-align:right;">{{ s.items_created }}</td>
+        <td style="padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);text-align:right;">{{ s.items_updated }}</td>
+        <td style="padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);text-align:right;">{{ s.items_skipped }}</td>
+        <td style="padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);text-align:right;">{{ s.items_found }}</td>
+        <td style="padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);text-align:right;color:var(--muted);">
+          {% if s.duration_ms is defined and s.duration_ms is not none %}
+            {% if s.duration_ms >= 1000 %}{{ (s.duration_ms / 1000)|round(1) }} s{% else %}{{ s.duration_ms }} ms{% endif %}
+          {% else %}—{% endif %}
+        </td>
+        <td style="padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);color:var(--muted);font-size:0.8rem;">{{ s.error or '' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">此任务暂无按数据源拆分的明细（可能是旧任务，或该类型未产出源级指标）。汇总数字见上方。</p>
+  {% endif %}
+</div>
+
+{% if result.errors %}
+<div class="panel">
+  <h2 style="font-size:1rem;margin:0 0 0.75rem;font-family:var(--font-mono);">错误列表</h2>
+  <ul style="margin:0;padding-left:1.1rem;color:var(--muted);font-size:0.85rem;">
+    {% for e in result.errors[:30] %}
+    <li style="margin-bottom:0.35rem;">{{ e }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+{% endblock %}

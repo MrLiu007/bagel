@@ -1,14 +1,24 @@
+# Bagel（贝果）— Docker Compose
+#
+# Quick start (from repo root, with a local .env):
+#   cp .env.example .env
+#   docker compose up -d --build
+#   open http://localhost:8000
+#
+# Stack: app + Postgres (SoT) + RSSHub + FreshRSS (infra only).
+# MediaCrawler is NOT in the image (gitignored / cloned on host if needed).
+
 services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: intel
-      POSTGRES_PASSWORD: intel
-      POSTGRES_DB: intel
+      POSTGRES_USER: bagel
+      POSTGRES_PASSWORD: bagel
+      POSTGRES_DB: bagel
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U intel -d intel"]
+      test: ["CMD-SHELL", "pg_isready -U bagel -d bagel"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -34,7 +44,7 @@ services:
       CRON_MIN: "1,31"
     volumes:
       - freshrss_data:/var/www/FreshRSS/data
-    # Not exposed publicly by default; debug via profile "debug"
+    # Not exposed publicly by default; use profile "debug" below.
     restart: unless-stopped
 
   app:
@@ -42,9 +52,15 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql+psycopg://intel:intel@postgres:5432/intel
+      # Force transactional Postgres inside the compose network.
+      STORAGE_BACKEND: postgres
+      DATABASE_URL: postgresql+psycopg://bagel:bagel@postgres:5432/bagel
       RSSHUB_BASE_URL: http://rsshub:1200
       FRESHRSS_BASE_URL: http://freshrss
+      NO_PROXY: localhost,127.0.0.1,postgres,rsshub,freshrss
+      # Optional: point HTTP(S)_PROXY at host proxy for overseas / GitHub / X.
+      # HTTP_PROXY: http://host.docker.internal:7890
+      # HTTPS_PROXY: http://host.docker.internal:7890
     ports:
       - "${APP_PORT:-8000}:8000"
     volumes:
@@ -59,15 +75,21 @@ services:
       freshrss:
         condition: service_started
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')",
+        ]
       interval: 15s
       timeout: 5s
       retries: 10
-      start_period: 30s
+      start_period: 40s
     restart: unless-stopped
 
-  # Optional: expose FreshRSS for ops debugging
-  # docker compose --profile debug up -d
+  # Optional: expose FreshRSS UI for ops
+  #   docker compose --profile debug up -d
   freshrss-debug:
     profiles: ["debug"]
     image: freshrss/freshrss:latest

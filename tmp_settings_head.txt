@@ -1,0 +1,50 @@
+﻿{% extends "base.html" %}
+{% block content %}
+<h1>{{ title }}</h1>
+<div class="tabs">
+  <a href="/settings?tab=sources" class="{% if tab == 'sources' %}on{% endif %}">鏂伴椈鏁版嵁婧?/a>
+  <a href="/settings?tab=github" class="{% if tab == 'github' %}on{% endif %}">GitHub</a>
+  <a href="/settings?tab=papers" class="{% if tab == 'papers' %}on{% endif %}">璁烘枃鏁版嵁婧?/a>
+  <a href="/settings?tab=education" class="{% if tab == 'education' %}on{% endif %}">鏁欒偛鏁版嵁婧?/a>
+  <a href="/settings?tab=models" class="{% if tab == 'models' %}on{% endif %}">妯″瀷鏁版嵁婧?/a>
+  <a href="/settings?tab=stocks" class="{% if tab == 'stocks' %}on{% endif %}">鑲＄エ鏁版嵁婧?/a>
+  <a href="/settings?tab=excludes" class="{% if tab == 'excludes' %}on{% endif %}">绯荤粺鎺掗櫎璇?/a>
+  <a href="/settings?tab=schedule" class="{% if tab == 'schedule' %}on{% endif %}">瀹氭椂浠诲姟</a>
+  <a href="/settings?tab=cli" class="{% if tab == 'cli' %}on{% endif %}">CLI</a>
+  <a href="/settings?tab=config" class="{% if tab == 'config' %}on{% endif %}">閰嶇疆</a>
+  <a href="/settings?tab=users" class="{% if tab == 'users' %}on{% endif %}">鐢ㄦ埛绠＄悊</a>
+  <a href="/settings?tab=health" class="{% if tab == 'health' %}on{% endif %}">绯荤粺鐘舵€?/a>
+</div>
+
+{% if settings_message %}
+<p class="meta ok">{{ settings_message }}</p>
+{% endif %}
+
+{% if tab == 'sources' %}
+<div class="panel">
+  <p class="hint">
+    涓嬫柟涓哄綋鍓嶅簱鍐呮柊闂绘暟鎹簮锛堥娆″惎鍔ㄧ敱榛樿绉嶅瓙鍐欏叆锛夈€傚彲鍚仠銆佸垹闄わ紝鎴栬拷鍔犺嚜瀹氫箟 RSS銆?    榛樿娓呭崟瑙?<span class="mono">docs/default-news-sources.md</span>銆?  </p>
+  <form class="inline" method="post" action="/settings/sources">
+    <input type="text" name="name" placeholder="鍚嶇О" required />
+    <input type="url" name="url" placeholder="https://鈥?rss" required style="flex:2;min-width:220px;" />
+    <select name="region">
+      <option value="CN">鍥藉唴</option>
+      <option value="GLOBAL">娴峰</option>
+    </select>
+    <select name="source_type">
+      <option value="RSS">RSS</option>
+      <option value="RSSHUB">RSSHub</option>
+    </select>
+    <button type="submit">娣诲姞</button>
+  </form>
+</div>
+<div class="panel">
+  {% if sources %}
+    {% for s in sources %}
+    <div class="row">
+      <div>
+        <div class="kw">{{ s.name }}
+          <span class="badge {% if s.enabled %}on{% endif %}">{% if s.enabled %}ON{% else %}OFF{% endif %}</span>
+          <span class="badge cat">{{ s.region }}</span>
+          <span class="badge">{{ s.source_type }}</span>
+        </div>

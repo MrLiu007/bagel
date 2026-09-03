@@ -1,16 +1,23 @@
 <div class="tabs">
+  <a href="/briefs/space?view=board"
+     class="{% if kind == 'SPACE' or kind == 'DASHBOARD' %}on{% endif %}">个人空间</a>
   <a href="/briefs?period={{ period }}{% if current_month %}&month={{ current_month }}{% endif %}"
      class="{% if kind == 'NEWS' %}on{% endif %}">新闻总结</a>
   <a href="/briefs/github?period={{ period }}{% if current_month %}&month={{ current_month }}{% endif %}"
      class="{% if kind == 'GITHUB' %}on{% endif %}">项目总结</a>
   <a href="/briefs/papers?period={{ period }}{% if current_month %}&month={{ current_month }}{% endif %}"
      class="{% if kind == 'SCIENCE' %}on{% endif %}">论文总结</a>
+  <a href="/briefs/education?period={{ period }}{% if current_month %}&month={{ current_month }}{% endif %}"
+     class="{% if kind == 'EDUCATION' %}on{% endif %}">教育总结</a>
+  <a href="/briefs/models?period={{ period }}{% if current_month %}&month={{ current_month }}{% endif %}"
+     class="{% if kind == 'MODEL' %}on{% endif %}">模型总结</a>
   <a href="/briefs/stocks?period={{ period }}{% if current_month %}&month={{ current_month }}{% endif %}"
      class="{% if kind == 'STOCK' %}on{% endif %}">股票总结</a>
   <a href="/briefs/media?period={{ period }}{% if current_month %}&month={{ current_month }}{% endif %}"
      class="{% if kind == 'MEDIA' %}on{% endif %}">自媒体总结</a>
 </div>
 
+{% if kind != 'SPACE' and kind != 'DASHBOARD' %}
 <div class="tabs" style="margin-top:-0.35rem;">
   <a href="{{ list_url }}?period=month{% if current_month %}&month={{ current_month }}{% endif %}"
      class="{% if period == 'month' %}on{% endif %}">月总结</a>
@@ -34,9 +41,14 @@
   <strong>项目总结 · 投屏约 8～10 分钟</strong>：项目是什么 → 与常见做法对比 → 最小上手路径 → 可迁移点。
   {% elif kind == 'SCIENCE' %}
   <strong>论文总结 · 投屏约 8～10 分钟</strong>：要解决什么 → 做法与朴素方法对比 → 直观例子 → 对教育/工程启发。默认 arXiv + OpenAlex + HF Papers，可在<a href="/settings?tab=papers">系统设置 → 论文数据源</a>管理。
+  {% elif kind == 'EDUCATION' %}
+  <strong>教育总结 · 投屏约 8～10 分钟</strong>：开放课/资源是什么 → 适合谁学 → 与自学路径对比 → 可迁移启发。数据源见<a href="/settings?tab=education">教育数据源</a>（MIT / 斯坦福 / 清北等）。
+  {% elif kind == 'MODEL' %}
+  <strong>模型总结 · 投屏约 8～10 分钟</strong>：模型是什么 → 相对常见基线的增量 → 许可/部署边界 → 选型启发。数据源见<a href="/settings?tab=models">模型数据源</a>（Hugging Face / ModelScope）。
   {% elif kind == 'STOCK' %}
   <strong>股票总结 · 投屏约 6～8 分钟</strong>：事实 → 标的/主题 → 情绪与分歧 → 情报启示（非投资建议）。数据源见<a href="/settings?tab=stocks">股票数据源</a>。
   {% else %}
   <strong>自媒体总结 · 投屏约 6 分钟</strong>：观点提炼 → 可信度一句话 → 例子 → 对我们的启发。避免复读热搜。
   {% endif %}
 </div>
+{% endif %}

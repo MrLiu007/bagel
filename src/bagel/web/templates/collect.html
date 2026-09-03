@@ -1,43 +1,56 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>{{ title }}</h1>
-<p class="hint">当前为<strong>主动触发</strong>模式。每次拉取只保留<strong>近 {{ lookback_days | default(14) }} 天内发布</strong>的条目（按发布时间，而非入库时间），列表也按发布时间倒序。</p>
+<div class="tabs">
+  <a href="/collect?tab=manual" class="{% if tab == 'manual' %}on{% endif %}">手动采集</a>
+  <a href="/collect?tab=scheduled" class="{% if tab == 'scheduled' %}on{% endif %}">定时采集</a>
+</div>
+
+{% if tab == 'manual' %}
+<p class="hint">当前为<strong>主动触发</strong>模式。每次拉取只保留<strong>近 {{ lookback_days | default(14) }} 天内发布</strong>的条目（按发布时间，而非入库时间），列表也按发布时间倒序。点击任务可查看各数据源明细。</p>
 
 <div class="panel">
-  <div class="actions">
-    <button class="primary" data-kind="collect_news" data-all="1" type="button">采集全部新闻</button>
+  <div class="actions" id="collect-kinds">
+    <button data-kind="collect_news" type="button">采集新闻</button>
     <button data-kind="collect_github" type="button">采集 GitHub</button>
     <button data-kind="collect_papers" type="button">采集论文</button>
+    <button data-kind="collect_education" type="button">采集教育</button>
+    <button data-kind="collect_models" type="button">采集模型</button>
     <button data-kind="collect_stocks" type="button">采集股票</button>
-    <button data-kind="enrich_stocks" type="button">股票 enrichment</button>
-    <button data-kind="build_digest" type="button">生成日报</button>
-    <button data-kind="build_monthly_briefs" type="button">生成月度总结</button>
+    <button data-kind="compile_wiki" type="button">编译 Wiki</button>
   </div>
   <div class="progress-wrap">
     <div class="bar"><span id="bar"></span></div>
     <div class="meta" id="meta">尚未开始任务</div>
   </div>
 </div>
+{% else %}
+<p class="hint">定时任务在<strong>系统设置 → 定时任务</strong>开启后，每次自动触发都会写入下方记录。点击任务可查看与手动采集相同的明细指标。</p>
+{% endif %}
 
 <div class="panel">
-  <h2 style="font-size:1rem;margin:0 0 0.75rem;font-family:var(--font-mono);">最近任务</h2>
-  <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
+  <h2 style="font-size:1rem;margin:0 0 0.75rem;font-family:var(--font-mono);">
+    {% if tab == 'scheduled' %}定时任务记录{% else %}最近任务{% endif %}
+  </h2>
+  <table class="task-table" style="width:100%;border-collapse:collapse;font-size:0.85rem;">
     <thead><tr>
       <th style="text-align:left;padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);">类型</th>
       <th style="text-align:left;padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);">状态</th>
       <th style="text-align:left;padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);">进度</th>
+      <th style="text-align:left;padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);">耗时</th>
       <th style="text-align:left;padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);">说明</th>
     </tr></thead>
     <tbody id="recent">
       {% for t in recent %}
-      <tr>
+      <tr class="task-row" data-href="/collect/tasks/{{ t.id }}" style="cursor:pointer;">
         <td style="padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);color:var(--muted);">{{ t.kind }}</td>
         <td style="padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);color:var(--muted);">{{ t.status }}</td>
         <td style="padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);color:var(--muted);">{{ t.percent }}%</td>
+        <td style="padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);color:var(--muted);">{{ t.duration_label or '—' }}</td>
         <td style="padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);color:var(--muted);">{{ t.message }}</td>
       </tr>
       {% else %}
-      <tr><td colspan="4" style="padding:0.45rem 0.3rem;color:var(--muted);">暂无</td></tr>
+      <tr><td colspan="5" style="padding:0.45rem 0.3rem;color:var(--muted);">暂无</td></tr>
       {% endfor %}
     </tbody>
   </table>
@@ -46,17 +59,57 @@
 
 {% block scripts %}
 <script>
+  const TRIGGER = {{ tab|tojson }};
+  const recentBody = document.getElementById('recent');
+  const KIND_META = {
+    collect_news: { label: '新闻', href: '/news' },
+    collect_github: { label: 'GitHub', href: '/github' },
+    collect_papers: { label: '论文', href: '/papers' },
+    collect_education: { label: '教育', href: '/education' },
+    collect_models: { label: '模型', href: '/models' },
+    collect_stocks: { label: '股票', href: '/stocks' },
+    compile_wiki: { label: 'Wiki 编译', href: '/briefs/space' },
+    collect_all: { label: '全部', href: '/news' },
+    summarize: { label: '摘要', href: '/briefs' }
+  };
+
+  function bindRows(root) {
+    root.querySelectorAll('tr.task-row[data-href]').forEach(tr => {
+      tr.addEventListener('click', () => { window.location.href = tr.dataset.href; });
+    });
+  }
+  bindRows(document);
+
+  {% if tab == 'manual' %}
   const bar = document.getElementById('bar');
   const meta = document.getElementById('meta');
-  const buttons = [...document.querySelectorAll('button[data-kind]')];
+  const buttons = [...document.querySelectorAll('#collect-kinds button[data-kind]')];
   let timer = null;
   let activeId = null;
+  let activeKind = null;
 
   function setBusy(busy) {
     buttons.forEach(b => b.disabled = busy);
   }
 
+  function highlightKind(kind) {
+    activeKind = kind || null;
+    if (kind) {
+      try { sessionStorage.setItem('bagel.collect.kind', kind); } catch (_) {}
+    }
+    buttons.forEach(b => {
+      b.classList.toggle('primary', !!kind && b.dataset.kind === kind);
+    });
+  }
+
+  function resultLink(kind) {
+    const info = KIND_META[kind] || KIND_META.collect_news;
+    return `<a href="${info.href}">查看${info.label}</a>`;
+  }
+
   function render(state) {
+    const kind = state.kind || activeKind;
+    if (kind) highlightKind(kind);
     const pct = state.percent || 0;
     bar.style.width = pct + '%';
     const cls = state.status === 'failed' ? 'warn' : (state.status === 'success' ? 'ok' : '');
@@ -64,12 +117,16 @@
     const result = state.result
       ? ` · 发现 ${state.result.items_found ?? '-'} / 新建 ${state.result.items_created ?? '-'}`
       : '';
-    meta.innerHTML = `<span class="${cls}">[${state.status}]</span> ${state.message || ''}${result}${extra} · ${pct}%`;
+    const dur = state.duration_label ? ` · 耗时 ${state.duration_label}` : '';
+    meta.innerHTML = `<span class="${cls}">[${state.status}]</span> ${state.message || ''}${result}${extra}${dur} · ${pct}%`;
     if (state.status === 'success' || state.status === 'failed') {
       setBusy(false);
       if (timer) { clearInterval(timer); timer = null; }
+      if (state.id) {
+        meta.innerHTML += ` · <a href="/collect/tasks/${state.id}">查看详情</a>`;
+      }
       if (state.status === 'success') {
-        meta.innerHTML += ` · <a href="/news">查看新闻</a>`;
+        meta.innerHTML += ` · ${resultLink(kind)}`;
       }
       refreshRecent();
     }
@@ -90,6 +147,7 @@
 
   async function start(kind) {
     setBusy(true);
+    highlightKind(kind);
     meta.textContent = '任务启动中…';
     bar.style.width = '0%';
     const body = new FormData();
@@ -108,22 +166,23 @@
   }
 
   async function refreshRecent() {
-    const resp = await fetch('/api/tasks');
+    const resp = await fetch('/api/tasks?trigger=' + encodeURIComponent(TRIGGER));
     if (!resp.ok) return;
     const data = await resp.json();
-    const tbody = document.getElementById('recent');
     if (!data.tasks.length) {
-      tbody.innerHTML = '<tr><td colspan="4" style="padding:0.45rem 0.3rem;color:var(--muted);">暂无</td></tr>';
+      recentBody.innerHTML = '<tr><td colspan="5" style="padding:0.45rem 0.3rem;color:var(--muted);">暂无</td></tr>';
       return;
     }
-    tbody.innerHTML = data.tasks.map(t =>
-      `<tr>
+    recentBody.innerHTML = data.tasks.map(t =>
+      `<tr class="task-row" data-href="/collect/tasks/${t.id}" style="cursor:pointer;">
         <td style="padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);color:var(--muted);">${t.kind}</td>
         <td style="padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);color:var(--muted);">${t.status}</td>
         <td style="padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);color:var(--muted);">${t.percent}%</td>
+        <td style="padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);color:var(--muted);">${t.duration_label || '—'}</td>
         <td style="padding:0.45rem 0.3rem;border-bottom:1px solid var(--line);color:var(--muted);">${t.message || ''}</td>
       </tr>`
     ).join('');
+    bindRows(recentBody);
   }
 
   buttons.forEach(btn => {
@@ -132,11 +191,18 @@
 
   {% if latest and latest.status in ['pending', 'running'] %}
   activeId = {{ latest.id|tojson }};
+  highlightKind({{ latest.kind|tojson }});
   setBusy(true);
   timer = setInterval(() => poll(activeId), 800);
   poll(activeId);
   {% elif latest %}
   render({{ latest|tojson }});
+  {% else %}
+  try {
+    const remembered = sessionStorage.getItem('bagel.collect.kind');
+    if (remembered) highlightKind(remembered);
+  } catch (_) {}
+  {% endif %}
   {% endif %}
 </script>
 {% endblock %}

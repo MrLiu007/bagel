@@ -199,15 +199,50 @@ def fetch_hf_papers(*, max_results: int = 25) -> list[PaperRecord]:
 
 
 def fetch_semantic_scholar(query: str, *, max_results: int = 20) -> list[PaperRecord]:
+    """Search Semantic Scholar; retries briefly on 429 (rate limit)."""
+    import time
+
     url = (
         "https://api.semanticscholar.org/graph/v1/paper/search"
         f"?query={quote_plus(query)}&limit={max_results}"
         "&fields=title,url,abstract,authors,year,externalIds,publicationDate"
     )
+    settings = get_settings()
+    headers = {"User-Agent": USER_AGENT}
+    # Optional: SEMANTIC_SCHOLAR_API_KEY raises anonymous rate limits.
+    api_key = (settings.semantic_scholar_api_key or "").strip()
+    if api_key:
+        headers["x-api-key"] = api_key
+
+    last_exc: Exception | None = None
+    data: dict[str, Any] = {}
     with _client() as client:
-        resp = client.get(url)
-        resp.raise_for_status()
-        data = resp.json()
+        for attempt in range(3):
+            try:
+                resp = client.get(url, headers=headers)
+                if resp.status_code == 429:
+                    retry_after = resp.headers.get("Retry-After")
+                    wait = float(retry_after) if retry_after and retry_after.isdigit() else (1.5 * (attempt + 1))
+                    time.sleep(min(wait, 8.0))
+                    last_exc = httpx.HTTPStatusError(
+                        f"429 Too Many Requests for Semantic Scholar (attempt {attempt + 1})",
+                        request=resp.request,
+                        response=resp,
+                    )
+                    continue
+                resp.raise_for_status()
+                data = resp.json()
+                last_exc = None
+                break
+            except httpx.HTTPStatusError as exc:
+                last_exc = exc
+                if exc.response is not None and exc.response.status_code == 429 and attempt < 2:
+                    time.sleep(1.5 * (attempt + 1))
+                    continue
+                raise
+    if last_exc is not None:
+        raise last_exc
+
     out: list[PaperRecord] = []
     for row in data.get("data") or []:
         title = (row.get("title") or "").strip()

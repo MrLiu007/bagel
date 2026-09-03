@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | **SQLite（默认）** | 事务真相源 | 个人、演示、CI |
 | **PostgreSQL** | 事务真相源 | 团队常驻、并发写入 |
-| **LLM Wiki** | 只读知识导出 | 给 Obsidian / RAG / git 文档用 |
+| **LLM Wiki** | 可读知识正文（MD）+ DB 索引 | Obsidian / 人工浏览；`wiki_page`/`wiki_edge` 供查询与 GBrain |
 
 不推荐「仅 Markdown 文件当主库」：去重、状态（收藏/忽略）、按发布时间分页、月度聚合都会变脆。
 

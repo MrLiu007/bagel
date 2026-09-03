@@ -36,6 +36,33 @@ from bagel.web.templating import templates
 
 STATIC_DIR = Path(__file__).resolve().parent / "web" / "static"
 
+_QUIET_ACCESS_MARKERS: tuple[str, ...] = (
+    "/json/version",
+    "/json/list",
+    '"GET /json ',
+    "/favicon.ico",
+    "/robots.txt",
+    "/.well-known/",
+)
+
+
+def _install_quiet_access_log() -> None:
+    """Hide IDE/browser probe noise from uvicorn access logs (reload-safe)."""
+    import logging
+
+    class _QuietProbeFilter(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            try:
+                msg = record.getMessage()
+            except Exception:  # noqa: BLE001
+                return True
+            return not any(marker in msg for marker in _QUIET_ACCESS_MARKERS)
+
+    log = logging.getLogger("uvicorn.access")
+    if any(isinstance(f, _QuietProbeFilter) for f in log.filters):
+        return
+    log.addFilter(_QuietProbeFilter())
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -68,6 +95,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    _install_quiet_access_log()
     application = FastAPI(
         title="Bagel（贝果）",
         version=__version__,

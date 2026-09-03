@@ -19,9 +19,10 @@ class ItemType(StrEnum):
     WECHAT_MSG = "WECHAT_MSG"
     PAPER = "PAPER"
     STOCK_NEWS = "STOCK_NEWS"
+    MODEL = "MODEL"
+    EDUCATION = "EDUCATION"
     # Reserved for future collectors (not wired in MVP UI):
     BLOG = "BLOG"
-    MODEL = "MODEL"
     DATASET = "DATASET"
     ANNOUNCEMENT = "ANNOUNCEMENT"
 
@@ -50,6 +51,8 @@ class SourceType(StrEnum):
     WECHAT = "WECHAT"
     PAPER = "PAPER"
     STOCK = "STOCK"
+    MODEL = "MODEL"
+    EDUCATION = "EDUCATION"
 
 
 class Region(StrEnum):
@@ -74,6 +77,19 @@ class KeywordRuleType(StrEnum):
     BOOST = "BOOST"
 
 
+class KeywordScope(StrEnum):
+    """Resource categories a keyword rule may apply to (stored in scopes CSV)."""
+
+    NEWS = "news"
+    GITHUB = "github"
+    STOCKS = "stocks"
+    PAPERS = "papers"
+    MODELS = "models"
+    EDUCATION = "education"
+    MEDIA = "media"
+    WECHAT = "wechat"
+
+
 class BriefKind(StrEnum):
     """Weekly / monthly brief templates (SCIENCE == papers UI)."""
 
@@ -82,6 +98,8 @@ class BriefKind(StrEnum):
     SCIENCE = "SCIENCE"
     MEDIA = "MEDIA"
     STOCK = "STOCK"
+    MODEL = "MODEL"
+    EDUCATION = "EDUCATION"
 
 
 class JobStatus(StrEnum):

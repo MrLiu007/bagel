@@ -28,6 +28,18 @@ REDDIT_HEADERS = {
     "Sec-Fetch-User": "?1",
     "Upgrade-Insecure-Requests": "1",
 }
+# Sites that often 403/404 bot UA but accept browser-like RSS clients.
+_BROWSER_RSS_HOSTS = (
+    "reddit.com",
+    "redd.it",
+    "ifanr.com",
+    "qbitai.com",
+    "cnblogs.com",
+    "feed.cnblogs.com",
+    "solidot.org",
+    "36kr.com",
+    "sspai.com",
+)
 
 
 def _is_reddit_url(url: str) -> bool:
@@ -35,9 +47,20 @@ def _is_reddit_url(url: str) -> bool:
     return "reddit.com" in low or "redd.it" in low
 
 
+def _needs_browser_ua(url: str) -> bool:
+    low = (url or "").lower()
+    return any(h in low for h in _BROWSER_RSS_HOSTS)
+
+
 def request_headers_for_url(url: str) -> dict[str, str]:
     if _is_reddit_url(url):
         return dict(REDDIT_HEADERS)
+    if _needs_browser_ua(url):
+        return {
+            "User-Agent": BROWSER_UA,
+            "Accept": "application/rss+xml, application/atom+xml, application/xml;q=0.9, text/xml;q=0.8, */*;q=0.7",
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+        }
     return {"User-Agent": DEFAULT_UA}
 
 

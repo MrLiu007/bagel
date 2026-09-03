@@ -144,6 +144,7 @@ class BriefSlotItem:
     score: float
     stars: int | None = None
     language: str | None = None
+    community: str = ""
 
 
 def _display_title(item: IntelItem) -> str:
@@ -187,6 +188,8 @@ def to_slot(item: IntelItem) -> BriefSlotItem:
     why = _why_text(item)
     if why and body and why in body:
         why = ""
+    meta = item.metadata_ or {}
+    community = str(meta.get("community_label") or meta.get("community") or "")
     return BriefSlotItem(
         title=_display_title(item),
         url=item.url,
@@ -196,7 +199,8 @@ def to_slot(item: IntelItem) -> BriefSlotItem:
         why=why,
         score=float(item.score or 0),
         stars=_stars(item),
-        language=item.language or (item.metadata_ or {}).get("language"),
+        language=item.language or meta.get("language"),
+        community=community,
     )
 
 
@@ -382,6 +386,32 @@ def _entry_science(slot: BriefSlotItem) -> list[str]:
     ]
 
 
+def _entry_model(slot: BriefSlotItem) -> list[str]:
+    bridge = _bridge(slot.category)
+    why = _distinct_why(slot)
+    head = _facts(slot)
+    if slot.community:
+        head = f"[{slot.community}] {head}"
+    return [
+        "#### 模型是什么",
+        "",
+        head,
+        "",
+        "#### 相对常见基线的增量",
+        "",
+        why or bridge.contrast,
+        "",
+        "#### 许可 / 部署边界",
+        "",
+        "核对许可证、权重体量、推理成本与中文能力；没有实测数字时只讲「选型维度」，不夸大。",
+        "",
+        "#### 选型启发",
+        "",
+        bridge.takeaway,
+        "",
+    ]
+
+
 def _entry_media(slot: BriefSlotItem) -> list[str]:
     bridge = _bridge(slot.category)
     why = _distinct_why(slot)
@@ -440,6 +470,10 @@ def _entry_blocks(slot: BriefSlotItem, *, kind: str) -> list[str]:
         return _entry_github(slot)
     if kind == BriefKind.SCIENCE:
         return _entry_science(slot)
+    if kind == BriefKind.EDUCATION:
+        return _entry_science(slot)
+    if kind == BriefKind.MODEL:
+        return _entry_model(slot)
     if kind == BriefKind.MEDIA:
         return _entry_media(slot)
     if kind == BriefKind.STOCK:
@@ -500,6 +534,44 @@ def _render_kind_brief(
             "3. **有链接才算数**：无法回溯原文的论文不进终稿。",
         ]
         section_title = "## 精选论文"
+        with_stars = False
+    elif kind == BriefKind.EDUCATION:
+        title_label = "教育 / open courses"
+        duration = "约 8～10 分钟"
+        guide = [
+            "## 讲解口径（教育）",
+            "",
+            "- **资源**：开放课/资料来自哪所高校或平台。",
+            "- **适合谁**：前置知识与学习目标。",
+            "- **对比**：相对自学路径多了什么结构。",
+            "- **启发**：可迁到课程或自学清单的一点。",
+            "",
+        ]
+        takeaways = [
+            "1. **名校不等于适合**：先对齐学习者与目标。",
+            "2. **路径比目录重要**：讲清怎么学完，而不是堆课名。",
+            "3. **有链接才算数**：无法打开原文的资源不进终稿。",
+        ]
+        section_title = "## 精选教育资源"
+        with_stars = False
+    elif kind == BriefKind.MODEL:
+        title_label = "模型 / model hubs"
+        duration = "约 8～10 分钟"
+        guide = [
+            "## 讲解口径（模型）",
+            "",
+            "- **身份**：来自哪个社区、解决什么任务。",
+            "- **增量**：相对常见基线强在哪（能力 / 成本 / 许可）。",
+            "- **边界**：部署与合规要注意什么。",
+            "- **启发**：课程案例或产品选型各落一句。",
+            "",
+        ]
+        takeaways = [
+            "1. **社区与任务先对齐**：HF / 魔搭只是货架，任务才是尺子。",
+            "2. **热度不等于可落地**：下载量要配许可与复现成本一起看。",
+            "3. **有链接才算数**：无法打开模型页的条目不进终稿。",
+        ]
+        section_title = "## 精选模型"
         with_stars = False
     elif kind == BriefKind.GITHUB:
         title_label = "好的产品 / 开源项目"
@@ -640,11 +712,31 @@ def render_monthly_brief(
     items: Sequence[IntelItem],
     generated_at: datetime | None = None,
     period_type: str = "month",
+    custom_prompt: str | None = None,
 ) -> str:
     _ = generated_at
-    return _render_kind_brief(
-        kind=kind, year_month=year_month, items=items, period_type=period_type
+    ordered = _prioritize_by_prompt(list(items), custom_prompt)
+    body = _render_kind_brief(
+        kind=kind, year_month=year_month, items=ordered, period_type=period_type
     )
+    if custom_prompt and custom_prompt.strip():
+        focus = custom_prompt.strip().replace("\n", " ")
+        header = f"> **自定义聚焦**：{focus}\n\n"
+        return header + body
+    return body
+
+
+def _prioritize_by_prompt(items: list[IntelItem], custom_prompt: str | None) -> list[IntelItem]:
+    prompt = (custom_prompt or "").strip().lower()
+    if not prompt or not items:
+        return items
+    tokens = [t for t in re.split(r"[\s,，、;；]+", prompt) if len(t) >= 2]
+
+    def score(item: IntelItem) -> int:
+        blob = f"{item.title} {item.summary or ''} {item.category or ''}".lower()
+        return sum(1 for t in tokens if t in blob)
+
+    return sorted(items, key=lambda i: (score(i), float(i.score or 0)), reverse=True)
 
 
 def item_types_for_kind(kind: str) -> list[str]:
@@ -652,6 +744,10 @@ def item_types_for_kind(kind: str) -> list[str]:
         return [ItemType.GITHUB_REPO, ItemType.GITHUB_RELEASE]
     if kind == BriefKind.SCIENCE:
         return [ItemType.PAPER]
+    if kind == BriefKind.EDUCATION:
+        return [ItemType.EDUCATION]
+    if kind == BriefKind.MODEL:
+        return [ItemType.MODEL]
     if kind == BriefKind.MEDIA:
         return [ItemType.MEDIA_POST]
     if kind == BriefKind.STOCK:

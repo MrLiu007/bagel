@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -10,9 +11,11 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from bagel.collectors.github import COLLECTOR_VERSION, GithubCollector
-from bagel.domain.enums import ItemStatus, JobStatus
+from bagel.domain.enums import ItemStatus, JobStatus, KeywordScope
+from bagel.jobs.metrics import elapsed_ms, source_stat
 from bagel.pipeline.category import classify_title
 from bagel.pipeline.filter import apply_keyword_rules
+from bagel.pipeline.keyword_scopes import rules_for_scope
 from bagel.pipeline.recency import (
     github_query_with_recency,
     is_within_lookback,
@@ -74,13 +77,18 @@ def run_collect_github(
             "items_created": 0,
             "items_updated": 0,
             "items_skipped": 0,
+            "duration_ms": 0,
+            "source_stats": [],
             "errors": ["GitHub collection disabled"],
             "hint": "ENABLE_GITHUB=false",
         }
 
     query_repo = GithubQueryRepository(session)
     queries = list(query_repo.list_enabled())
-    rules = KeywordRuleRepository(session).list_enabled()
+    rules = rules_for_scope(
+        KeywordRuleRepository(session).list_enabled(),
+        KeywordScope.GITHUB,
+    )
     collector = GithubCollector(settings)
     items_repo = ItemRepository(session)
     evidence_repo = RawEvidenceRepository(session)
@@ -88,9 +96,11 @@ def run_collect_github(
 
     found = created = updated = skipped = 0
     errors: list[str] = []
+    source_stats: list[dict[str, Any]] = []
     seen_repos: set[str] = set()
     total = len(queries)
     lookback_days = settings.collect_lookback_days
+    job_t0 = time.perf_counter()
     logger.info(
         "collect_github.start queries=%s lookback_days=%s token=%s proxy=%s",
         total,
@@ -115,6 +125,8 @@ def run_collect_github(
             "items_created": 0,
             "items_updated": 0,
             "items_skipped": 0,
+            "duration_ms": elapsed_ms(job_t0),
+            "source_stats": [],
             "errors": [hint],
             "error": hint,
             "hint": hint,
@@ -123,6 +135,8 @@ def run_collect_github(
     progress(0, total, f"准备执行 {total} 组 GitHub Query（近 {lookback_days} 天）…")
 
     for index, query in enumerate(queries, start=1):
+        src_t0 = time.perf_counter()
+        src_found = src_created = src_updated = src_skipped = 0
         progress(index - 1, total, f"查询中 ({index}/{total})：{query.name}")
         recent_q = github_query_with_recency(query.query, days=lookback_days)
         logger.info("collect_github.query name=%s q=%s", query.name, recent_q)
@@ -133,6 +147,14 @@ def run_collect_github(
             query_repo.mark_run(query, result_count=0, error=str(exc)[:200])
             errors.append(f"{query.name}: {exc}")
             logger.exception("collect_github.query_exception name=%s", query.name)
+            source_stats.append(
+                source_stat(
+                    query.name,
+                    status="failed",
+                    duration_ms=elapsed_ms(src_t0),
+                    error=str(exc),
+                )
+            )
             progress(index, total, f"失败：{query.name}")
             continue
 
@@ -146,6 +168,14 @@ def run_collect_github(
                 result.error_code,
                 result.http_status,
                 detail[:200],
+            )
+            source_stats.append(
+                source_stat(
+                    query.name,
+                    status="failed",
+                    duration_ms=elapsed_ms(src_t0),
+                    error=f"{result.error_code} ({detail})",
+                )
             )
             progress(index, total, f"失败：{query.name} ({result.error_code})")
             continue
@@ -186,8 +216,10 @@ def run_collect_github(
                 keep_unknown=False,
             ):
                 skipped += 1
+                src_skipped += 1
                 continue
             found += 1
+            src_found += 1
             label = _item_label(normalized.title, normalized.url)
             try:
                 with session.begin_nested():
@@ -243,10 +275,13 @@ def run_collect_github(
                     )
                     if was_created:
                         created += 1
+                        src_created += 1
                     else:
                         updated += 1
+                        src_updated += 1
             except (SQLAlchemyError, ValueError, TypeError) as exc:
                 skipped += 1
+                src_skipped += 1
                 errors.append(f"{query.name}/{label}: {exc.__class__.__name__}")
                 logger.warning(
                     "collect_github.item_skip name=%s item=%s err=%s",
@@ -262,23 +297,57 @@ def run_collect_github(
             session.rollback()
             errors.append(f"{query.name}: commit failed ({exc.__class__.__name__})")
             logger.exception("collect_github.commit_failed name=%s", query.name)
+            source_stats.append(
+                source_stat(
+                    query.name,
+                    status="failed",
+                    items_found=src_found,
+                    items_created=src_created,
+                    items_updated=src_updated,
+                    items_skipped=src_skipped,
+                    duration_ms=elapsed_ms(src_t0),
+                    error=f"commit failed ({exc.__class__.__name__})",
+                )
+            )
             progress(index, total, f"提交失败：{query.name}")
             continue
+        source_stats.append(
+            source_stat(
+                query.name,
+                status="success",
+                items_found=src_found,
+                items_created=src_created,
+                items_updated=src_updated,
+                items_skipped=src_skipped,
+                duration_ms=elapsed_ms(src_t0),
+            )
+        )
         progress(index, total, f"完成：{query.name}（累计新建 {created}，跳过 {skipped}）")
 
     release_targets = list(seen_repos)[:5]
     for offset, repo_name in enumerate(release_targets, start=1):
+        src_t0 = time.perf_counter()
         progress(total + offset - 1, total + len(release_targets), f"Release：{repo_name}")
         try:
             release = collector.fetch_latest_release(repo_name)
         except Exception as exc:  # noqa: BLE001
             errors.append(f"release/{repo_name}: {exc}")
             logger.warning("collect_github.release_exception repo=%s err=%s", repo_name, exc)
+            source_stats.append(
+                source_stat(
+                    f"release/{repo_name}",
+                    status="failed",
+                    duration_ms=elapsed_ms(src_t0),
+                    error=str(exc),
+                )
+            )
             continue
         if not release:
+            # Many trending repos never publish GitHub Releases — skip quietly.
+            logger.debug("collect_github.no_release repo=%s", repo_name)
             continue
         if not is_within_lookback(release.published_at, days=lookback_days, keep_unknown=False):
-            skipped += 1
+            logger.debug("collect_github.release_outside_lookback repo=%s", repo_name)
             continue
         found += 1
         label = _item_label(release.title, release.url)
@@ -313,13 +382,35 @@ def run_collect_github(
                 )
                 if was_created:
                     created += 1
+                    src_created = 1
+                    src_updated = 0
                 else:
                     updated += 1
+                    src_created = 0
+                    src_updated = 1
             session.commit()
+            source_stats.append(
+                source_stat(
+                    f"release/{repo_name}",
+                    status="success",
+                    items_found=1,
+                    items_created=src_created,
+                    items_updated=src_updated,
+                    duration_ms=elapsed_ms(src_t0),
+                )
+            )
         except (SQLAlchemyError, ValueError, TypeError) as exc:
             session.rollback()
             skipped += 1
             errors.append(f"release/{label}: {exc.__class__.__name__}")
+            source_stats.append(
+                source_stat(
+                    f"release/{repo_name}",
+                    status="failed",
+                    duration_ms=elapsed_ms(src_t0),
+                    error=exc.__class__.__name__,
+                )
+            )
             continue
 
     status = JobStatus.SUCCESS
@@ -367,6 +458,8 @@ def run_collect_github(
         "items_created": created,
         "items_updated": updated,
         "items_skipped": skipped,
+        "duration_ms": elapsed_ms(job_t0),
+        "source_stats": source_stats,
         "errors": errors,
         "error": error_message or hint,
         "hint": hint,

@@ -22,7 +22,7 @@ templates.env.filters["plain"] = truncate
 templates.env.filters["fmt_dt"] = format_datetime
 
 
-def present_item(item, *, preview: bool | None = None) -> dict:
+def present_item(item, *, preview: bool | None = None, source_name: str | None = None) -> dict:
     """View-model so templates do not depend on custom filters.
 
     Lists show full summary/content. Media posts dedupe identical title/body.
@@ -65,11 +65,13 @@ def present_item(item, *, preview: bool | None = None) -> dict:
         is_new = fs >= datetime.now(UTC) - timedelta(hours=24)
 
     return {
-        "id": item.id,
+        "id": str(item.id),
         "url": item.url,
         "title": title or raw_title,
         "category": item.category,
         "author": getattr(item, "author", None) or "",
+        "source_name": source_name or "",
+        "source_id": str(getattr(item, "source_id", "") or ""),
         "tags": list(item.tags or []),
         "summary": body or raw_body,
         "show_related": item_type
@@ -80,6 +82,8 @@ def present_item(item, *, preview: bool | None = None) -> dict:
             ItemType.GITHUB_REPO,
             ItemType.GITHUB_RELEASE,
             ItemType.MEDIA_POST,
+            ItemType.MODEL,
+            ItemType.EDUCATION,
         },
         "tickers": tickers,
         "sentiment": sentiment,

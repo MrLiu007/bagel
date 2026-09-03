@@ -140,6 +140,7 @@ def _ensure_owner_columns(engine: Engine) -> None:
         ("intel_keyword_rule", "owner_id"),
         ("intel_github_query", "owner_id"),
         ("intel_monthly_brief", "owner_id"),
+        ("intel_search_event", "owner_id"),
     ]
     dialect = engine.dialect.name
     with engine.begin() as conn:
@@ -155,6 +156,24 @@ def _ensure_owner_columns(engine: Engine) -> None:
                 conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} CHAR(36)"))
             else:
                 conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} UUID"))
+        # Keyword rule scopes (CSV of KeywordScope values).
+        if "intel_keyword_rule" in insp.get_table_names():
+            cols = {c["name"] for c in insp.get_columns("intel_keyword_rule")}
+            if "scopes" not in cols:
+                if dialect == "sqlite":
+                    conn.execute(
+                        text(
+                            "ALTER TABLE intel_keyword_rule "
+                            "ADD COLUMN scopes VARCHAR(255) NOT NULL DEFAULT ''"
+                        )
+                    )
+                else:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE intel_keyword_rule "
+                            "ADD COLUMN scopes VARCHAR(255) NOT NULL DEFAULT ''"
+                        )
+                    )
         # Widen period key so weekly briefs (YYYY-Www) fit.
         if "intel_monthly_brief" in insp.get_table_names():
             if dialect == "postgresql":

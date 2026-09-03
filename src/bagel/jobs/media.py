@@ -7,14 +7,16 @@ from typing import Any, Callable
 
 from sqlalchemy.orm import Session
 
-from bagel.domain.enums import ItemStatus, ItemType, SourceType
+from bagel.domain.enums import ItemStatus, ItemType, KeywordScope, SourceType
 from bagel.domain.models import IntelItem
 from bagel.integrations.mediacrawler import MediaCrawlerError, run_media_crawl
 from bagel.pipeline.category import classify_title
+from bagel.pipeline.filter import apply_keyword_rules
+from bagel.pipeline.keyword_scopes import rules_for_scope
 from bagel.pipeline.textutil import headline_from_body, strip_html
 from bagel.services import wiki as wiki_svc
 from bagel.settings import get_settings
-from bagel.storage.repositories import ItemRepository
+from bagel.storage.repositories import ItemRepository, KeywordRuleRepository
 from sqlalchemy import select
 
 ProgressCallback = Callable[..., None]
@@ -88,6 +90,10 @@ def run_collect_media(
 
     posts = crawl.posts
     repo = ItemRepository(session)
+    rules = rules_for_scope(
+        KeywordRuleRepository(session).list_enabled(),
+        KeywordScope.MEDIA,
+    )
     created = 0
     updated = 0
     total_posts = max(len(posts), 1)
@@ -101,6 +107,8 @@ def run_collect_media(
                 percent=min(99.9, round(pct, 1)),
                 message=f"入库 {post.title[:40]}",
             )
+        filt = apply_keyword_rules(post.title, post.summary, rules)
+        status = filt.status if filt.accepted else ItemStatus.REJECTED
         item, was_created = repo.upsert_from_normalized(
             item_type=ItemType.MEDIA_POST,
             source_type=SourceType.MEDIA,
@@ -112,9 +120,17 @@ def run_collect_media(
             published_at=post.published_at,
             tags=[post.platform, *(keywords or settings.media_keyword_list)][:12],
             category=classify_title(post.title, post.summary or ""),
-            metadata={"platform": post.platform, "external_id": post.external_id},
-            status=ItemStatus.CANDIDATE,
-            score=1.0,
+            metadata={
+                "platform": post.platform,
+                "external_id": post.external_id,
+                "filter": {
+                    "include": filt.matched_include,
+                    "exclude": filt.matched_exclude,
+                    "boost": filt.matched_boost,
+                },
+            },
+            status=status,
+            score=1.0 + filt.score,
             owner_id=oid,
         )
         if was_created:

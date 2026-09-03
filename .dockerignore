@@ -1,0 +1,22 @@
+# Build context hygiene for Bagel image
+.git
+.github
+.idea
+.venv
+.pytest_cache
+__pycache__
+*.pyc
+*.pyo
+.env
+.env.*
+!.env.example
+data/
+static/
+docs/
+tests/
+scripts/
+third_party/MediaCrawler/
+*.md
+!README.md
+agent-transcripts/
+.cursor/

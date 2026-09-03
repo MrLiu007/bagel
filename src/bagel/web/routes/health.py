@@ -19,23 +19,81 @@ from bagel.web.templating import templates
 router = APIRouter(tags=["health"])
 
 
-@router.get("/settings", response_class=HTMLResponse)
+def _settings_redirect(db: Session, tab: str, *, saved: str | None = "1") -> RedirectResponse:
+    """PRG redirect after settings mutation.
+
+    Commit *before* returning 303 so the follow-up GET cannot race the
+    dependency-teardown commit (browser would otherwise see stale tags).
+    """
+    db.commit()
+    q = f"/settings?tab={quote(tab, safe='')}"
+    if saved:
+        q += f"&saved={quote(saved, safe='')}"
+    resp = RedirectResponse(url=q, status_code=303)
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    return resp
+
+
+@router.get("/settings", response_class=HTMLResponse, response_model=None)
 async def settings_page(
     request: Request,
     db: Session = Depends(get_db),
-    tab: str = Query("tags"),
-) -> HTMLResponse:
+    tab: str = Query("sources"),
+    saved: str | None = Query(None),
+):
+    if tab == "tags":
+        # Legacy bookmark: 过滤标签已并入新闻数据源兴趣标签。
+        return RedirectResponse(url="/settings?tab=sources", status_code=303)
     active_tab = tab if tab in {
-        "tags", "sources", "papers", "stocks", "schedule", "cli", "config", "health", "users"
-    } else "tags"
+        "sources",
+        "github",
+        "papers",
+        "education",
+        "models",
+        "stocks",
+        "excludes",
+        "schedule",
+        "cli",
+        "config",
+        "health",
+        "users",
+    } else "sources"
     report = run_health_checks(db) if active_tab == "health" else None
     sources = settings_svc.list_news_sources(db) if active_tab == "sources" else []
     default_catalog = settings_svc.default_source_catalog() if active_tab == "sources" else []
     paper_sources = settings_svc.list_paper_sources(db) if active_tab == "papers" else []
     paper_catalog = settings_svc.default_paper_catalog() if active_tab == "papers" else []
+    education_sources = settings_svc.list_education_sources(db) if active_tab == "education" else []
+    education_catalog = settings_svc.default_education_catalog() if active_tab == "education" else []
+    model_sources = settings_svc.list_model_sources(db) if active_tab == "models" else []
+    model_catalog = settings_svc.default_model_catalog() if active_tab == "models" else []
     stock_sources = settings_svc.list_stock_sources(db) if active_tab == "stocks" else []
     stock_catalog = settings_svc.default_stock_catalog() if active_tab == "stocks" else []
+    github_queries = settings_svc.list_github_queries(db) if active_tab == "github" else []
     users = auth_svc.list_users(db) if active_tab == "users" else []
+
+    from bagel.pipeline.keyword_scopes import (
+        ALL_SCOPES,
+        INCLUDE_SCOPES,
+        SCOPE_LABELS,
+        TAB_TO_SCOPE,
+        effective_scopes,
+    )
+
+    include_scope = TAB_TO_SCOPE.get(active_tab)
+    include_tags = (
+        settings_svc.list_filter_tags(db, scope=include_scope) if include_scope else []
+    )
+    exclude_tags = settings_svc.list_exclude_tags(db) if active_tab == "excludes" else []
+    exclude_scope_meta = [
+        {
+            "rule": rule,
+            "scopes": effective_scopes(rule),
+            "labels": settings_svc.scope_labels_for_rule(rule),
+        }
+        for rule in exclude_tags
+    ]
 
     schedule_cfg = None
     schedule_status = None
@@ -64,12 +122,17 @@ async def settings_page(
     if active_tab == "config":
         from bagel.pipeline.paths import display_path
         from bagel.services import env_config as env_cfg
+        from bagel.services import user_config as user_cfg
 
-        env_groups = env_cfg.catalog_for_ui()
+        uid = request.session.get("user_id")
+        is_admin = bool(request.session.get("is_admin"))
+        env_groups = user_cfg.catalog_for_ui(uid, is_admin=is_admin)
         env_path = display_path(env_cfg.resolve_env_path())
         config_message = request.query_params.get("msg")
 
-    return templates.TemplateResponse(
+    settings_message = "已保存，列表已更新。" if saved else None
+
+    response = templates.TemplateResponse(
         request,
         "settings.html",
         {
@@ -77,14 +140,26 @@ async def settings_page(
             "active": "settings",
             "nav": NAV_ITEMS,
             "tab": active_tab,
-            "include_tags": settings_svc.list_filter_tags(db),
-            "exclude_tags": settings_svc.list_exclude_tags(db),
+            "settings_message": settings_message,
+            "include_tags": include_tags,
+            "include_scope": include_scope,
+            "include_scope_label": SCOPE_LABELS.get(include_scope or "", ""),
+            "exclude_tags": exclude_tags,
+            "exclude_scope_meta": exclude_scope_meta,
+            "all_scopes": list(ALL_SCOPES),
+            "include_scopes": list(INCLUDE_SCOPES),
+            "scope_labels": SCOPE_LABELS,
             "sources": sources,
             "default_catalog": default_catalog,
             "paper_sources": paper_sources,
             "paper_catalog": paper_catalog,
+            "education_sources": education_sources,
+            "education_catalog": education_catalog,
+            "model_sources": model_sources,
+            "model_catalog": model_catalog,
             "stock_sources": stock_sources,
             "stock_catalog": stock_catalog,
+            "github_queries": github_queries,
             "report": report,
             "users": users,
             "is_admin": bool(request.session.get("is_admin")),
@@ -99,6 +174,9 @@ async def settings_page(
             "config_message": config_message,
         },
     )
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    return response
 
 
 @router.get("/settings/health", response_class=HTMLResponse)
@@ -109,25 +187,110 @@ async def settings_health() -> RedirectResponse:
 @router.post("/settings/tags")
 async def add_tag(
     keyword: str = Form(...),
+    scope: str = Form("news"),
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
     try:
-        settings_svc.add_filter_tag(db, keyword)
+        settings_svc.add_filter_tag(db, keyword, scope=scope)
     except settings_svc.SettingsError as exc:
         raise HTTPException(status_code=400, detail=exc.message) from exc
-    return RedirectResponse(url="/settings?tab=tags", status_code=303)
+    return _settings_redirect(db, settings_svc.redirect_tab_for_scope(scope))
+
+
+@router.post("/settings/tags/{rule_id}/toggle")
+async def toggle_tag(
+    rule_id: UUID,
+    enabled: str = Form("1"),
+    scope: str = Form("news"),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    try:
+        settings_svc.toggle_filter_tag(db, rule_id, enabled=enabled in {"1", "true", "on"})
+    except settings_svc.SettingsError as exc:
+        raise HTTPException(status_code=404, detail=exc.message) from exc
+    return _settings_redirect(db, settings_svc.redirect_tab_for_scope(scope))
 
 
 @router.post("/settings/tags/{rule_id}/delete")
 async def delete_tag(
     rule_id: UUID,
+    scope: str = Form(""),
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
     try:
-        settings_svc.delete_filter_tag(db, rule_id)
+        settings_svc.delete_filter_tag(db, rule_id, scope=scope or None)
     except settings_svc.SettingsError as exc:
         raise HTTPException(status_code=404, detail=exc.message) from exc
-    return RedirectResponse(url="/settings?tab=tags", status_code=303)
+    tab = settings_svc.redirect_tab_for_scope(scope) if scope else "sources"
+    return _settings_redirect(db, tab)
+
+
+@router.post("/settings/excludes")
+async def add_exclude(
+    request: Request,
+    keyword: str = Form(...),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    form = await request.form()
+    scopes = [str(v) for v in form.getlist("scopes")]
+    try:
+        settings_svc.add_exclude_tag(db, keyword, scopes=scopes)
+    except settings_svc.SettingsError as exc:
+        raise HTTPException(status_code=400, detail=exc.message) from exc
+    return _settings_redirect(db, "excludes")
+
+
+@router.post("/settings/excludes/{rule_id}/scopes")
+async def update_exclude_scopes(
+    rule_id: UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    form = await request.form()
+    scopes = [str(v) for v in form.getlist("scopes")]
+    try:
+        settings_svc.update_exclude_tag(db, rule_id, scopes=scopes)
+    except settings_svc.SettingsError as exc:
+        raise HTTPException(status_code=400, detail=exc.message) from exc
+    return _settings_redirect(db, "excludes")
+
+
+@router.post("/settings/excludes/{rule_id}/toggle")
+async def toggle_exclude(
+    rule_id: UUID,
+    enabled: str = Form("1"),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    try:
+        settings_svc.toggle_exclude_tag(db, rule_id, enabled=enabled in {"1", "true", "on"})
+    except settings_svc.SettingsError as exc:
+        raise HTTPException(status_code=404, detail=exc.message) from exc
+    return _settings_redirect(db, "excludes")
+
+
+@router.post("/settings/excludes/{rule_id}/delete")
+async def delete_exclude(
+    rule_id: UUID,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    try:
+        settings_svc.delete_exclude_tag(db, rule_id)
+    except settings_svc.SettingsError as exc:
+        raise HTTPException(status_code=404, detail=exc.message) from exc
+    return _settings_redirect(db, "excludes")
+
+
+@router.post("/settings/github/{query_id}/toggle")
+async def toggle_github_query(
+    query_id: UUID,
+    enabled: str = Form("1"),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    try:
+        settings_svc.toggle_github_query(db, query_id, enabled=enabled in {"1", "true", "on"})
+    except settings_svc.SettingsError as exc:
+        raise HTTPException(status_code=404, detail=exc.message) from exc
+    return RedirectResponse(url="/settings?tab=github", status_code=303)
 
 
 @router.post("/settings/sources")
@@ -229,6 +392,84 @@ async def delete_paper_source(
     return RedirectResponse(url="/settings?tab=papers", status_code=303)
 
 
+@router.post("/settings/education")
+async def add_education_source(
+    name: str = Form(...),
+    url: str = Form(...),
+    region: str = Form("GLOBAL"),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    try:
+        settings_svc.add_education_source(db, name=name, url=url, region=region)
+    except settings_svc.SettingsError as exc:
+        raise HTTPException(status_code=400, detail=exc.message) from exc
+    return RedirectResponse(url="/settings?tab=education", status_code=303)
+
+
+@router.post("/settings/education/{source_id}/toggle")
+async def toggle_education_source(
+    source_id: UUID,
+    enabled: str = Form("1"),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    try:
+        settings_svc.toggle_education_source(db, source_id, enabled=enabled in {"1", "true", "on"})
+    except settings_svc.SettingsError as exc:
+        raise HTTPException(status_code=404, detail=exc.message) from exc
+    return RedirectResponse(url="/settings?tab=education", status_code=303)
+
+
+@router.post("/settings/education/{source_id}/delete")
+async def delete_education_source(
+    source_id: UUID,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    try:
+        settings_svc.delete_education_source(db, source_id)
+    except settings_svc.SettingsError as exc:
+        raise HTTPException(status_code=404, detail=exc.message) from exc
+    return RedirectResponse(url="/settings?tab=education", status_code=303)
+
+
+@router.post("/settings/models")
+async def add_model_source(
+    name: str = Form(...),
+    url: str = Form(...),
+    region: str = Form("GLOBAL"),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    try:
+        settings_svc.add_model_source(db, name=name, url=url, region=region)
+    except settings_svc.SettingsError as exc:
+        raise HTTPException(status_code=400, detail=exc.message) from exc
+    return RedirectResponse(url="/settings?tab=models", status_code=303)
+
+
+@router.post("/settings/models/{source_id}/toggle")
+async def toggle_model_source(
+    source_id: UUID,
+    enabled: str = Form("1"),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    try:
+        settings_svc.toggle_model_source(db, source_id, enabled=enabled in {"1", "true", "on"})
+    except settings_svc.SettingsError as exc:
+        raise HTTPException(status_code=404, detail=exc.message) from exc
+    return RedirectResponse(url="/settings?tab=models", status_code=303)
+
+
+@router.post("/settings/models/{source_id}/delete")
+async def delete_model_source(
+    source_id: UUID,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    try:
+        settings_svc.delete_model_source(db, source_id)
+    except settings_svc.SettingsError as exc:
+        raise HTTPException(status_code=404, detail=exc.message) from exc
+    return RedirectResponse(url="/settings?tab=models", status_code=303)
+
+
 @router.post("/settings/stocks")
 async def add_stock_source(
     name: str = Form(...),
@@ -276,6 +517,9 @@ async def save_schedule(
     schedule_collect_news: str | None = Form(None),
     schedule_collect_github: str | None = Form(None),
     schedule_collect_stocks: str | None = Form(None),
+    schedule_collect_models: str | None = Form(None),
+    enable_keyword_growth: str | None = Form(None),
+    enable_wiki_compile: str | None = Form(None),
 ) -> RedirectResponse:
     from bagel.jobs.scheduler import reload_scheduler_jobs
     from bagel.services.runtime_config import (
@@ -294,6 +538,9 @@ async def save_schedule(
         schedule_collect_news=schedule_collect_news in {"1", "true", "on"},
         schedule_collect_github=schedule_collect_github in {"1", "true", "on"},
         schedule_collect_stocks=schedule_collect_stocks in {"1", "true", "on"},
+        schedule_collect_models=schedule_collect_models in {"1", "true", "on"},
+        enable_keyword_growth=enable_keyword_growth in {"1", "true", "on"},
+        enable_wiki_compile=enable_wiki_compile in {"1", "true", "on"},
     )
     reload_scheduler_jobs()
     return RedirectResponse(url="/settings?tab=schedule", status_code=303)
@@ -363,19 +610,41 @@ async def feishu_digest_push(
 @router.post("/settings/config")
 async def save_env_config(request: Request) -> RedirectResponse:
     from bagel.services import env_config as env_cfg
+    from bagel.services import user_config as user_cfg
 
     form = await request.form()
+    uid = request.session.get("user_id")
+    is_admin = bool(request.session.get("is_admin"))
     updates: dict[str, str] = {}
+    system_updates: dict[str, str] = {}
     for field in env_cfg.ENV_CATALOG:
+        if field.key in user_cfg.SYSTEM_ENV_KEYS:
+            if not is_admin:
+                continue
+            if field.type == "bool":
+                system_updates[field.key] = (
+                    "true" if form.get(field.key) in {"1", "true", "on"} else "false"
+                )
+            elif field.key in form:
+                system_updates[field.key] = str(form.get(field.key) or "")
+            continue
         if field.type == "bool":
             updates[field.key] = "true" if form.get(field.key) in {"1", "true", "on"} else "false"
         elif field.key in form:
             updates[field.key] = str(form.get(field.key) or "")
     try:
-        path = env_cfg.update_env_values(updates)
+        if system_updates and is_admin:
+            env_cfg.update_env_values(system_updates)
+        if not uid:
+            raise HTTPException(status_code=401, detail="请先登录后再保存个人配置")
+        path = user_cfg.save_user_overrides(uid, updates)
     except env_cfg.EnvConfigError as exc:
         raise HTTPException(status_code=400, detail=exc.message) from exc
-    msg = quote(f"已写入 {path.name}；标有「需重启」的项请重启服务后生效", safe="")
+    msg = quote(
+        f"已保存个人配置（{path.name}）；未改动的项仍使用系统默认。"
+        + (" 系统项已写入 .env，部分需重启。" if system_updates and is_admin else ""),
+        safe="",
+    )
     return RedirectResponse(url=f"/settings?tab=config&msg={msg}", status_code=303)
 
 

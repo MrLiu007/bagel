@@ -1,0 +1,168 @@
+{
+  "version": "v1",
+  "dependencyCount": 28,
+  "dependencies": [
+    {
+      "topicId": "tp_agent",
+      "prerequisiteId": "tp_llm",
+      "strength": "hard",
+      "reason": "Agent 编排建立在 LLM 规划与工具调用能力之上"
+    },
+    {
+      "topicId": "tp_rag",
+      "prerequisiteId": "tp_llm",
+      "strength": "hard",
+      "reason": "RAG 以生成模型为后端，检索结果需注入上下文"
+    },
+    {
+      "topicId": "tp_prompt",
+      "prerequisiteId": "tp_llm",
+      "strength": "soft",
+      "reason": "提示工程针对大模型交互面"
+    },
+    {
+      "topicId": "tp_safety",
+      "prerequisiteId": "tp_llm",
+      "strength": "soft",
+      "reason": "对齐与安全问题主要出现在基础模型部署中"
+    },
+    {
+      "topicId": "tp_agent",
+      "prerequisiteId": "tp_rag",
+      "strength": "soft",
+      "reason": "许多 Agent 通过检索增强获取外部知识"
+    },
+    {
+      "topicId": "tp_training",
+      "prerequisiteId": "tp_llm",
+      "strength": "soft",
+      "reason": "微调与推理优化以基础模型为对象"
+    },
+    {
+      "topicId": "tp_eval",
+      "prerequisiteId": "tp_llm",
+      "strength": "soft",
+      "reason": "主流基准围绕语言模型能力展开"
+    },
+    {
+      "topicId": "tp_multimodal",
+      "prerequisiteId": "tp_llm",
+      "strength": "soft",
+      "reason": "多数 VLM 以语言模型为骨干"
+    },
+    {
+      "topicId": "tp_embodied",
+      "prerequisiteId": "tp_agent",
+      "strength": "soft",
+      "reason": "具身系统常复用 Agent 规划与工具抽象"
+    },
+    {
+      "topicId": "tp_embodied",
+      "prerequisiteId": "tp_multimodal",
+      "strength": "soft",
+      "reason": "机器人感知依赖视觉等多模态输入"
+    },
+    {
+      "topicId": "tp_edu_ai",
+      "prerequisiteId": "tp_agent",
+      "strength": "soft",
+      "reason": "智能辅导常以对话 Agent 形态出现"
+    },
+    {
+      "topicId": "tp_ocw",
+      "prerequisiteId": "tp_edu_ai",
+      "strength": "soft",
+      "reason": "开放课程是教育应用落地的重要资源形态"
+    },
+    {
+      "topicId": "tp_model_hub",
+      "prerequisiteId": "tp_opensource",
+      "strength": "soft",
+      "reason": "模型社区是开源发布的主要分发渠道"
+    },
+    {
+      "topicId": "tp_github",
+      "prerequisiteId": "tp_opensource",
+      "strength": "soft",
+      "reason": "工程仓库是开源发布的承载形式"
+    },
+    {
+      "topicId": "tp_rag_hybrid",
+      "prerequisiteId": "tp_rag",
+      "strength": "hard",
+      "reason": "混合检索是 RAG 体系内的召回增强子技能"
+    },
+    {
+      "topicId": "tp_rag_graph",
+      "prerequisiteId": "tp_rag",
+      "strength": "hard",
+      "reason": "GraphRAG 建立在检索增强范式之上"
+    },
+    {
+      "topicId": "tp_agent_tools",
+      "prerequisiteId": "tp_agent",
+      "strength": "hard",
+      "reason": "工具调用是 Agent 执行层的核心能力"
+    },
+    {
+      "topicId": "tp_agent_multi",
+      "prerequisiteId": "tp_agent",
+      "strength": "soft",
+      "reason": "多智能体是单 Agent 编排的扩展"
+    },
+    {
+      "topicId": "tp_agent_multi",
+      "prerequisiteId": "tp_agent_tools",
+      "strength": "soft",
+      "reason": "多角色协作通常依赖工具与消息传递"
+    },
+    {
+      "topicId": "tp_llm_pretrain",
+      "prerequisiteId": "tp_llm",
+      "strength": "hard",
+      "reason": "预训练是基础模型生命周期的第一阶段"
+    },
+    {
+      "topicId": "tp_llm_posttrain",
+      "prerequisiteId": "tp_llm_pretrain",
+      "strength": "soft",
+      "reason": "后训练通常在预训练检查点上继续"
+    },
+    {
+      "topicId": "tp_llm_posttrain",
+      "prerequisiteId": "tp_safety",
+      "strength": "soft",
+      "reason": "对齐方法与安全目标紧密相关"
+    },
+    {
+      "topicId": "tp_train_lora",
+      "prerequisiteId": "tp_training",
+      "strength": "hard",
+      "reason": "LoRA 是训练/微调路径下的具体技术"
+    },
+    {
+      "topicId": "tp_train_infer",
+      "prerequisiteId": "tp_training",
+      "strength": "hard",
+      "reason": "推理引擎属于推理/训练工程的部署面"
+    },
+    {
+      "topicId": "tp_vlm",
+      "prerequisiteId": "tp_multimodal",
+      "strength": "hard",
+      "reason": "VLM 是多模态中的核心模型形态"
+    },
+    {
+      "topicId": "tp_tutor",
+      "prerequisiteId": "tp_edu_ai",
+      "strength": "hard",
+      "reason": "智能辅导是教育应用的典型产品形态"
+    },
+    {
+      "topicId": "tp_tutor",
+      "prerequisiteId": "tp_agent",
+      "strength": "soft",
+      "reason": "辅导产品常以对话 Agent 实现"
+    }
+  ]
+}

@@ -154,19 +154,42 @@ def test_candidates_redirects_to_news(client: TestClient) -> None:
     assert resp.headers["location"] == "/news"
 
 
-def test_settings_filter_tags(client: TestClient, db: Session) -> None:
-    resp = client.get("/settings")
+def test_settings_news_interest_tags(client: TestClient, db: Session) -> None:
+    resp = client.get("/settings?tab=sources")
     assert resp.status_code == 200
-    assert "过滤标签" in resp.text
+    assert "兴趣标签" in resp.text
+    assert "新闻数据源" in resp.text
+    assert "系统排除词" in resp.text
     assert "系统状态" in resp.text
+
+    legacy = client.get("/settings?tab=tags", follow_redirects=False)
+    assert legacy.status_code == 303
+    assert "tab=sources" in legacy.headers.get("location", "")
 
     resp = client.post(
         "/settings/tags",
-        data={"keyword": "GraphRAG"},
+        data={"keyword": "GraphRAG", "scope": "news"},
         follow_redirects=False,
     )
     assert resp.status_code == 303
+    loc = resp.headers.get("location", "")
+    assert "tab=sources" in loc
+    assert "saved=1" in loc
+    # Follow PRG: new tag must appear without a second manual refresh.
+    page = client.get(loc)
+    assert page.status_code == 200
+    assert "GraphRAG" in page.text
+    assert "已保存" in page.text
     from bagel.services import settings_svc
 
-    tags = settings_svc.list_filter_tags(db)
+    tags = settings_svc.list_filter_tags(db, scope="news")
     assert any(t.keyword == "GraphRAG" for t in tags)
+
+    excludes = client.get("/settings?tab=excludes")
+    assert excludes.status_code == 200
+    assert "系统排除词" in excludes.text
+    assert "自媒体" in excludes.text
+
+    github = client.get("/settings?tab=github")
+    assert github.status_code == 200
+    assert "兴趣标签" in github.text

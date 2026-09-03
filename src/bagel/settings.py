@@ -54,6 +54,8 @@ class Settings(BaseSettings):
 
     # GitHub
     github_token: str = ""
+    # Semantic Scholar (optional; raises rate limits when set)
+    semantic_scholar_api_key: str = ""
 
     # LLM (OpenAI-compatible: openai / azure / deepseek / moonshot / volcengine / custom)
     llm_enabled: bool = True
