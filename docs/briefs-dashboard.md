@@ -4,13 +4,20 @@
 
 原「看板」已更名为 **个人空间**。旧路径 `/briefs/dashboard` 301 跳转到 `/briefs/space`。
 
+子视图：
+
+| 视图 | URL | 说明 |
+|------|-----|------|
+| 看板 | `?view=board`（默认） | 搜索统计、关键词、类型与数据源 |
+| 图谱 | `?view=graph` | 全幅 3D GBrain（倒锥布局） |
+
 | 模块 | 说明 |
 |------|------|
 | 搜索统计 | 近 90 天搜索次数（含飞书指令、个人空间试搜） |
 | 关键词排名 | 搜索词频次与命中条目数 |
 | 常用数据类型 | 近 90 天各 `ItemType` 入库量（含教育） |
 | 常用数据源 | 绑定 `IntelSource` 的条目计数 |
-| GBrain 知识图谱 | ECharts 力导向关系图：类型 / 分类 / 标签 / 数据源 / 条目共现 |
+| GBrain 知识图谱 | 见下节；taxonomy 投影 + SUBJECTS 筛选 + 知识卡 |
 
 顶部可 **试搜并记录**，行为写入 `intel_search_event`。
 
@@ -22,20 +29,28 @@
 2. **Taxonomy**：包内 seed（topics / dependencies / clusters），结构对齐 os-taxonomy，内容自有
 3. **Core**：资源优先；边为 `about` / `prerequisite` / `contains` / `typed_as` 等；可选合并 `wiki_edge`
 4. **Wiki 编译**：MD 正文 + DB 索引（见 [wiki-taxonomy-gbrain.md](./wiki-taxonomy-gbrain.md)）
-5. **可视化**：个人空间使用 **3d-force-graph**（高度 `fy` = 资源/概念层）；统计文案对齐 micro-topics / deps / clusters；`stats.resources`（勿用 `items`，Jinja 会撞上 `dict.items`）
-6. **交互**：点击节点打开 URL；先修边虚线粒子；自动慢旋
+5. **可视化**：图谱页使用 **3d-force-graph**（高度 `fy`）；倒锥居中、舞台无框透明、单行规模统计（`resources · 主题 · 关联`）
+6. **交互**：点资源开知识卡（摘要 + URL）；SUBJECTS 切换 8 频道；先修边粒子；自动慢旋；学习记录复习
+
+统计字段用 `stats.resources`（勿用模板里的 `items`，Jinja 会撞上 `dict.items`）。
 
 关联抽屉默认 `hidden`，仅点击列表「关联」时打开。
 
 ## 关联侧栏（列表 + 图谱）
 
-各资源列表「关联」不再整页跳转，改为右侧抽屉（图1 混合模式）：
+各资源列表「关联」不再整页跳转，改为右侧抽屉（混合模式）：
 
 1. **列表视图**（默认）：按类型分组的相关资源（新闻 / 论文 / 教育 / …）
-2. **图谱视图**：约 560px 高的 ECharts 子图（一阶关联）
-3. **底部**：「在新页面打开完整 GBrain」→ `/briefs/space?seed=…`
+2. **图谱视图**：抽屉内 3D 子图（一阶关联）
+3. **底部**：「在新页面打开完整 GBrain」→ `/briefs/space?view=graph&seed=…`
 
 API：`GET /api/items/{id}/related`（JSON）。全页 `/items/{id}/related` 仍保留作兜底。
+
+知识卡 / 学习 API：
+
+- `GET /api/gbrain/card?key=…`
+- `POST /api/gbrain/learn`
+- `GET /api/gbrain/review`
 
 ## 关键词自增长
 
@@ -61,4 +76,6 @@ API：`GET /api/items/{id}/related`（JSON）。全页 `/items/{id}/related` 仍
 ## 数据表
 
 - `intel_search_event` — 搜索日志（迁移 `0005_search_event`）
+- `wiki_page` / `wiki_edge` — Wiki 索引（迁移 `0006_wiki_index`）
+- `gbrain_learn_event` — 图谱学习事件（迁移 `0007_gbrain_learn`）
 - `intel_monthly_brief.metadata.prompt_used` — 本次生成提示词快照
