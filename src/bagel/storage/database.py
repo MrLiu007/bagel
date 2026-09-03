@@ -107,15 +107,12 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def init_db(*, seed: bool = True) -> None:
-    """Create tables (SQLite-friendly) and optionally seed defaults."""
-    from bagel.domain.models import Base
-    from bagel.storage.seed import seed_if_empty
-
-    engine = get_engine()
-    Base.metadata.create_all(bind=engine)
-    _ensure_owner_columns(engine)
+    """Create missing tables (idempotent) and optionally seed defaults."""
+    ensure_schema()
     if not seed:
         return
+    from bagel.storage.seed import seed_if_empty
+
     factory = get_session_factory()
     session = factory()
     try:
@@ -127,6 +124,20 @@ def init_db(*, seed: bool = True) -> None:
     finally:
         session.close()
 
+
+def ensure_schema() -> None:
+    """Create any missing ORM tables (checkfirst) and apply light column patches.
+
+    Used by local SQLite boot and as a Postgres safety net after Alembic so
+    redeploys do not fail when a table was never migrated or was only created
+    via ``create_all`` historically (e.g. ``app_user``).
+    """
+    from bagel.domain.models import Base
+
+    engine = get_engine()
+    # checkfirst=True (default): CREATE only when the table is absent.
+    Base.metadata.create_all(bind=engine)
+    _ensure_owner_columns(engine)
 
 def _ensure_owner_columns(engine: Engine) -> None:
     """Best-effort ADD COLUMN for upgrades on existing DBs."""
