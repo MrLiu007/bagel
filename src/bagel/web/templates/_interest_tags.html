@@ -6,7 +6,7 @@
     未配置时不过兴趣门禁（仍受<strong>系统排除词</strong>约束）。
     自媒体 / 微信用各自拉取关键词，不使用此处 INCLUDE。
   </p>
-  <form class="inline" method="post" action="/settings/tags">
+  <form class="inline" method="post" action="{{ u('/settings/tags') }}">
     <input type="hidden" name="scope" value="{{ include_scope }}" />
     <input type="text" name="keyword" placeholder="例如：LLM, Agent, RAG" required />
     <button type="submit">添加兴趣标签</button>
@@ -21,12 +21,12 @@
         <div class="meta">权重 {{ rule.weight }}</div>
       </div>
       <div class="actions">
-        <form method="post" action="/settings/tags/{{ rule.id }}/toggle">
+        <form method="post" action="{{ u('/settings/tags/' ~ rule.id ~ '/toggle') }}">
           <input type="hidden" name="scope" value="{{ include_scope }}" />
           <input type="hidden" name="enabled" value="{% if rule.enabled %}0{% else %}1{% endif %}" />
           <button type="submit" class="{% if rule.enabled %}btn-state-off{% else %}btn-state-on{% endif %}">{% if rule.enabled %}停用{% else %}启用{% endif %}</button>
         </form>
-        <form method="post" action="/settings/tags/{{ rule.id }}/delete" onsubmit="return confirm('确认删除该兴趣标签？');">
+        <form method="post" action="{{ u('/settings/tags/' ~ rule.id ~ '/delete') }}" onsubmit="return confirm('确认删除该兴趣标签？');">
           <input type="hidden" name="scope" value="{{ include_scope }}" />
           <button class="danger" type="submit">删除</button>
         </form>

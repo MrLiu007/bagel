@@ -2,18 +2,18 @@
 {% block content %}
 <h1>{{ title }}</h1>
 <div class="tabs">
-  <a href="/settings?tab=sources" class="{% if tab == 'sources' %}on{% endif %}">新闻数据源</a>
-  <a href="/settings?tab=github" class="{% if tab == 'github' %}on{% endif %}">GitHub</a>
-  <a href="/settings?tab=papers" class="{% if tab == 'papers' %}on{% endif %}">论文数据源</a>
-  <a href="/settings?tab=education" class="{% if tab == 'education' %}on{% endif %}">教育数据源</a>
-  <a href="/settings?tab=models" class="{% if tab == 'models' %}on{% endif %}">模型数据源</a>
-  <a href="/settings?tab=stocks" class="{% if tab == 'stocks' %}on{% endif %}">股票数据源</a>
-  <a href="/settings?tab=excludes" class="{% if tab == 'excludes' %}on{% endif %}">系统排除词</a>
-  <a href="/settings?tab=schedule" class="{% if tab == 'schedule' %}on{% endif %}">定时任务</a>
-  <a href="/settings?tab=cli" class="{% if tab == 'cli' %}on{% endif %}">CLI</a>
-  <a href="/settings?tab=config" class="{% if tab == 'config' %}on{% endif %}">配置</a>
-  <a href="/settings?tab=users" class="{% if tab == 'users' %}on{% endif %}">用户管理</a>
-  <a href="/settings?tab=health" class="{% if tab == 'health' %}on{% endif %}">系统状态</a>
+  <a href="{{ u('/settings?tab=sources') }}" class="{% if tab == 'sources' %}on{% endif %}">新闻数据源</a>
+  <a href="{{ u('/settings?tab=github') }}" class="{% if tab == 'github' %}on{% endif %}">GitHub</a>
+  <a href="{{ u('/settings?tab=papers') }}" class="{% if tab == 'papers' %}on{% endif %}">论文数据源</a>
+  <a href="{{ u('/settings?tab=education') }}" class="{% if tab == 'education' %}on{% endif %}">教育数据源</a>
+  <a href="{{ u('/settings?tab=models') }}" class="{% if tab == 'models' %}on{% endif %}">模型数据源</a>
+  <a href="{{ u('/settings?tab=stocks') }}" class="{% if tab == 'stocks' %}on{% endif %}">股票数据源</a>
+  <a href="{{ u('/settings?tab=excludes') }}" class="{% if tab == 'excludes' %}on{% endif %}">系统排除词</a>
+  <a href="{{ u('/settings?tab=schedule') }}" class="{% if tab == 'schedule' %}on{% endif %}">定时任务</a>
+  <a href="{{ u('/settings?tab=cli') }}" class="{% if tab == 'cli' %}on{% endif %}">CLI</a>
+  <a href="{{ u('/settings?tab=config') }}" class="{% if tab == 'config' %}on{% endif %}">配置</a>
+  <a href="{{ u('/settings?tab=users') }}" class="{% if tab == 'users' %}on{% endif %}">用户管理</a>
+  <a href="{{ u('/settings?tab=health') }}" class="{% if tab == 'health' %}on{% endif %}">系统状态</a>
 </div>
 
 {% if settings_message %}
@@ -26,7 +26,7 @@
     下方为当前库内新闻数据源（首次启动由默认种子写入）。可启停、删除，或追加自定义 RSS。
     默认清单见 <span class="mono">docs/default-news-sources.md</span>。
   </p>
-  <form class="inline" method="post" action="/settings/sources">
+  <form class="inline" method="post" action="{{ u('/settings/sources') }}">
     <input type="text" name="name" placeholder="名称" required />
     <input type="url" name="url" placeholder="https://…/rss" required style="flex:2;min-width:220px;" />
     <select name="region">
@@ -53,11 +53,11 @@
         <div class="meta" style="word-break:break-all;">{{ s.url }}</div>
       </div>
       <div class="actions">
-        <form method="post" action="/settings/sources/{{ s.id }}/toggle">
+        <form method="post" action="{{ u('/settings/sources/' ~ s.id ~ '/toggle') }}">
           <input type="hidden" name="enabled" value="{% if s.enabled %}0{% else %}1{% endif %}" />
           <button type="submit" class="{% if s.enabled %}btn-state-off{% else %}btn-state-on{% endif %}">{% if s.enabled %}停用{% else %}启用{% endif %}</button>
         </form>
-        <form method="post" action="/settings/sources/{{ s.id }}/delete" onsubmit="return confirm('确认删除该源？');">
+        <form method="post" action="{{ u('/settings/sources/' ~ s.id ~ '/delete') }}" onsubmit="return confirm('确认删除该源？');">
           <button class="danger" type="submit">删除</button>
         </form>
       </div>
@@ -102,7 +102,7 @@
         <div class="meta" style="word-break:break-all;">{{ q.query }}</div>
       </div>
       <div class="actions">
-        <form method="post" action="/settings/github/{{ q.id }}/toggle">
+        <form method="post" action="{{ u('/settings/github/' ~ q.id ~ '/toggle') }}">
           <input type="hidden" name="enabled" value="{% if q.enabled %}0{% else %}1{% endif %}" />
           <button type="submit" class="{% if q.enabled %}btn-state-off{% else %}btn-state-on{% endif %}">{% if q.enabled %}停用{% else %}启用{% endif %}</button>
         </form>
@@ -123,7 +123,7 @@
     命中则拒绝入库。可多选适用类目：新闻 / GitHub / 股票 / 论文 / 模型 / 自媒体 / 微信。
     与各页「兴趣标签」及自媒体/微信拉取关键词独立。详见 <span class="mono">docs/filter-tags.md</span>。
   </p>
-  <form method="post" action="/settings/excludes" style="display:flex;flex-direction:column;gap:0.65rem;">
+  <form method="post" action="{{ u('/settings/excludes') }}" style="display:flex;flex-direction:column;gap:0.65rem;">
     <div class="inline">
       <input type="text" name="keyword" placeholder="例如：付费课程" required style="flex:1;min-width:180px;" />
       <button type="submit">添加排除词</button>
@@ -149,7 +149,7 @@
         </div>
         <div class="meta">适用：{{ meta.labels | join(' · ') }}</div>
       </div>
-      <form method="post" action="/settings/excludes/{{ rule.id }}/scopes" style="flex:2;min-width:220px;">
+      <form method="post" action="{{ u('/settings/excludes/' ~ rule.id ~ '/scopes') }}" style="flex:2;min-width:220px;">
         <div style="display:flex;flex-wrap:wrap;gap:0.4rem 0.85rem;font-size:0.85rem;margin-bottom:0.4rem;">
           {% for s in all_scopes %}
           <label style="display:inline-flex;align-items:center;gap:0.3rem;cursor:pointer;">
@@ -161,11 +161,11 @@
         <button type="submit">保存类目</button>
       </form>
       <div class="actions">
-        <form method="post" action="/settings/excludes/{{ rule.id }}/toggle">
+        <form method="post" action="{{ u('/settings/excludes/' ~ rule.id ~ '/toggle') }}">
           <input type="hidden" name="enabled" value="{% if rule.enabled %}0{% else %}1{% endif %}" />
           <button type="submit" class="{% if rule.enabled %}btn-state-off{% else %}btn-state-on{% endif %}">{% if rule.enabled %}停用{% else %}启用{% endif %}</button>
         </form>
-        <form method="post" action="/settings/excludes/{{ rule.id }}/delete" onsubmit="return confirm('确认删除该排除词？');">
+        <form method="post" action="{{ u('/settings/excludes/' ~ rule.id ~ '/delete') }}" onsubmit="return confirm('确认删除该排除词？');">
           <button class="danger" type="submit">删除</button>
         </form>
       </div>
@@ -184,7 +184,7 @@
     URL 约定：<code>arxiv:cs.AI</code>、<code>hf:daily</code>、<code>openalex:C154945302</code>、<code>s2:large language model</code>。
     如需启用 Semantic Scholar，请在 <code>.env</code> 配置 <code>SEMANTIC_SCHOLAR_API_KEY</code> 后于本页打开该源。
   </p>
-  <form class="inline" method="post" action="/settings/papers">
+  <form class="inline" method="post" action="{{ u('/settings/papers') }}">
     <input type="text" name="name" placeholder="名称，如 arXiv cs.AI" required />
     <input type="text" name="url" placeholder="arxiv:cs.AI" required style="flex:2;min-width:220px;" />
     <button type="submit">添加</button>
@@ -201,11 +201,11 @@
         <div class="meta" style="word-break:break-all;">{{ s.url }}</div>
       </div>
       <div class="actions">
-        <form method="post" action="/settings/papers/{{ s.id }}/toggle">
+        <form method="post" action="{{ u('/settings/papers/' ~ s.id ~ '/toggle') }}">
           <input type="hidden" name="enabled" value="{% if s.enabled %}0{% else %}1{% endif %}" />
           <button type="submit" class="{% if s.enabled %}btn-state-off{% else %}btn-state-on{% endif %}">{% if s.enabled %}停用{% else %}启用{% endif %}</button>
         </form>
-        <form method="post" action="/settings/papers/{{ s.id }}/delete" onsubmit="return confirm('确认删除该论文源？');">
+        <form method="post" action="{{ u('/settings/papers/' ~ s.id ~ '/delete') }}" onsubmit="return confirm('确认删除该论文源？');">
           <button class="danger" type="submit">删除</button>
         </form>
       </div>
@@ -237,7 +237,7 @@
     教育 Tab 使用的高校开放学习资源（MIT OCW、Stanford AI Lab、耶鲁 OYC、Class Central、fast.ai 等）。
     支持完整 RSS URL，或 RSSHub 相对路径。启动时会自动修复已知失效源地址。
   </p>
-  <form class="inline" method="post" action="/settings/education">
+  <form class="inline" method="post" action="{{ u('/settings/education') }}">
     <input type="text" name="name" placeholder="名称，如 MIT OCW" required />
     <input type="text" name="url" placeholder="https://…/rss 或 /rsshub/path" required style="flex:2;min-width:220px;" />
     <select name="region">
@@ -258,11 +258,11 @@
         <div class="meta" style="word-break:break-all;">{{ s.region }} · {{ s.url }}</div>
       </div>
       <div class="actions">
-        <form method="post" action="/settings/education/{{ s.id }}/toggle">
+        <form method="post" action="{{ u('/settings/education/' ~ s.id ~ '/toggle') }}">
           <input type="hidden" name="enabled" value="{% if s.enabled %}0{% else %}1{% endif %}" />
           <button type="submit" class="{% if s.enabled %}btn-state-off{% else %}btn-state-on{% endif %}">{% if s.enabled %}停用{% else %}启用{% endif %}</button>
         </form>
-        <form method="post" action="/settings/education/{{ s.id }}/delete" onsubmit="return confirm('确认删除该教育源？');">
+        <form method="post" action="{{ u('/settings/education/' ~ s.id ~ '/delete') }}" onsubmit="return confirm('确认删除该教育源？');">
           <button class="danger" type="submit">删除</button>
         </form>
       </div>
@@ -295,7 +295,7 @@
     URL 约定：<code>hf:models</code>、<code>hf:models:downloads</code>、<code>hf:models:pipeline:text-generation</code>、
     <code>hf:models:search:qwen</code>、<code>ms:models</code>、<code>ms:models:downloads</code>、<code>ms:models:search:Qwen</code>。
   </p>
-  <form class="inline" method="post" action="/settings/models">
+  <form class="inline" method="post" action="{{ u('/settings/models') }}">
     <input type="text" name="name" placeholder="名称，如 Hugging Face" required />
     <input type="text" name="url" placeholder="hf:models 或 ms:models" required style="flex:2;min-width:220px;" />
     <select name="region">
@@ -316,11 +316,11 @@
         <div class="meta" style="word-break:break-all;">{{ s.region }} · {{ s.url }}</div>
       </div>
       <div class="actions">
-        <form method="post" action="/settings/models/{{ s.id }}/toggle">
+        <form method="post" action="{{ u('/settings/models/' ~ s.id ~ '/toggle') }}">
           <input type="hidden" name="enabled" value="{% if s.enabled %}0{% else %}1{% endif %}" />
           <button type="submit" class="{% if s.enabled %}btn-state-off{% else %}btn-state-on{% endif %}">{% if s.enabled %}停用{% else %}启用{% endif %}</button>
         </form>
-        <form method="post" action="/settings/models/{{ s.id }}/delete" onsubmit="return confirm('确认删除该模型源？');">
+        <form method="post" action="{{ u('/settings/models/' ~ s.id ~ '/delete') }}" onsubmit="return confirm('确认删除该模型源？');">
           <button class="danger" type="submit">删除</button>
         </form>
       </div>
@@ -352,7 +352,7 @@
     股票 Tab 使用的资讯源（与新闻数据源隔离）。支持完整 RSS URL，或 RSSHub 相对路径（如 <code>/cls/telegraph</code>）。
     默认含 Yahoo / MarketWatch / CNBC / BBC Business 等海外源；国内 RSSHub 源默认关闭，需自建 RSSHub 后启用。
   </p>
-  <form class="inline" method="post" action="/settings/stocks">
+  <form class="inline" method="post" action="{{ u('/settings/stocks') }}">
     <input type="text" name="name" placeholder="名称，如 CNBC" required />
     <input type="text" name="url" placeholder="https://…/rss 或 /rsshub/path" required style="flex:2;min-width:220px;" />
     <select name="region">
@@ -374,11 +374,11 @@
         <div class="meta" style="word-break:break-all;">{{ s.url }}</div>
       </div>
       <div class="actions">
-        <form method="post" action="/settings/stocks/{{ s.id }}/toggle">
+        <form method="post" action="{{ u('/settings/stocks/' ~ s.id ~ '/toggle') }}">
           <input type="hidden" name="enabled" value="{% if s.enabled %}0{% else %}1{% endif %}" />
           <button type="submit" class="{% if s.enabled %}btn-state-off{% else %}btn-state-on{% endif %}">{% if s.enabled %}停用{% else %}启用{% endif %}</button>
         </form>
-        <form method="post" action="/settings/stocks/{{ s.id }}/delete" onsubmit="return confirm('确认删除该股票源？');">
+        <form method="post" action="{{ u('/settings/stocks/' ~ s.id ~ '/delete') }}" onsubmit="return confirm('确认删除该股票源？');">
           <button class="danger" type="submit">删除</button>
         </form>
       </div>
@@ -423,7 +423,7 @@
     {% endif %}
   </p>
   {% endif %}
-  <form method="post" action="/settings/schedule">
+  <form method="post" action="{{ u('/settings/schedule') }}">
     <label class="check" style="display:flex;align-items:center;gap:0.4rem;margin:0.6rem 0;color:var(--muted);">
       <input type="checkbox" name="enable_scheduler" value="1" {% if schedule_cfg.enable_scheduler %}checked{% endif %} />
       启用定时拉取
@@ -480,7 +480,7 @@
     {% if cli_status.ready %}<span class="ok">就绪</span>{% else %}<span class="warn">未就绪</span>{% endif %}
     · {{ cli_status.message }}
   </p>
-  <form method="post" action="/settings/cli">
+  <form method="post" action="{{ u('/settings/cli') }}">
     <label class="check" style="display:flex;align-items:center;gap:0.4rem;margin:0.6rem 0;color:var(--muted);">
       <input type="checkbox" name="enable_feishu_cli" value="1" {% if runtime_cfg.enable_feishu_cli %}checked{% endif %} />
       启用飞书 CLI / Webhook
@@ -504,7 +504,7 @@
 </div>
 <div class="panel">
   <p class="hint">发送测试消息（需已启用并配置 Webhook 或安装 lark-cli）。命令行：<code>bagel cli feishu-send "你好"</code></p>
-  <form class="inline" method="post" action="/settings/cli/feishu-test">
+  <form class="inline" method="post" action="{{ u('/settings/cli/feishu-test') }}">
     <input type="text" name="text" value="贝果 CLI 测试消息" style="flex:2;min-width:220px;" />
     <button type="submit">发送测试</button>
   </form>
@@ -515,19 +515,19 @@
     CLI：<code>bagel cli feishu-digest yesterday</code> · <code>bagel cli feishu-digest week</code>
   </p>
   <div class="actions">
-    <form method="post" action="/settings/cli/feishu-digest">
+    <form method="post" action="{{ u('/settings/cli/feishu-digest') }}">
       <input type="hidden" name="kind" value="yesterday" />
       <button type="submit">推送昨日列表</button>
     </form>
-    <form method="post" action="/settings/cli/feishu-digest">
+    <form method="post" action="{{ u('/settings/cli/feishu-digest') }}">
       <input type="hidden" name="kind" value="week" />
       <button type="submit">推送本周+上周汇总</button>
     </form>
-    <form method="post" action="/settings/cli/feishu-digest">
+    <form method="post" action="{{ u('/settings/cli/feishu-digest') }}">
       <input type="hidden" name="kind" value="week-this" />
       <button type="submit">仅本周汇总</button>
     </form>
-    <form method="post" action="/settings/cli/feishu-digest">
+    <form method="post" action="{{ u('/settings/cli/feishu-digest') }}">
       <input type="hidden" name="kind" value="week-last" />
       <button type="submit">仅上周汇总</button>
     </form>
@@ -544,7 +544,7 @@
     密钥类字段默认掩码；留空或保持掩码则不改动。
   </p>
   {% if config_message %}<p class="msg ok">{{ config_message }}</p>{% endif %}
-  <form method="post" action="/settings/config">
+  <form method="post" action="{{ u('/settings/config') }}">
     {% for group in env_groups %}
     <h2 style="font-size:1rem;margin:1.1rem 0 0.55rem;font-family:var(--font-mono);color:var(--accent-2);">{{ group.group }}</h2>
     {% for f in group.fields %}
@@ -593,7 +593,7 @@
   {% if not is_admin %}
   <p class="msg warn">仅管理员可新增/停用用户。你可修改自己的密码。</p>
   {% endif %}
-  <form class="inline" method="post" action="/settings/users" style="margin-bottom:1rem;">
+  <form class="inline" method="post" action="{{ u('/settings/users') }}" style="margin-bottom:1rem;">
     <input type="text" name="username" placeholder="新用户名" {% if is_admin %}required{% else %}disabled{% endif %} />
     <input type="password" name="password" placeholder="初始密码" {% if is_admin %}required{% else %}disabled{% endif %} />
     <label class="check" style="display:flex;align-items:center;gap:0.35rem;color:var(--muted);font-size:0.85rem;">
@@ -608,12 +608,12 @@
       <div class="meta">{% if u.is_active %}启用{% else %}停用{% endif %} · id {{ u.id }}</div>
     </div>
     <div class="inline">
-      <form method="post" action="/settings/users/{{ u.id }}/password">
+      <form method="post" action="{{ u('/settings/users/' ~ u.id ~ '/password') }}">
         <input type="password" name="password" placeholder="新密码" required />
         <button type="submit">改密</button>
       </form>
       {% if is_admin and u.username != current_username %}
-      <form method="post" action="/settings/users/{{ u.id }}/toggle">
+      <form method="post" action="{{ u('/settings/users/' ~ u.id ~ '/toggle') }}">
         <button type="submit">{% if u.is_active %}停用{% else %}启用{% endif %}</button>
       </form>
       {% endif %}

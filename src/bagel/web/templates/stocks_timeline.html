@@ -4,10 +4,10 @@
 {% include "_stock_disclaimer.html" %}
 <p class="hint">
   近 <strong>{{ days }}</strong> 天股票资讯按发布日聚合；右侧为出现频次较高的标的。
-  <a href="/stocks">← 列表</a> ·
-  <a href="/stocks/timeline?days=7">7 天</a> ·
-  <a href="/stocks/timeline?days=14">14 天</a> ·
-  <a href="/stocks/timeline?days=30">30 天</a>
+  <a href="{{ u('/stocks') }}">← 列表</a> ·
+  <a href="{{ u('/stocks/timeline?days=7') }}">7 天</a> ·
+  <a href="{{ u('/stocks/timeline?days=14') }}">14 天</a> ·
+  <a href="{{ u('/stocks/timeline?days=30') }}">30 天</a>
 </p>
 
 {% if symbols %}
@@ -15,14 +15,14 @@
   <h2 style="font-size:1rem;margin:0 0 0.75rem;font-family:var(--font-mono);">热门标的</h2>
   <div class="symbol-cloud">
     {% for s in symbols %}
-    <a class="badge ticker" href="/stocks/symbol/{{ s.symbol }}">{{ s.symbol }} · {{ s.count }}</a>
+    <a class="badge ticker" href="{{ u('/stocks/symbol/' ~ s.symbol) }}">{{ s.symbol }} · {{ s.count }}</a>
     {% endfor %}
   </div>
 </div>
 {% endif %}
 
 {% if not timeline %}
-<p class="empty">近 {{ days }} 天暂无股票资讯。请先 <a href="/collect">采集股票</a>。</p>
+<p class="empty">近 {{ days }} 天暂无股票资讯。请先 <a href="{{ u('/collect') }}">采集股票</a>。</p>
 {% else %}
   {% for day in timeline %}
   <section class="panel timeline-day">
@@ -48,7 +48,7 @@
           {% if vm.category %}<span class="badge cat">{{ vm.category }}</span>{% endif %}
           {% if vm.sentiment %}<span class="badge sentiment {{ vm.sentiment }}">{{ vm.sentiment }}</span>{% endif %}
           {% for t in vm.tickers[:4] %}
-          <a class="badge ticker" href="/stocks/symbol/{{ t.symbol }}">{{ t.symbol }}</a>
+          <a class="badge ticker" href="{{ u('/stocks/symbol/' ~ t.symbol) }}">{{ t.symbol }}</a>
           {% endfor %}
           <span class="time">{{ vm.time_label }}</span>
         </div>

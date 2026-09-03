@@ -189,7 +189,7 @@
   }
 
   async function poll(id) {
-    const resp = await fetch('/api/tasks/' + id);
+    const resp = await fetch(bagelUrl('/api/tasks/' + id));
     if (resp.status === 404) {
       meta.innerHTML = '<span class="warn">任务不存在或已过期，请重新抓取</span>';
       showTips('服务重启后内存任务会丢失；请再点「开始抓取」。', true);
@@ -213,7 +213,7 @@
     meta.textContent = '任务启动中…';
     bar.style.width = '0%';
     const body = new FormData(form);
-    const resp = await fetch('/api/media/crawl', { method: 'POST', body });
+    const resp = await fetch(bagelUrl('/api/media/crawl'), { method: 'POST', body });
     const state = await resp.json();
     if (!resp.ok) {
       meta.textContent = state.detail || '启动失败';

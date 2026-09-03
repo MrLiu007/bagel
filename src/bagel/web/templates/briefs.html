@@ -36,18 +36,45 @@
     overflow: auto; padding: 0.75rem; border: 1px solid var(--line); border-radius: var(--radius);
     background: var(--code-bg); font-size: 0.82rem; font-family: var(--font-mono); color: var(--fg);
   }
-  article.brief-body table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin: 0.75rem 0; }
+  article.brief-body .mermaid {
+    margin: 0.85rem 0; padding: 0.75rem; border-radius: 10px;
+    background: var(--brief-inset); text-align: center; overflow-x: auto;
+  }
+  article.brief-body { overflow: hidden; }
+  article.brief-body .table-scroll {
+    width: 100%; max-width: 100%; overflow-x: auto; margin: 0.75rem 0;
+    border: 1px solid var(--line); border-radius: var(--radius);
+  }
+  article.brief-body table {
+    width: 100%; table-layout: fixed; border-collapse: collapse;
+    font-size: 0.85rem; margin: 0;
+  }
   article.brief-body th, article.brief-body td {
     border: 1px solid var(--line); padding: 0.4rem 0.5rem; text-align: left; vertical-align: top;
-    color: var(--summary);
+    color: var(--summary); overflow-wrap: anywhere; word-break: break-word;
   }
   article.brief-body th { background: var(--brief-inset); color: var(--fg); }
+  article.brief-body table th:nth-child(1),
+  article.brief-body table td:nth-child(1) { width: 2.2rem; }
+  article.brief-body table th:nth-child(2),
+  article.brief-body table td:nth-child(2) { width: 5.2rem; }
+  article.brief-body table th:nth-child(5),
+  article.brief-body table td:nth-child(5) { width: 7rem; }
+  article.brief-body table td:nth-child(5) a {
+    display: inline-block; max-width: 100%;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
   .share-guide {
     border: 1px solid var(--line); border-radius: var(--radius); padding: 0.85rem 1rem;
     margin: 0 0 1rem; background: var(--soft-bg); color: var(--muted); font-size: 0.88rem; line-height: 1.55;
   }
   .share-guide strong { color: var(--accent-2); }
 </style>
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+  const dark = document.documentElement.getAttribute("data-theme") !== "light";
+  mermaid.initialize({ startOnLoad: true, theme: dark ? "dark" : "default", securityLevel: "loose" });
+</script>
 {% endblock %}
 {% block content %}
 <h1>汇总</h1>
@@ -64,11 +91,11 @@
   四类总结均为<strong>投屏讲解终稿</strong>（新闻 / 项目 / 论文 / 自媒体结构不同）。
   {% endif %}
   支持<strong>月总结</strong>与<strong>周总结</strong>；按<strong>原文发布时间</strong>纳入。
-  可导出 Markdown。当前为<strong>{{ cadence_label }}</strong>。
+  支持导出 Markdown / <strong>HTML 投屏稿</strong>；可打开<strong>投屏视图</strong>全屏讲解。当前为<strong>{{ cadence_label }}</strong>。
 </p>
 
 <div class="toolbar">
-  <form method="get" action="{{ list_url }}" style="display:flex;gap:0.5rem;align-items:center;">
+  <form method="get" action="{{ u(list_url) }}" style="display:flex;gap:0.5rem;align-items:center;">
     <input type="hidden" name="period" value="{{ period }}" />
     <label for="month" style="color:var(--muted);font-size:0.85rem;">{% if period == 'week' %}周次{% else %}月份{% endif %}</label>
     <select id="month" name="month" onchange="this.form.submit()">
@@ -81,13 +108,17 @@
       {% endif %}
     </select>
   </form>
-  <form method="post" action="/briefs/generate">
+  <form method="post" action="{{ u('/briefs/generate') }}">
     <input type="hidden" name="kind" value="{{ kind }}" />
     <input type="hidden" name="year_month" value="{{ current_month }}" />
     <input type="hidden" name="period" value="{{ period }}" />
     <button type="submit">生成 / 刷新{{ scope_label }}</button>
   </form>
-  <a class="btn primary" href="{{ export_url }}">导出 Markdown</a>
+  {% if brief %}
+  <a class="btn primary" href="{{ u(present_url) }}" target="_blank" rel="noopener">投屏视图</a>
+  <a class="btn" href="{{ u(export_html_url) }}">导出 HTML</a>
+  {% endif %}
+  <a class="btn" href="{{ u(export_url) }}">导出 Markdown</a>
 </div>
 
 <div class="panel" style="margin-bottom:1rem;">
@@ -95,7 +126,7 @@
   <p class="hint" style="margin:0 0 0.55rem;">
     可选：填写后将优先用于本次生成（条目排序与开篇聚焦），并写入生成记录。留空则使用系统默认提示词。
   </p>
-  <form method="post" action="/briefs/generate">
+  <form method="post" action="{{ u('/briefs/generate') }}">
     <input type="hidden" name="kind" value="{{ kind }}" />
     <input type="hidden" name="year_month" value="{{ current_month }}" />
     <input type="hidden" name="period" value="{{ period }}" />
@@ -119,6 +150,10 @@
     <pre style="white-space:pre-wrap;font-size:0.82rem;margin:0.65rem 0 0;color:var(--summary);">{{ prompt_used }}</pre>
   </details>
   {% endif %}
+  <p class="toolbar" style="margin:0 0 0.75rem;">
+    <a class="btn primary" href="{{ u(present_url) }}" target="_blank" rel="noopener">投屏视图</a>
+    <a class="btn" href="{{ export_html_url }}">导出 HTML</a>
+  </p>
   <article class="brief-body">{{ article_html | safe }}</article>
 {% else %}
   <p class="empty">

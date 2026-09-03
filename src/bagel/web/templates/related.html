@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <p class="hint" style="margin-bottom:0.75rem;">
-  <a href="{{ back_url }}">← 返回列表</a>
+  <a href="{{ u(back_url) }}">← 返回列表</a>
 </p>
 <h1>关联分析</h1>
 <p class="hint">按<strong>摘要核心关键词</strong>相近聚合（并保留同一作者的其他作品）。不以粗标签或空标题硬凑关联。</p>
@@ -45,7 +45,7 @@
     {% if hit.item.summary %}<p class="summary">{{ hit.item.summary }}</p>{% endif %}
     <div class="actions">
       <a class="btn" href="{{ hit.item.url }}" target="_blank" rel="noopener">打开原文</a>
-      <a class="btn" href="/items/{{ hit.item.id }}/related">关联</a>
+      <a class="btn" href="{{ u('/items/' ~ hit.item.id ~ '/related') }}">关联</a>
     </div>
   </article>
   {% endfor %}

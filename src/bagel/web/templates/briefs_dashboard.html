@@ -109,8 +109,8 @@
 {% include "briefs_tabs.html" %}
 
 <div class="space-subtabs">
-  <a href="/briefs/space?view=board{% if search_q %}&q={{ search_q|urlencode }}{% endif %}" class="{% if space_view != 'graph' %}on{% endif %}">看板</a>
-  <a href="/briefs/space?view=graph{% if search_q %}&q={{ search_q|urlencode }}{% endif %}" class="{% if space_view == 'graph' %}on{% endif %}">图谱</a>
+  <a href="{{ u('/briefs/space?view=board' ~ (search_q and ('&q=' ~ (search_q|urlencode)) or '')) }}" class="{% if space_view != 'graph' %}on{% endif %}">看板</a>
+  <a href="{{ u('/briefs/space?view=graph' ~ (search_q and ('&q=' ~ (search_q|urlencode)) or '')) }}" class="{% if space_view == 'graph' %}on{% endif %}">图谱</a>
 </div>
 
 {% if space_view != 'graph' %}
@@ -119,7 +119,7 @@
 </p>
 {% if search_note %}<p class="meta ok">{{ search_note }}</p>{% endif %}
 
-<form class="inline panel" method="get" action="/briefs/space" style="margin-bottom:1rem;">
+<form class="inline panel" method="get" action="{{ u('/briefs/space') }}" style="margin-bottom:1rem;">
   <input type="hidden" name="view" value="board" />
   <input type="text" name="q" value="{{ search_q }}" placeholder="试搜：LLM、Agent、开放课…" style="flex:1;min-width:200px;" />
   <button type="submit">搜索并记录</button>
@@ -402,10 +402,15 @@
     });
   }
 
+  function appHref(url) {
+    if (!url) return url;
+    return url.charAt(0) === '/' ? bagelUrl(url) : url;
+  }
+
   function openCard(nodeKey, pushHistory) {
     currentKey = nodeKey;
     if (pushHistory) cardHistory.push(nodeKey);
-    fetch('/api/gbrain/card?key=' + encodeURIComponent(nodeKey))
+    fetch(bagelUrl('/api/gbrain/card?key=' + encodeURIComponent(nodeKey)))
       .then(function (r) { return r.json(); })
       .then(function (card) {
         if (card.detail) return;
@@ -413,7 +418,7 @@
         focusKeys = {};
         (card.focus_keys || [card.key]).forEach(function (k) { focusKeys[k] = true; });
         applyVisibility();
-        fetch('/api/gbrain/learn', {
+        fetch(bagelUrl('/api/gbrain/learn'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ key: card.key, action: 'focus' })
@@ -434,7 +439,7 @@
         '<div class="rel-top"><i></i><span class="rel-title">' + esc(it.name || it.title || it.key) + '</span>' +
         (badge ? '<em>' + esc(badge) + '</em>' : '') + '</div>' +
         (sum ? '<div class="rel-sum">' + esc(sum) + '</div>' : '') +
-        (url ? '<a class="rel-url" href="' + esc(url) + '" target="_blank" rel="noopener" data-ext="1">打开原文 ↗</a>' : '') +
+        (url ? '<a class="rel-url" href="' + esc(appHref(url)) + '" target="_blank" rel="noopener" data-ext="1">打开原文 ↗</a>' : '') +
         '</div>';
     }).join('');
     el.querySelectorAll('.rel').forEach(function (row) {
@@ -481,7 +486,7 @@
       card.builds_on);
     renderRelSection('gbrain-card-unlocks', 'UNLOCKS / NEXT ' + ((card.unlocks || []).length), card.unlocks);
     var url = document.getElementById('gbrain-card-url');
-    if (card.url) { url.href = card.url; url.hidden = false; url.textContent = '打开原文 ↗'; }
+    if (card.url) { url.href = appHref(card.url); url.hidden = false; url.textContent = '打开原文 ↗'; }
     else { url.hidden = true; }
   }
 
@@ -498,7 +503,7 @@
   });
   document.getElementById('gbrain-card-review').addEventListener('click', function () {
     if (!currentKey) return;
-    fetch('/api/gbrain/learn', {
+    fetch(bagelUrl('/api/gbrain/learn'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key: currentKey, action: 'review' })
@@ -506,7 +511,7 @@
   });
 
   function loadReview() {
-    fetch('/api/gbrain/review')
+    fetch(bagelUrl('/api/gbrain/review'))
       .then(function (r) { return r.json(); })
       .then(function (rev) {
         document.getElementById('gbrain-review-meta').textContent =
@@ -520,7 +525,7 @@
         ul.innerHTML = sugg.map(function (s) {
           return '<li><button type="button" data-key="' + s.key + '">' + esc(s.title) +
             '</button>' +
-            (s.url ? ' <a class="ext" href="' + esc(s.url) + '" target="_blank" rel="noopener">原文</a>' : '') +
+            (s.url ? ' <a class="ext" href="' + esc(appHref(s.url)) + '" target="_blank" rel="noopener">原文</a>' : '') +
             ' <span class="mono">views ' + s.views + '</span>' +
             '<div class="why">' + esc(s.why || '') + '</div></li>';
         }).join('');

@@ -22,6 +22,7 @@ from starlette.requests import Request
 from bagel import __version__
 from bagel.settings import get_settings
 from bagel.web.auth_gate import AuthGateMiddleware
+from bagel.web.proxy_prefix import ForwardedPrefixMiddleware, PrefixLocationMiddleware
 from bagel.web.deps import NotAuthenticated
 from bagel.web.nav import NAV_ITEMS
 from bagel.web.routes.auth import router as auth_router
@@ -140,7 +141,8 @@ def create_app() -> FastAPI:
             },
         )
 
-    # Middleware order: last added runs first. Session must wrap auth gate.
+    # Middleware order: last added runs first (outermost).
+    # ForwardedPrefix must run first on request; PrefixLocation must wrap AuthGate responses.
     application.add_middleware(AuthGateMiddleware)
     application.add_middleware(
         SessionMiddleware,
@@ -149,6 +151,8 @@ def create_app() -> FastAPI:
         max_age=60 * 60 * 24 * 14,
         same_site="lax",
     )
+    application.add_middleware(PrefixLocationMiddleware)
+    application.add_middleware(ForwardedPrefixMiddleware)
 
     return application
 

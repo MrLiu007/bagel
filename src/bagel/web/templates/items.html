@@ -10,7 +10,7 @@
 {% if page_actions %}
 <div class="actions" style="margin-bottom:1rem;">
   {% for a in page_actions %}
-  <a class="btn{% if a.primary %} primary{% endif %}" href="{{ a.href }}">{{ a.label }}</a>
+  <a class="btn{% if a.primary %} primary{% endif %}" href="{{ u(a.href) }}">{{ a.label }}</a>
   {% endfor %}
 </div>
 {% endif %}
