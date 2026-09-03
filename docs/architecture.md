@@ -21,7 +21,7 @@ Postgres  (RSS infra)    (feed adapter)
 - Interest filters are **per channel**: INCLUDE on each data-source settings tab; EXCLUDE on **系统排除词** with multi-select scopes ([filter-tags.md](./filter-tags.md)).
 - Media/wechat keep env crawl keywords; EXCLUDE can still apply after ingest when scoped.
 - In-process APScheduler for scheduled jobs (idempotent; prefer single worker).
-- Optional Markdown **wiki** under `WIKI_DIR` holds compiled readable pages; `wiki_page` / `wiki_edge` hold transactional indexes. Domain taxonomy seed lives in-package (structure inspired by os-taxonomy; not Marble curriculum data). See [wiki-taxonomy-gbrain.md](./wiki-taxonomy-gbrain.md).
+- Optional Markdown **wiki** under `WIKI_DIR` holds compiled readable pages; `wiki_page` / `wiki_edge` hold transactional indexes. Domain taxonomy seed lives in-package (structure inspired by os-taxonomy; not Marble curriculum data). Personal space GBrain is a resource-first 3D cone (`/briefs/space?view=graph`); UX notes in [wiki-taxonomy-gbrain.md](./wiki-taxonomy-gbrain.md) and [briefs-dashboard.md](./briefs-dashboard.md).
 
 ## Package layout
 

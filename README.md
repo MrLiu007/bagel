@@ -3,51 +3,48 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Python](https://img.shields.io/badge/Python-%3E%3D3.14-blue.svg)](https://www.python.org/)
 [![uv](https://img.shields.io/badge/packaging-uv-de5fe9.svg)](https://github.com/astral-sh/uv)
+[![FastAPI](https://img.shields.io/badge/Web-FastAPI-009688.svg)](https://fastapi.tiangolo.com/)
 
-> **Bagel（贝果）**：一个人也能跑起来的 AI 情报中枢 —— 采集 · 审阅 · 汇总 · 飞书触达。
+> **Self-hosted AI intel hub** — collect news · GitHub · papers · models · media into one DB, review in a Web UI, digest to Feishu. SQLite by default. MIT.
+>
+> **Bagel（贝果）**：一个人也能跑起来的 AI 情报中枢 —— 采集 · 审阅 · 汇总 · 飞书触达 · 3D 知识图谱。
 
 一个 Python 工程 · 一份 `.env` · 可选 Compose · 一个 Web 入口。  
 用户只访问 **http://localhost:8000**，无需理解 FreshRSS / RSSHub / PostgreSQL。
 
-**开源协议： [MIT](./LICENSE)** —— 宽松、易二次分发与商用改造，适合作为 GitHub 开源主协议。
+---
+
+## 为什么是 Bagel
+
+情报散落在 RSS、GitHub、arXiv、Hugging Face、自媒体和微信里；人工刷流既慢又漏。  
+Bagel 把多源采集归一成同一套 `IntelItem`，用 Web 审阅 + 周月汇总 + 飞书推送闭环；可选编译 Wiki，在个人空间用 **GBrain** 一张 3D 图把「资源 ↔ 主题」串起来。
+
+| 你要的 | Bagel 怎么做 |
+|--------|----------------|
+| 本地可控 | 默认 SQLite；数据在你机器上 |
+| 少组件 | 单进程 FastAPI；FreshRSS/RSSHub 仅作隐藏基建 |
+| 国内可用 | 海外源失败不阻断国内采集；代理可选 |
+| 触达现场 | 飞书指令查询 + 定时摘要推送 |
+| 看得懂关联 | Taxonomy + Wiki + 资源优先的 3D 图谱 |
+
+**不是什么：** 不是托管 SaaS、不是荐股产品、不是向量库/RAG 全家桶（Wiki MD 可给 Obsidian/RAG，**不能替代**事务库）。
 
 ---
 
-## 截图
+## 你得到什么
 
-| 登录 | 新闻 | GitHub |
-|:---:|:---:|:---:|
-| ![登录](./static/0.登录.png) | ![新闻](./static/1.new.png) | ![GitHub](./static/2.github项目.png) |
+- **多渠道采集** — 新闻 / GitHub / 论文 / 教育 / 模型 / 股票 / 自媒体 / 微信，统一入库与去重  
+- **Web 审阅台** — 列表、收藏、兴趣标签、关联侧栏；明暗主题  
+- **周月汇总** — 可自定义提示词；可选 LLM 润色  
+- **飞书双场景** — 自然语言查库 + 定时推送  
+- **个人空间** — 看板统计 + 全幅 **GBrain**（倒锥 3D、SUBJECTS 八频道、摘要+原文知识卡）  
+- **Wiki 编译** — Markdown 正文 + DB 索引；taxonomy 结构可扩展  
 
-| 论文 | 股票 | 自媒体 |
-|:---:|:---:|:---:|
-| ![论文](./static/3.art.png) | ![股票](./static/4.股票.png) | ![自媒体](./static/5.自媒体.png) |
-
-| 微信 | 汇总 | 收藏 |
-|:---:|:---:|:---:|
-| ![微信](./static/6.微信.png) | ![汇总](./static/7.汇总.png) | ![收藏](./static/8.收藏.png) |
-
-| 采集 | 新闻数据源（含兴趣标签） | 论文源 |
-|:---:|:---:|:---:|
-| ![采集](./static/9.手动采集.png) | ![新闻数据源](./static/11.系统设置-新闻源.png) | ![论文源](./static/12.系统设置-论文源.png) |
-
-| 定时任务 | 股票源 | CLI / 飞书 |
-|:---:|:---:|:---:|
-| ![定时任务](./static/13.系统设置-定时任务.png) | ![股票源](./static/14.系统设置-股票源.png) | ![CLI](./static/15.系统设置-CLI.png) |
-
-| 配置 | 用户管理 | 系统状态 |
-|:---:|:---:|:---:|
-| ![配置](./static/16.系统设置-配置.png) | ![用户](./static/17.系统设置-用户管理.png) | ![系统状态](./static/18.系统设置-系统状态.png) |
-
-| 关联依赖 |
-|:---:|
-| ![关联](./static/19.新闻&论文&项目&自媒体等关联依赖信息.png) |
-
-更多原图见仓库 [`static/`](./static/) 目录。
+完整能力表见 **[docs/capabilities.md](./docs/capabilities.md)**。
 
 ---
 
-## 最快上手
+## 最快上手（约 1 分钟）
 
 ```bash
 git clone https://github.com/MrLiu007/bagel.git
@@ -58,162 +55,51 @@ uv run bagel doctor
 uv run bagel dev --host 127.0.0.1 --port 8000 --reload
 ```
 
-默认使用 **SQLite**（`data/bagel.db`），无需 Docker / Postgres。
-
-### MediaCrawler（自媒体）与仓库体积
-
-- **源码不进 git**（`third_party/MediaCrawler/` 已 ignore），仓库保持精简。
-- **默认启动时**：若开启自媒体且本地还没有 MediaCrawler，会自动 `git clone` 到本机（仅首次/缺失时）。
-- **GitHub 在海外**：clone 可能需 **VPN / 代理**，或 `.env` 设置 `MEDIA_CRAWLER_GIT_URL` 镜像。失败不阻断主站。
-- **`--reload` 热重载**：已排除 `third_party/MediaCrawler` 与 `data/`；入口 shim 仅在内容变化时写入，避免控制台无限 Reloading。
-- 若你曾 `git add .` 导致提交报 submodule 错，按文档修复索引即可。
-
-详见 **[docs/git-and-mediacrawler.md](./docs/git-and-mediacrawler.md)**。
-
-手动安装（可选）：
-
-```bash
-uv run bagel setup-media
-```
-
-### 启动命令命名
+打开 **http://127.0.0.1:8000**。默认 **SQLite**（`data/bagel.db`），无需 Docker。
 
 | 命令 | 作用 |
 |------|------|
-| `bagel` | 主 CLI 入口（包名 / 控制台脚本同名） |
-| `bagel version` | 打印版本 |
 | `bagel doctor` | 环境与依赖健康检查 |
-| `bagel dev` | **开发启动** Web（默认 reload；可自动拉取 MediaCrawler） |
-| `bagel setup-media` | 手动克隆 MediaCrawler 到 `third_party/`（gitignore） |
-| `bagel cli …` | 外部工具（飞书 send / digest / ask） |
+| `bagel dev` | 开发启动 Web（可自动拉取 MediaCrawler） |
+| `bagel setup-media` | 手动克隆自媒体依赖到 `third_party/`（gitignore） |
+| `bagel cli …` | 飞书 send / digest / ask |
 
-生产或无 reload：
+生产或无 reload：`uv run bagel dev --host 0.0.0.0 --port 8000 --no-reload`
 
-```bash
-uv run bagel dev --host 0.0.0.0 --port 8000 --no-reload
-# 或等价：
-uv run uvicorn bagel.main:app --host 0.0.0.0 --port 8000
-```
-
-可选：
-
-- `STORAGE_BACKEND=postgres` + `DATABASE_URL=postgresql+psycopg://...`
-- `WIKI_ENABLED=true` → 额外导出 Markdown 到 `data/wiki/`（给 Obsidian / RAG，**不能替代数据库**）
+**自媒体 / MediaCrawler：** 源码不进 git；首次需要时自动 clone（海外网络可能需代理或镜像 URL）。详见 [docs/git-and-mediacrawler.md](./docs/git-and-mediacrawler.md)。
 
 ---
 
-## 能力全景（归档）
+## 截图
 
-本表整理当前仓库已落地能力，便于开源读者与二次开发者快速摸底。
+| 登录 | 新闻 | GitHub |
+|:---:|:---:|:---:|
+| ![登录](./static/0.登录.png) | ![新闻](./static/1.new.png) | ![GitHub](./static/2.github项目.png) |
 
-### 采集与入库
+| 论文 | 汇总 | 关联 |
+|:---:|:---:|:---:|
+| ![论文](./static/3.art.png) | ![汇总](./static/7.汇总.png) | ![关联](./static/19.新闻&论文&项目&自媒体等关联依赖信息.png) |
 
-| 能力 | 说明 |
-|------|------|
-| RSS / RSSHub 新闻 | 国内优先；海外源可在代理下采集，失败不阻断国内 |
-| GitHub 项目 / Release | Token 可选；网络降级友好 |
-| 论文源 | arXiv 等可配置源 |
-| 教育源 | MIT / 斯坦福 / 清北等开放课 RSS（可配置） |
-| 模型源 | Hugging Face Hub / ModelScope 魔搭 |
-| 股票资讯 | 独立源管理 + enrichment / 时间线 / 行研草稿（非荐股） |
-| 自媒体 | 对接 MediaCrawler（**本机克隆**，不进仓库；`bagel setup-media`） |
-| 微信 | Gewe 回调入库，关键词过滤 |
-| Reddit RSS | 预置源 + 浏览器态请求头 |
-| 去重 / 归一 | 统一 `IntelItem`；原始证据不被 LLM 覆盖 |
-| 回溯窗口 | `COLLECT_LOOKBACK_DAYS` 控制新鲜度 |
-
-### 审阅与产品页
-
-| 路径 | 能力 |
-|------|------|
-| `/news` `/github` `/papers` `/models` `/stocks` `/media` `/wechat` | 列表、分类、收藏、关联条目 |
-| `/briefs/*` | 周 / 月总结、**个人空间**（搜索统计 + ECharts GBrain）、教育总结、自定义提示词 |
-| `/favorites` | 收藏夹 |
-| `/collect` | 采集（手动 / 定时）+ 任务详情 |
-| `/stocks/timeline` · 个股页 | 行情可视化（Yahoo OHLC，可关） |
-| 明暗主题 | 本地持久化主题切换 |
-
-### 系统设置
-
-| 页签 | 能力 |
-|------|------|
-| 新闻数据源 | RSS 源 CRUD、启停；**兴趣标签 INCLUDE**（本类目） |
-| GitHub | Search Query 启停；兴趣标签 INCLUDE |
-| 论文 / 教育 / 模型 / 股票源 | CRUD、启停；各页兴趣标签 INCLUDE |
-| 系统排除词 | EXCLUDE：多选类目（含自媒体/微信）、添加/删除/启停 |
-| 定时任务 | 间隔 30～720 分钟 + 抖动；采集任务 + **关键词自增长**（每日 03:15） |
-| CLI · 飞书 | Webhook / lark-cli；昨日列表 / 周汇总推送；定时后异步推送 |
-| 配置 | 可视化编辑 `.env`（路径对外相对化，不泄露本机绝对路径） |
-| 用户管理 | 多用户登录、管理员、改密 |
-| 系统状态 | DB / RSSHub / GitHub / LLM / 网络健康检查 |
-
-兴趣过滤按资源类型分散：各数据源页配置 INCLUDE；**系统排除词**统一管理 EXCLUDE（可多选类目）。详见 [docs/filter-tags.md](./docs/filter-tags.md)。
-
-### 飞书双场景
-
-| 场景 | 行为 |
-|------|------|
-| **指令查询** | 飞书发「把 8/20–8/21 体操新闻发我」→ 查库 → 空则补采最新 → 回复；事件入口 `POST /api/feishu/events`，调试 `POST /api/feishu/command` |
-| **定时推送** | 定时采集入库后异步推摘要（设置里勾选「定时采集完成后异步推送飞书」） |
-
-CLI：
-
-```bash
-uv run bagel cli feishu-send "你好"
-uv run bagel cli feishu-digest yesterday
-uv run bagel cli feishu-ask "把8月20号到8月21号的体操方向新闻发我" --push
-```
-
-### 工程与运维
-
-| 项 | 说明 |
-|----|------|
-| CLI | `bagel doctor` / `bagel dev` / `bagel cli …` |
-| 存储 | SQLite 默认；Postgres 可选；Wiki Markdown 导出可选 |
-| 调度 | 进程内 APScheduler（建议单 worker） |
-| 鉴权 | Session；可 `AUTH_REQUIRED=false` 本地调试 |
-| 测试 | `uv run pytest` |
-| 代理 | `NETWORK_MODE=AUTO` + `HTTPS_PROXY=…` |
+更多界面（股票 / 自媒体 / 微信 / 设置 / 采集等）见仓库 [`static/`](./static/) 目录。
 
 ---
 
-## 功能入口速查
-
-| 路径 | 说明 |
-|------|------|
-| `/` | 首页 |
-| `/news` | 新闻 |
-| `/github` | GitHub 项目 |
-| `/papers` | 论文 |
-| `/education` | 教育（高校开放课等） |
-| `/models` | 模型（HF / ModelScope，可按社区筛选） |
-| `/stocks` | 股票资讯 |
-| `/media` | 自媒体 |
-| `/wechat` | 微信 |
-| `/briefs/news` 等 | 汇总（周/月总结 + 自定义提示词） |
-| `/briefs/space` | 个人空间：搜索统计、ECharts GBrain（`/briefs/dashboard` 已重定向） |
-| `/favorites` | 收藏 |
-| `/collect` | 采集（手动 / 定时） |
-| `/settings` | 系统设置（默认打开新闻数据源） |
-| `/health` | 存活探针 |
-| `/api/feishu/events` | 飞书事件（公网回调） |
-| `/api/feishu/command` | 飞书指令调试 API |
-
----
-
-## 文档索引
+## 文档
 
 | 文档 | 内容 |
 |------|------|
+| [docs/capabilities.md](./docs/capabilities.md) | **能力全景归档**、入口速查、验收清单 |
+| [docs/github-presence.md](./docs/github-presence.md) | **GitHub About / Topics** 推荐文案 |
 | [AGENTS.md](./AGENTS.md) | 开发约束 |
 | [docs/architecture.md](./docs/architecture.md) | 架构原则与包结构 |
+| [docs/wiki-taxonomy-gbrain.md](./docs/wiki-taxonomy-gbrain.md) | Wiki · Taxonomy · GBrain（含图谱 UX） |
+| [docs/briefs-dashboard.md](./docs/briefs-dashboard.md) | 个人空间、关联侧栏、学习 API |
 | [docs/storage.md](./docs/storage.md) | SQLite / Postgres / Wiki |
 | [docs/data-model.md](./docs/data-model.md) | 数据模型 |
 | [docs/network.md](./docs/network.md) | 网络与代理 |
+| [docs/filter-tags.md](./docs/filter-tags.md) | 兴趣标签与排除词 |
 | [docs/default-news-sources.md](./docs/default-news-sources.md) | 默认新闻源 |
-| [docs/filter-tags.md](./docs/filter-tags.md) | 兴趣标签、排除词与各类型边界 |
-| [docs/briefs-dashboard.md](./docs/briefs-dashboard.md) | 个人空间、WikiItem/GBrain、关联侧栏、教育总结、关键词自增长 |
-| [docs/git-and-mediacrawler.md](./docs/git-and-mediacrawler.md) | MediaCrawler 克隆与 git 注意点 |
+| [docs/git-and-mediacrawler.md](./docs/git-and-mediacrawler.md) | MediaCrawler 与 git |
 | [docs/user-config-media-wechat.md](./docs/user-config-media-wechat.md) | 自媒体 + 微信 |
 
 ---
@@ -226,139 +112,44 @@ HTTPS_PROXY=http://127.0.0.1:7890
 HTTP_PROXY=http://127.0.0.1:7890
 ```
 
-海外源 / GitHub 不可达时：国内新闻继续；`bagel doctor` 与设置页显示降级告警。
+海外源 / GitHub 不可达时：国内新闻继续；`bagel doctor` 与设置页显示降级告警。详见 [docs/network.md](./docs/network.md)。
 
 ---
 
-## Docker Compose 部署
+## Docker Compose（可选）
 
-推荐用 Compose 一次性拉起 **Bagel + Postgres + RSSHub + FreshRSS**（后两者为隐藏基础设施，默认不对公网暴露）。
-
-### 前置
-
-- 已安装 [Docker Desktop](https://www.docker.com/products/docker-desktop/)（或 Docker Engine + Compose v2）
-- 仓库根目录有 `.env`（可从示例复制）
+适合一次拉起 **Bagel + Postgres + RSSHub + FreshRSS**（后两者默认不对公网暴露）。
 
 ```bash
-cp .env.example .env
-# 至少修改 SESSION_SECRET；海外/GitHub/X 建议配置 HTTP(S)_PROXY
-```
-
-### 启动
-
-```bash
+cp .env.example .env   # 至少改 SESSION_SECRET
 docker compose up -d --build
 ```
 
-浏览器打开 **http://localhost:8000**（端口可用 `.env` 的 `APP_PORT` 覆盖）。
+浏览器打开 **http://localhost:8000**（端口可用 `APP_PORT` 覆盖）。
 
-默认账号：`liuzemin` / `123456`（可在系统设置中修改）。
+本地开发仍推荐 `uv run bagel dev` + SQLite。Compose 变量、代理、排障见下方要点：
 
-### Compose 会覆盖的环境变量
-
-| 变量 | Compose 值 | 说明 |
-|------|------------|------|
-| `STORAGE_BACKEND` | `postgres` | 事务库 |
-| `DATABASE_URL` | `postgresql+psycopg://bagel:bagel@postgres:5432/bagel` | 容器内网地址 |
-| `RSSHUB_BASE_URL` | `http://rsshub:1200` | X / 微博等 RSSHub 路由 |
-| `FRESHRSS_BASE_URL` | `http://freshrss` | 可选 RSS 基建 |
-| `NO_PROXY` | 含 `postgres,rsshub,freshrss` | 避免代理环回 |
-
-宿主机代理给容器用（可选，写在 `compose.yml` 的 `app.environment` 或 `.env`）：
-
-```env
-HTTP_PROXY=http://host.docker.internal:7890
-HTTPS_PROXY=http://host.docker.internal:7890
-```
-
-### 常用命令
-
-```bash
-docker compose ps
-docker compose logs -f app
-curl http://127.0.0.1:8000/health
-docker compose down          # 停服务（保留数据卷）
-docker compose down -v       # 停服务并删除 Postgres / FreshRSS 卷
-```
-
-调试 FreshRSS UI：
-
-```bash
-docker compose --profile debug up -d
-# http://localhost:8080
-```
-
-### 说明
-
-- **本地开发**仍推荐 `uv run bagel dev` + 默认 SQLite，无需 Docker。
-- 镜像入口为 `docker-entrypoint.sh`：Postgres 跑 `alembic upgrade head`；SQLite 跳过 Alembic（由启动时 `init_db` 建表）。
-- MediaCrawler **不进镜像**；自媒体采集请在宿主机执行 `bagel setup-media`，或挂载本机 `third_party/MediaCrawler`。
-- 海外新闻 / X RSS 拉取失败会**跳过该源**，国内源继续；任务记为部分成功。
-- 若 `docker compose up` 拉取 `postgres` / `rsshub` / `freshrss` 镜像超时，请配置 Docker Hub 镜像或代理后再试（应用镜像 `bagel-app` 可单独 `docker compose build app`）。
+- Compose 覆盖 `STORAGE_BACKEND=postgres` 与容器内 `DATABASE_URL` / RSSHub / FreshRSS  
+- 镜像入口对 Postgres 跑 `alembic upgrade head`；SQLite 由 `init_db` 建表  
+- MediaCrawler **不进镜像**；自媒体请在宿主机 `bagel setup-media` 或挂载本机目录  
+- 拉取基础镜像超时：配置 Docker Hub 镜像或代理后再试  
 
 ---
 
-## 开源说明
+## 开源与致谢
 
-- **协议**：MIT（见 [LICENSE](./LICENSE)）
-- **品牌**：英文名 **Bagel**，中文名 **贝果**；Python 包 / CLI / 默认库文件均为 `bagel`
-- **第三方**：见下方「依赖与致谢」；外部工具源码不随本仓库再许可
-- **免责**：股票相关能力仅供信息整理，**不构成投资建议**
+- **协议**：[MIT](./LICENSE) — 宽松、易二次分发与商用改造  
+- **品牌**：英文 **Bagel**，中文 **贝果**；包名 / CLI / 默认库文件均为 `bagel`  
+- **免责**：股票相关能力仅供信息整理，**不构成投资建议**  
+- 从旧版升级：默认库由 `data/intel.db` 改为 `data/bagel.db`（可改名或在 `.env` 继续指向旧路径）
 
-欢迎 Issue / PR。GitHub 仓库名建议使用 `bagel`。若本地目录仍叫 `ai-intel-center`，关闭占用后可自行改名为 `bagel`（包名与 CLI 已是 `bagel`，不影响运行）。
+站在开源肩膀上（许可证归原作者；**不 fork** FreshRSS / RSSHub）：
 
-若从旧版升级：默认库文件由 `data/intel.db` 改为 `data/bagel.db`；可将旧库改名或在 `.env` 里继续指向原路径。
-
----
-
-## 依赖与致谢
-
-Bagel（贝果）站在开源社区肩膀上。下列为运行时/集成依赖与引用的第三方项目；**许可证与版权归原作者所有**，请在二次分发时一并遵守。
-
-### Python 运行时（`pyproject.toml` / `uv.lock`）
-
-| 项目 | 用途 |
+| 依赖 | 用途 |
 |------|------|
-| [FastAPI](https://github.com/fastapi/fastapi) / [Uvicorn](https://github.com/encode/uvicorn) / [Starlette](https://github.com/encode/starlette) | Web 与 ASGI |
-| [SQLAlchemy](https://github.com/sqlalchemy/sqlalchemy) / [Alembic](https://github.com/sqlalchemy/alembic) / [psycopg](https://github.com/psycopg/psycopg) | ORM、迁移、Postgres 驱动 |
-| [Pydantic Settings](https://github.com/pydantic/pydantic-settings) / [python-dotenv](https://github.com/theskumar/python-dotenv) | `.env` 配置 |
-| [httpx](https://github.com/encode/httpx) / [feedparser](https://github.com/kurtmckee/feedparser) | HTTP 与 RSS 解析 |
-| [APScheduler](https://github.com/agronholm/apscheduler) | 进程内定时任务 |
-| [Typer](https://github.com/fastapi/typer) / [Rich](https://github.com/Textualize/rich) | CLI |
-| [Jinja2](https://github.com/pallets/jinja) | 服务端模板 |
-| [uv](https://github.com/astral-sh/uv) | 包管理与锁定 |
+| FastAPI · Uvicorn · SQLAlchemy · Alembic · uv | Web / ORM / 包管理 |
+| [RSSHub](https://github.com/DIYgod/RSSHub) · [FreshRSS](https://github.com/FreshRSS/FreshRSS) | 隐藏 RSS 基建（Compose 可选） |
+| [MediaCrawler](https://github.com/NanmiCoder/MediaCrawler) | 自媒体（本机克隆，不进 git） |
+| 3d-force-graph | 个人空间 GBrain 可视化 |
 
-### 基础设施与外部 API（可选）
-
-| 项目 / 服务 | 用途 | 说明 |
-|-------------|------|------|
-| [RSSHub](https://github.com/DIYgod/RSSHub) | 无原生 RSS 站点的 feed 适配 | **不 fork**；Compose 可选依赖 |
-| [FreshRSS](https://github.com/FreshRSS/FreshRSS) | RSS 阅读基础设施 | **不 fork**；Compose 可选依赖 |
-| [GitHub REST API](https://docs.github.com/en/rest) | 仓库搜索 / Release / star 快照 | 建议配置 `GITHUB_TOKEN` |
-| OpenAI 兼容 LLM API | 摘要与润色（可选） | 任意兼容 `chat/completions` 的服务 |
-| Yahoo Finance 等行情源 | 股票时间线可视化（可选） | 可在配置中关闭 |
-| Gewe API | 个人微信消息桥接（可选） | 第三方 HTTP 协议；风控与合规由使用者自负 |
-
-### 本机克隆的外部工具（不进 git）
-
-| 项目 | 用途 | 说明 |
-|------|------|------|
-| [MediaCrawler](https://github.com/NanmiCoder/MediaCrawler) | 自媒体平台采集 | 默认 `bagel setup-media` / 启动时自动 clone 到 `third_party/MediaCrawler`（已 gitignore）；**遵循其自身许可证**，本仓库仅提供 `bagel_entry.py` 入口 shim |
-
-### 致谢
-
-感谢上述项目的作者与维护者，以及所有为 AI 情报、RSS、开源爬虫与 Python Web 生态做出贡献的人。若名单有遗漏，欢迎提 Issue / PR 补充。
-
----
-
-## 验收清单
-
-- [ ] `uv run bagel dev` 后打开 http://127.0.0.1:8000
-- [ ] 默认 SQLite 可采集国内新闻
-- [ ] 系统设置 → 各数据源页可管理兴趣标签；系统排除词可多选类目并启停
-- [ ] 汇总 → 个人空间可查看搜索统计与 ECharts GBrain
-- [ ] 教育 Tab：设置源、采集、收藏、关联侧栏、教育总结
-- [ ] 列表「关联」打开侧栏（列表 + 图谱），可进完整个人空间
-- [ ] 周/月总结支持自定义提示词并显示生成所用提示词
-- [ ] 主题切换与列表页正常
-- [ ] `uv run pytest` 通过
+欢迎 Issue / PR。推广时请同步 GitHub **About** / Topics：见 **[docs/github-presence.md](./docs/github-presence.md)**。
