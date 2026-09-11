@@ -1,4 +1,4 @@
-"""Feishu command parse + notify + event challenge."""
+﻿"""Feishu command parse + notify + event challenge."""
 
 from __future__ import annotations
 

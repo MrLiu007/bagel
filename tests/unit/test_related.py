@@ -1,4 +1,4 @@
-"""Related-item scoring — summary core keywords."""
+﻿"""Related-item scoring — summary core keywords."""
 
 from __future__ import annotations
 
@@ -72,6 +72,46 @@ def test_extract_keywords_from_summary():
     assert "可以" not in keys
 
 
+def test_paper_parsed_content_drives_related_keywords(db: Session):
+    """After PDF parse, related matching should use body terms (not only short abstract)."""
+    seed = _add(
+        db,
+        item_type=ItemType.PAPER,
+        source_type=SourceType.PAPER,
+        title="A short title",
+        url="https://example.com/p1",
+        summary="Generic abstract about methods.",
+        metadata={"parse": {"status": "done"}},
+    )
+    # Inject long parsed body with distinctive tech terms.
+    seed.content = (
+        "archify typed JSON IR acceptance pipeline for agent architecture diagrams. " * 40
+    )
+    related = _add(
+        db,
+        item_type=ItemType.NEWS,
+        title="Weekend links",
+        url="https://example.com/p2",
+        summary="Deep dive into archify JSON IR and agent architecture diagram acceptance checks.",
+    )
+    noise = _add(
+        db,
+        title="Food festival",
+        url="https://example.com/p3",
+        summary="Local cuisine and travel tips for the weekend.",
+    )
+    from bagel.services.related import _summary_text, extract_core_keywords
+
+    keys = extract_core_keywords(_summary_text(seed))
+    assert "archify" in keys or "json" in keys or "agent" in keys
+    bundle = find_related(db, seed.id, limit=10, cross_type=True)
+    ids = {h.item.id for _, hits in bundle.groups for h in hits}
+    assert related.id in ids
+    assert noise.id not in ids
+    flat_reasons = [r for _, hits in bundle.groups for h in hits for r in h.reasons]
+    assert any("正文关键词" in r for r in flat_reasons)
+
+
 def test_summary_keywords_relate_even_if_titles_differ(db: Session):
     seed = _add(
         db,
@@ -106,7 +146,7 @@ def test_summary_keywords_relate_even_if_titles_differ(db: Session):
     ids = {h.item.id for _, hits in bundle.groups for h in hits}
     assert related.id in ids
     assert noise.id not in ids
-    assert any(title == "摘要关键词相近" for title, _ in bundle.groups)
+    assert any(title == "关键词相近" for title, _ in bundle.groups)
 
 
 def test_tags_alone_do_not_relate(db: Session):

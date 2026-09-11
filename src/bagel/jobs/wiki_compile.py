@@ -1,4 +1,4 @@
-"""Scheduled / manual wiki compile job (idempotent)."""
+﻿"""Scheduled / manual wiki compile job (idempotent)."""
 
 from __future__ import annotations
 
@@ -15,4 +15,4 @@ def run_compile_wiki(session: Session, *, limit: int = 400, force: bool = False)
     # Always allow compile when called explicitly; WIKI_ENABLED gates auto-export elsewhere.
     result = compile_wiki(session, settings=settings, limit=limit, force=force)
     session.commit()
-    return result
+    return {"status": "SUCCESS", **result}

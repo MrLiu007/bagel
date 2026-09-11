@@ -1,4 +1,4 @@
-"""initial schema: IntelItem + Raw Evidence + sources
+﻿"""initial schema: IntelItem + Raw Evidence + sources
 
 Revision ID: 0001_initial
 Revises:

@@ -1,4 +1,4 @@
-"""Settings service — interest tags, exclude rules, typed data sources."""
+﻿"""Settings service — interest tags, exclude rules, typed data sources."""
 
 from __future__ import annotations
 
@@ -511,4 +511,67 @@ def toggle_education_source(session: Session, source_id: UUID, *, enabled: bool)
 
 
 def delete_education_source(session: Session, source_id: UUID) -> None:
+    delete_news_source(session, source_id)
+
+
+def list_av_sources(session: Session) -> list[IntelSource]:
+    return [s for s in SourceRepository(session).list_all() if s.source_type == SourceType.AV]
+
+
+def default_av_catalog() -> list[dict]:
+    from bagel.storage.seed import DEFAULT_AV_SOURCES
+
+    rows: list[dict] = []
+    for row in DEFAULT_AV_SOURCES:
+        rows.append(
+            {
+                "name": row["name"],
+                "url": row["url"],
+                "region": str(row.get("region", Region.GLOBAL)),
+                "source_type": str(row.get("source_type", SourceType.AV)),
+                "enabled": bool(row.get("enabled", True)),
+            }
+        )
+    return rows
+
+
+def add_av_source(
+    session: Session,
+    *,
+    name: str,
+    url: str,
+    region: str = "GLOBAL",
+) -> IntelSource:
+    cleaned_name = (name or "").strip()
+    cleaned_url = (url or "").strip()
+    if not cleaned_name or not cleaned_url:
+        raise SettingsError("名称与 URL 不能为空")
+    if not cleaned_url.lower().startswith("av:") and not cleaned_url.startswith("http"):
+        cleaned_url = f"av:generic:url:{cleaned_url}"
+    region_v = region.strip().upper() if region else "GLOBAL"
+    if region_v not in {Region.CN, Region.GLOBAL}:
+        raise SettingsError("region 仅支持 CN / GLOBAL")
+    repo = SourceRepository(session)
+    return repo.add(
+        IntelSource(
+            name=cleaned_name,
+            url=cleaned_url,
+            source_type=SourceType.AV,
+            region=region_v,
+            network_requirement=(
+                NetworkRequirement.DIRECT
+                if region_v == Region.CN
+                else NetworkRequirement.PROXY_PREFERRED
+            ),
+            priority=500,
+            enabled=True,
+        )
+    )
+
+
+def toggle_av_source(session: Session, source_id: UUID, *, enabled: bool) -> IntelSource:
+    return toggle_news_source(session, source_id, enabled=enabled)
+
+
+def delete_av_source(session: Session, source_id: UUID) -> None:
     delete_news_source(session, source_id)

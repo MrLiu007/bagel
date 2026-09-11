@@ -1,4 +1,4 @@
-"""Keyword rule scopes — which resource categories a rule applies to."""
+﻿"""Keyword rule scopes — which resource categories a rule applies to."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ INCLUDE_SCOPES: tuple[str, ...] = (
     KeywordScope.PAPERS,
     KeywordScope.MODELS,
     KeywordScope.EDUCATION,
+    KeywordScope.AV,
 )
 
 SCOPE_LABELS: dict[str, str] = {
@@ -26,6 +27,7 @@ SCOPE_LABELS: dict[str, str] = {
     KeywordScope.PAPERS: "论文",
     KeywordScope.MODELS: "模型",
     KeywordScope.EDUCATION: "教育",
+    KeywordScope.AV: "音视频",
     KeywordScope.MEDIA: "自媒体",
     KeywordScope.WECHAT: "微信",
 }
@@ -37,6 +39,7 @@ TAB_TO_SCOPE: dict[str, str] = {
     "papers": KeywordScope.PAPERS,
     "models": KeywordScope.MODELS,
     "education": KeywordScope.EDUCATION,
+    "av": KeywordScope.AV,
 }
 
 SCOPE_TO_TAB: dict[str, str] = {v: k for k, v in TAB_TO_SCOPE.items()}

@@ -1,4 +1,4 @@
-"""Auth gate behaviour — login redirect vs CDP probe 404."""
+﻿"""Auth gate behaviour — login redirect vs CDP probe 404."""
 
 from __future__ import annotations
 

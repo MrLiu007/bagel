@@ -1,4 +1,4 @@
-"""Monthly / weekly brief pages — 新闻总结 / 项目总结 / 论文总结 / 自媒体总结."""
+﻿"""Monthly / weekly brief pages — 新闻总结 / 项目总结 / 论文总结 / 自媒体总结."""
 
 from __future__ import annotations
 
@@ -49,6 +49,7 @@ _KIND_UI: dict[str, tuple[str, str]] = {
     BriefKind.EDUCATION: ("education", "汇总 · 教育总结"),
     BriefKind.MODEL: ("models", "汇总 · 模型总结"),
     BriefKind.MEDIA: ("media", "汇总 · 自媒体总结"),
+    BriefKind.AV: ("av", "汇总 · 音视频总结"),
     BriefKind.STOCK: ("stocks", "汇总 · 股票总结"),
 }
 
@@ -71,6 +72,8 @@ def _kind_or_404(kind: str) -> str:
         return BriefKind.MODEL
     if key in {"MEDIA", "MEDIA_POST"}:
         return BriefKind.MEDIA
+    if key in {"AV", "AUDIO", "VIDEO"}:
+        return BriefKind.AV
     if key in {"STOCK", "STOCKS", "STOCK_NEWS"}:
         return BriefKind.STOCK
     raise HTTPException(status_code=404, detail="未知总结类型")
@@ -285,8 +288,9 @@ body {
     radial-gradient(900px 420px at 8% -8%, rgba(60,184,165,0.16), transparent 60%),
     radial-gradient(700px 380px at 100% 0%, rgba(212,163,92,0.10), transparent 55%),
     linear-gradient(180deg, color-mix(in srgb, var(--paper) 92%, #000) 0%, var(--paper) 40%, var(--paper) 100%);
-  line-height: 1.7;
+  line-height: 1.78;
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
 }
 .deck-bar {
   position: sticky; top: 0; z-index: 20;
@@ -313,51 +317,80 @@ body {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 main.deck {
-  width: min(960px, calc(100vw - 1.5rem));
-  margin: 0 auto; padding: 1.35rem 0 3.5rem;
+  width: min(1180px, calc(100vw - 2 * clamp(1rem, 3.2vw, 2.5rem)));
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 1.5rem 0 3.75rem;
 }
 article.brief-body {
+  width: 100%;
+  max-width: none;
   background:
-    linear-gradient(165deg, color-mix(in srgb, var(--panel) 92%, var(--accent)) 0%, var(--panel) 28%, var(--panel) 100%);
+    linear-gradient(180deg, color-mix(in srgb, var(--panel) 88%, var(--accent)) 0%, var(--panel) 12%, var(--panel) 100%);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: clamp(1.25rem, 2.5vw, 2.1rem) clamp(1.1rem, 2.4vw, 2.2rem) 2.4rem;
+  padding: clamp(1.5rem, 3vw, 2.6rem) clamp(1.35rem, 3.4vw, 3rem) 2.75rem;
   box-shadow: var(--shadow);
-  overflow: hidden; /* clip children; tables scroll inside .table-scroll */
+  overflow: hidden;
+  position: relative;
+}
+article.brief-body::before {
+  content: "";
+  position: absolute; left: 0; right: 0; top: 0; height: 3px;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 45%, var(--warn)), transparent 88%);
 }
 article.brief-body h1 {
   font-family: var(--font-display);
-  font-size: clamp(1.75rem, 3.4vw, 2.35rem);
-  font-weight: 700; line-height: 1.22; letter-spacing: -0.02em;
-  margin: 0 0 0.85rem; color: var(--ink);
+  font-size: clamp(1.85rem, 3.6vw, 2.55rem);
+  font-weight: 700; line-height: 1.2; letter-spacing: -0.025em;
+  margin: 0 0 1rem; color: var(--ink);
+  max-width: none;
 }
 article.brief-body h2 {
   font-family: var(--font-display);
-  font-size: clamp(1.2rem, 2vw, 1.45rem);
-  font-weight: 600; letter-spacing: -0.01em;
-  margin: 2.1rem 0 0.85rem; padding: 0 0 0.45rem;
+  font-size: clamp(1.22rem, 2.1vw, 1.5rem);
+  font-weight: 600; letter-spacing: -0.015em;
+  margin: 2.35rem 0 0.95rem; padding: 0 0 0.55rem;
   border-bottom: 1px solid var(--line);
   color: var(--ink);
+  max-width: none;
 }
 article.brief-body h2::before {
   content: ""; display: inline-block; width: 0.55rem; height: 0.55rem;
-  margin-right: 0.55rem; border-radius: 2px; background: var(--accent);
+  margin-right: 0.6rem; border-radius: 2px; background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
   transform: translateY(-0.08em);
 }
-article.brief-body h3.brief-item-title, article.brief-body h4.brief-item-title {
+article.brief-body h3,
+article.brief-body h3.brief-item-title,
+article.brief-body h4.brief-item-title {
   font-family: var(--font-body);
-  font-size: 1.06rem; font-weight: 700; line-height: 1.45;
-  margin: 0.45rem 0 0.9rem; padding: 0.7rem 0.95rem;
+  font-size: 1.08rem; font-weight: 700; line-height: 1.45;
+  margin: 1.15rem 0 0.75rem; padding: 0.75rem 1rem;
   border-left: 3px solid var(--accent);
-  background: linear-gradient(90deg, var(--accent-soft), transparent 80%);
-  border-radius: 0 12px 12px 0; color: var(--ink);
+  background: linear-gradient(90deg, var(--accent-soft), transparent 85%);
+  border-radius: 0 14px 14px 0; color: var(--ink);
+  max-width: none;
 }
-article.brief-body p, article.brief-body li {
-  color: var(--ink-soft); font-size: 1.05rem; max-width: 68ch;
+/* Projection: full-width prose (no 68ch measure — that left-biased the stage) */
+article.brief-body p,
+article.brief-body li,
+article.brief-body blockquote {
+  color: var(--ink-soft);
+  font-size: clamp(1.05rem, 1.15vw, 1.18rem);
+  max-width: none;
+  width: 100%;
 }
+article.brief-body p { margin: 0.65rem 0 1rem; }
 article.brief-body strong { color: var(--ink); font-weight: 700; }
-article.brief-body ul, article.brief-body ol { padding-left: 1.2rem; margin: 0.45rem 0 0.9rem; }
-article.brief-body li + li { margin-top: 0.28rem; }
+article.brief-body ul, article.brief-body ol {
+  width: 100%;
+  max-width: none;
+  padding-left: 1.35rem;
+  margin: 0.55rem 0 1.1rem;
+}
+article.brief-body li + li { margin-top: 0.42rem; }
+article.brief-body li::marker { color: var(--accent); }
 article.brief-body .item-index {
   margin: 1.75rem 0 0.3rem; color: var(--warn);
   font-weight: 700; font-size: 0.88rem; font-family: var(--font-mono);
@@ -368,10 +401,14 @@ article.brief-body hr.item-sep {
   background: linear-gradient(90deg, transparent, var(--line-strong), transparent);
 }
 article.brief-body blockquote {
-  margin: 0.75rem 0; padding: 0.75rem 1rem;
+  margin: 0.85rem 0 1.15rem;
+  padding: 0.9rem 1.15rem;
   border-left: 3px solid var(--warn);
-  color: var(--muted); background: color-mix(in srgb, var(--panel-2) 80%, transparent);
-  border-radius: 0 12px 12px 0; font-size: 0.98rem;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--panel-2) 78%, transparent);
+  border-radius: 0 14px 14px 0;
+  font-size: 1rem;
+  width: 100%;
 }
 article.brief-body a {
   color: var(--accent); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
@@ -445,6 +482,7 @@ article.brief-body .mermaid {
   .deck-bar, .hint-foot { display: none !important; }
   body { background: white; color: black; }
   article.brief-body { box-shadow: none; border: none; padding: 0; background: white; overflow: visible; }
+  article.brief-body::before { display: none; }
   .table-scroll { overflow: visible; border: none; }
 }
 """
@@ -465,15 +503,21 @@ def build_brief_presentation_html(
     export_md_url: str,
     meta_line: str = "",
     include_chrome: bool = True,
+    ppt_mode_url: str = "",
 ) -> str:
     """Self-contained presentation HTML (online view + download)."""
     bar = ""
     if include_chrome:
+        ppt_link = (
+            f'\n  <a class="primary" href="{html.escape(ppt_mode_url)}">PPT 模式</a>'
+            if ppt_mode_url
+            else ""
+        )
         bar = f"""
 <header class="deck-bar">
-  <a href="{html.escape(back_url)}">← 返回汇总</a>
+  <a href="{html.escape(back_url)}">← 返回汇总</a>{ppt_link}
   <button type="button" onclick="window.print()">打印 / PDF</button>
-  <a class="primary" href="{html.escape(export_html_url)}">下载 HTML</a>
+  <a href="{html.escape(export_html_url)}">下载 HTML</a>
   <a href="{html.escape(export_md_url)}">Markdown</a>
   <span class="meta">{html.escape(meta_line)}</span>
 </header>"""
@@ -665,6 +709,16 @@ async def briefs_media(
     return _list_page(request, db, BriefKind.MEDIA, month, period)
 
 
+@router.get("/briefs/av", response_class=HTMLResponse)
+async def briefs_av(
+    request: Request,
+    db: Session = Depends(get_db),
+    month: str | None = Query(None),
+    period: str | None = Query(None),
+) -> HTMLResponse:
+    return _list_page(request, db, BriefKind.AV, month, period)
+
+
 @router.get("/briefs/stocks", response_class=HTMLResponse)
 async def briefs_stocks(
     request: Request,
@@ -695,7 +749,14 @@ def _list_page(
 
     brief = brief_svc.get_brief(db, kind=kind, year_month=current)
     # Refresh manuscripts generated by older question-heavy templates.
-    if brief is not None and (brief.template_version or "") != TEMPLATE_VERSION:
+    # Never auto-overwrite LLM custom-prompt manuscripts.
+    meta = brief.metadata_ if brief is not None else None
+    gen_mode = str((meta or {}).get("generation_mode") or "")
+    if (
+        brief is not None
+        and gen_mode != "llm"
+        and (brief.template_version or "") != TEMPLATE_VERSION
+    ):
         try:
             bundle = brief_svc.write_monthly_brief(
                 db, kind=kind, year_month=current, period=period_key_type
@@ -713,13 +774,16 @@ def _list_page(
         period_options.insert(0, {"value": current, "label": format_period_option(current)})
     default_prompt = brief_prompts.load_default(kind)
     prompt_used = ""
+    generation_mode = ""
     if brief and brief.metadata_:
         prompt_used = str(brief.metadata_.get("prompt_used") or "")
+        generation_mode = str(brief.metadata_.get("generation_mode") or "")
     return templates.TemplateResponse(
         request,
         "briefs.html",
         {
             "title": title,
+            "kind_title": title,
             "active": "briefs",
             "nav": NAV_ITEMS,
             "kind": kind,
@@ -736,8 +800,10 @@ def _list_page(
             "export_url": f"/briefs/{kind_path}/{current}.md",
             "export_html_url": f"/briefs/{kind_path}/{current}.html",
             "present_url": f"/briefs/{kind_path}/{current}/present",
+            "present_ppt_url": f"/briefs/{kind_path}/{current}/present?mode=ppt",
             "default_prompt": default_prompt,
             "prompt_used": prompt_used,
+            "generation_mode": generation_mode,
         },
     )
 
@@ -845,6 +911,9 @@ async def present_brief(
     kind_path: str,
     year_month: str,
     db: Session = Depends(get_db),
+    mode: str | None = Query(None),
+    built: str | None = Query(None),
+    rebuild: str | None = Query(None),
 ) -> HTMLResponse:
     kind = _kind_or_404(kind_path)
     brief, key = _resolve_brief(db, kind=kind, year_month=year_month)
@@ -855,15 +924,102 @@ async def present_brief(
     meta = f"{brief.title} · {brief.item_count} 条"
     if brief.generated_at:
         meta += f" · {brief.generated_at}"
-    doc = build_brief_presentation_html(
-        title=brief.title or f"汇总 {key}",
-        article_html=article,
-        back_url=app_url(request, back),
-        export_html_url=app_url(request, f"/briefs/{path}/{key}.html"),
-        export_md_url=app_url(request, f"/briefs/{path}/{key}.md"),
-        meta_line=meta,
-        include_chrome=True,
+    ppt = (mode or "").strip().lower() in {"ppt", "slides", "deck", "reveal"}
+    doc_url = app_url(request, f"/briefs/{path}/{key}/present")
+    ppt_url = app_url(request, f"/briefs/{path}/{key}/present?mode=ppt")
+    ppt_built_url = app_url(request, f"/briefs/{path}/{key}/present?mode=ppt&built=1")
+    ppt_rebuild_url = app_url(
+        request, f"/briefs/{path}/{key}/present?mode=ppt&rebuild=1"
     )
+    export_html = app_url(request, f"/briefs/{path}/{key}.html")
+    export_md = app_url(request, f"/briefs/{path}/{key}.md")
+    back_abs = app_url(request, back)
+    if ppt:
+        from bagel.services.brief_ppt import (
+            build_brief_ppt_html,
+            build_ppt_loading_html,
+            get_or_build_ppt_slides,
+            load_ppt_slides_cache,
+            ppt_content_fingerprint,
+        )
+        from bagel.settings import get_settings
+
+        settings = get_settings()
+        force = (rebuild or "").strip().lower() in {"1", "true", "yes"}
+        ready = (built or "").strip().lower() in {"1", "true", "yes", "ready"}
+        fingerprint = ppt_content_fingerprint(
+            markdown=brief.markdown or "",
+            title=brief.title or "",
+            item_count=int(brief.item_count or 0),
+            generated_at=brief.generated_at,
+            template_version=getattr(brief, "template_version", "") or "",
+        )
+        cached = None if force else load_ppt_slides_cache(
+            brief.id, fingerprint, settings=settings
+        )
+
+        # Cache hit: open deck immediately (no progress page).
+        if not ready and cached and not force:
+            doc = build_brief_ppt_html(
+                title=brief.title or f"汇总 {key}",
+                article_html=article,
+                back_url=back_abs,
+                doc_mode_url=doc_url,
+                export_html_url=export_html,
+                export_md_url=export_md,
+                meta_line=meta,
+                slides=cached,
+                rebuild_url=ppt_rebuild_url,
+                from_cache=True,
+                use_llm=False,
+            )
+        elif not ready:
+            build_q = ppt_built_url
+            if force:
+                build_q = app_url(
+                    request,
+                    f"/briefs/{path}/{key}/present?mode=ppt&built=1&rebuild=1",
+                )
+            doc = build_ppt_loading_html(
+                title=brief.title or f"汇总 {key}",
+                build_url=build_q,
+                back_url=back_abs,
+                meta_line=meta,
+                cached_hint=force,
+            )
+        else:
+            slides, from_cache = get_or_build_ppt_slides(
+                article,
+                brief_id=brief.id,
+                fingerprint=fingerprint,
+                use_llm=True,
+                force=force,
+                settings=settings,
+            )
+            doc = build_brief_ppt_html(
+                title=brief.title or f"汇总 {key}",
+                article_html=article,
+                back_url=back_abs,
+                doc_mode_url=doc_url,
+                export_html_url=export_html,
+                export_md_url=export_md,
+                meta_line=meta,
+                slides=slides,
+                rebuild_url=ppt_rebuild_url,
+                from_cache=from_cache and not force,
+                use_llm=False,
+            )
+    else:
+        doc = build_brief_presentation_html(
+            title=brief.title or f"汇总 {key}",
+            article_html=article,
+            back_url=back_abs,
+            export_html_url=export_html,
+            export_md_url=export_md,
+            meta_line=meta,
+            include_chrome=True,
+            ppt_mode_url=ppt_url,
+        )
     return HTMLResponse(doc)
 
 

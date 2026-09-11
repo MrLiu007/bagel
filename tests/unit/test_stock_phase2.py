@@ -1,4 +1,4 @@
-"""Tests for stock enrichment + stock brief template."""
+﻿"""Tests for stock enrichment + stock brief template."""
 
 from __future__ import annotations
 

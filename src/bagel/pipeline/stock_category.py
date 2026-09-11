@@ -1,4 +1,4 @@
-"""Fixed taxonomy for stock / market news."""
+﻿"""Fixed taxonomy for stock / market news."""
 
 from __future__ import annotations
 

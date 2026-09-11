@@ -1,4 +1,4 @@
-"""Reverse-proxy path prefix (``X-Forwarded-Prefix`` / ``X-Script-Name``).
+﻿"""Reverse-proxy path prefix (``X-Forwarded-Prefix`` / ``X-Script-Name``).
 
 Nginx strips ``/bagel`` before forwarding; internal routes stay at ``/login`` etc.
 This module sets ``scope["root_path"]`` so URL generation and redirects include the

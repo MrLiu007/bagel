@@ -1,4 +1,4 @@
-"""In-memory collect task runner with progress reporting.
+﻿"""In-memory collect task runner with progress reporting.
 
 Powers `/collect` — runs jobs in background threads, persists recent task
 state under `data/task_state.json`, and survives process restart by marking
@@ -38,6 +38,25 @@ def _duration_ms(created_at: str | None, finished_at: str | None) -> int | None:
     return max(0, int((end - start).total_seconds() * 1000))
 
 
+# Jobs that do not ingest IntelItem rows — do not treat empty crawl stats as failure.
+_NON_CRAWL_KINDS = frozenset(
+    {
+        "compile_wiki",
+        "summarize",
+        "build_digest",
+        "build_monthly_briefs",
+        "download_av",
+        "extract_av_subtitles",
+        "enrich_media_transcript",
+        "enrich_stocks",
+        "parse_paper",
+        "resolve_paper_pdf",
+        "github_learn",
+        "github_learn_page",
+    }
+)
+
+
 def _format_duration(ms: int | None) -> str:
     if ms is None:
         return "—"
@@ -62,6 +81,7 @@ class TaskState:
     message: str = "等待开始"
     result: dict[str, Any] | None = None
     error: str | None = None
+    log: list[str] = field(default_factory=list)  # recent yt-dlp / job lines (UI + debug)
     trigger: str = "manual"  # manual | scheduled
     owner_id: str | None = None
     created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
@@ -79,6 +99,10 @@ class TaskState:
             ms = _duration_ms(self.created_at, self.finished_at)
         data["duration_ms"] = ms
         data["duration_label"] = _format_duration(ms)
+        # Cap payload size for polling clients.
+        logs = data.get("log") or []
+        if isinstance(logs, list) and len(logs) > 40:
+            data["log"] = logs[-40:]
         return data
 
 
@@ -120,10 +144,13 @@ class TaskManager:
             cleaned = {k: v for k, v in raw.items() if k in allowed}
             cleaned.setdefault("trigger", "manual")
             cleaned.setdefault("owner_id", None)
+            cleaned.setdefault("log", [])
             try:
                 state = TaskState(**cleaned)
             except TypeError:
                 continue
+            if not isinstance(state.log, list):
+                state.log = []
             if state.status in {"pending", "running"}:
                 state.status = "failed"
                 state.message = "已中断"
@@ -187,8 +214,15 @@ class TaskManager:
         with self._lock:
             state = self._tasks[task_id]
             explicit_percent = kwargs.pop("percent", None)
+            log_line = kwargs.pop("log_line", None)
             for key, value in kwargs.items():
                 setattr(state, key, value)
+            if log_line:
+                line = str(log_line).strip()
+                if line:
+                    logs = list(state.log or [])
+                    logs.append(line[:400])
+                    state.log = logs[-40:]
             if explicit_percent is not None:
                 state.percent = round(float(explicit_percent), 1)
             elif state.total > 0:
@@ -271,7 +305,13 @@ class TaskManager:
             status = "failed"
             message = "失败" if found or created or updated else "失败（0 条）"
             err = error or str(result.get("error") or result.get("hint") or "任务失败")[:500]
-        elif found <= 0 and created <= 0 and updated <= 0 and result_status not in {"SUCCESS", "PARTIAL"}:
+        elif (
+            kind not in _NON_CRAWL_KINDS
+            and found <= 0
+            and created <= 0
+            and updated <= 0
+            and result_status not in {"SUCCESS", "PARTIAL"}
+        ):
             status = "failed"
             message = "失败（0 条）"
             err = error or str(result.get("error") or result.get("hint") or "未抓取到任何内容")[:500]
@@ -334,15 +374,34 @@ class TaskManager:
         factory = get_session_factory()
         session = factory()
 
-        def on_progress(*, current: int, total: int, message: str, **extra: Any) -> None:
+        def on_progress(
+            *,
+            current: int | None = None,
+            total: int | None = None,
+            message: str = "",
+            **extra: Any,
+        ) -> None:
+            # Allow percent-only updates (download / subtitle jobs).
+            if current is None and total is None and extra.get("percent") is not None:
+                try:
+                    current = int(float(extra["percent"]))
+                except (TypeError, ValueError):
+                    current = 0
+                total = 100
             payload: dict[str, Any] = {
-                "current": current,
-                "total": max(total, 0),
                 "message": message,
                 "status": "running",
             }
+            if current is not None:
+                payload["current"] = int(current or 0)
+            if total is not None:
+                payload["total"] = max(int(total or 0), 0)
             if "percent" in extra and extra["percent"] is not None:
                 payload["percent"] = extra["percent"]
+            if extra.get("log_line"):
+                payload["log_line"] = extra["log_line"]
+            elif message:
+                payload["log_line"] = message
             self._update(task_id, **payload)
 
         try:
@@ -395,6 +454,99 @@ class TaskManager:
                     owner_id=options.get("owner_id"),
                     on_progress=on_progress,
                 )
+            elif kind == "collect_av":
+                from bagel.jobs.av import run_collect_av
+
+                result = run_collect_av(
+                    session,
+                    on_progress=on_progress,
+                    owner_id=options.get("owner_id"),
+                )
+            elif kind == "download_av":
+                from bagel.jobs.av import run_download_av
+                from bagel.services import user_config as user_cfg
+
+                result = run_download_av(
+                    session,
+                    item_id=options.get("item_id"),
+                    on_progress=on_progress,
+                    settings=user_cfg.settings_for_user(options.get("owner_id")),
+                )
+            elif kind == "extract_av_subtitles":
+                from bagel.jobs.av import run_extract_av_subtitles
+                from bagel.services import user_config as user_cfg
+
+                result = run_extract_av_subtitles(
+                    session,
+                    item_id=options.get("item_id"),
+                    on_progress=on_progress,
+                    settings=user_cfg.settings_for_user(options.get("owner_id")),
+                )
+            elif kind == "parse_paper":
+                from bagel.services import user_config as user_cfg
+                from bagel.services.paper_parse import run_download_and_parse_paper
+
+                result = run_download_and_parse_paper(
+                    session,
+                    item_id=options.get("item_id"),
+                    on_progress=on_progress,
+                    settings=user_cfg.settings_for_user(options.get("owner_id")),
+                )
+            elif kind == "resolve_paper_pdf":
+                from bagel.services import user_config as user_cfg
+                from bagel.services.paper_parse import resolve_and_store_pdf_url
+
+                result = resolve_and_store_pdf_url(
+                    session,
+                    item_id=options.get("item_id"),
+                    on_progress=on_progress,
+                    settings=user_cfg.settings_for_user(options.get("owner_id")),
+                )
+            elif kind == "github_learn":
+                from bagel.services.github_learn import run_github_learn
+
+                result = run_github_learn(
+                    session,
+                    item_id=options.get("item_id"),
+                    on_progress=on_progress,
+                    force=bool(options.get("force")),
+                )
+            elif kind == "github_learn_page":
+                from bagel.services.github_learn import run_github_learn_page
+
+                result = run_github_learn_page(
+                    session,
+                    item_id=options.get("item_id"),
+                    page_file=str(options.get("page_file") or ""),
+                    on_progress=on_progress,
+                    force=bool(options.get("force")),
+                )
+            elif kind == "enrich_media_transcript":
+                from bagel.services.av_bridge import enrich_media_transcript
+
+                on_progress(current=0, total=1, message="自媒体 → yt-dlp 提取文稿…")
+                out = enrich_media_transcript(
+                    session,
+                    options.get("item_id"),
+                    owner_id=options.get("owner_id"),
+                    on_progress=on_progress,
+                )
+                if out.subtitle_status == "done":
+                    result = {
+                        "status": "SUCCESS",
+                        "items_updated": 1,
+                        "chars": out.chars,
+                        "av_item_id": str(out.av_item.id),
+                        "detail_url": f"/av/items/{out.av_item.id}",
+                    }
+                else:
+                    result = {
+                        "status": "FAILED",
+                        "error": out.error or "字幕提取失败",
+                        "av_item_id": str(out.av_item.id),
+                        "detail_url": f"/av/items/{out.av_item.id}",
+                    }
+                on_progress(current=1, total=1, message="文稿提取完成")
             elif kind == "summarize":
                 result = run_summarize_selected(session, on_progress=on_progress)
             elif kind == "build_digest":
@@ -498,14 +650,23 @@ class TaskManager:
                     percent=100.0,
                 )
                 return
-            # Guard: never mark green success when nothing was ingested.
+            # Guard: never mark green success when a crawl ingested nothing.
             found = int((result or {}).get("items_found") or 0)
-            if found <= 0 and created <= 0 and updated <= 0:
+            if (
+                kind not in _NON_CRAWL_KINDS
+                and found <= 0
+                and created <= 0
+                and updated <= 0
+            ):
+                hint = (result or {}).get("hint")
+                err = _err_text("未抓取到任何内容")
+                if hint:
+                    err = f"{err} · {hint}"[:500]
                 self._update(
                     task_id,
                     status="failed",
                     message="失败（0 条）",
-                    error=_err_text("未抓取到任何内容"),
+                    error=err,
                     result=result,
                     finished_at=datetime.now(UTC).isoformat(),
                     percent=100.0,

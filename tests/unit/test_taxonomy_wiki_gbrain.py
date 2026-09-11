@@ -1,4 +1,4 @@
-"""Taxonomy loader, wiki compile index, and taxonomy-aware GBrain."""
+﻿"""Taxonomy loader, wiki compile index, and taxonomy-aware GBrain."""
 
 from __future__ import annotations
 

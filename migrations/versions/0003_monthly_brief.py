@@ -1,4 +1,4 @@
-"""add intel_monthly_brief for monthly sharing briefs
+﻿"""add intel_monthly_brief for monthly sharing briefs
 
 Revision ID: 0003_monthly_brief
 Revises: 0002_category

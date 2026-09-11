@@ -1,4 +1,4 @@
-"""MediaCrawler adapter — invokes an external checkout; never vendors its source."""
+﻿"""MediaCrawler adapter — invokes an external checkout; never vendors its source."""
 
 from __future__ import annotations
 
@@ -116,6 +116,9 @@ def status_dict(settings: Settings | None = None) -> dict[str, Any]:
         "max_notes": settings.media_crawler_max_notes,
         "cdp_connect_existing": settings.media_crawler_cdp_connect_existing,
         "enable_cdp_mode": settings.media_crawler_enable_cdp_mode,
+        "get_comments": bool(settings.media_crawler_get_comments),
+        "get_sub_comments": bool(settings.media_crawler_get_sub_comments),
+        "get_medias": bool(settings.media_crawler_get_medias),
         "playwright_ok": bool(browser.get("ok")),
         "playwright_detail": browser.get("detail"),
         "playwright_executable": display_path(exe) if exe else None,
@@ -156,16 +159,24 @@ def _platform_label(code: str) -> str:
 
 
 def _normalize_keywords(keywords: list[str]) -> list[str]:
-    """Split Chinese commas / spaces so 'AI 教育' becomes ['AI','教育']."""
+    """Split Chinese commas / CJK phrases; keep ASCII phrases like 'GPT 6' intact."""
     out: list[str] = []
     for raw in keywords:
         text = (raw or "").replace("，", ",").replace("、", ",").strip()
         if not text:
             continue
         parts = [p.strip() for p in text.split(",") if p.strip()]
-        if len(parts) == 1 and (" " in parts[0] or "\u3000" in parts[0]):
-            parts = [p for p in re.split(r"[\s\u3000]+", parts[0]) if p]
-        out.extend(parts)
+        expanded: list[str] = []
+        for part in parts:
+            if " " in part or "\u3000" in part:
+                # Space-split only when the phrase contains CJK (e.g. "AI 教育").
+                if re.search(r"[\u4e00-\u9fff]", part):
+                    expanded.extend(p for p in re.split(r"[\s\u3000]+", part) if p)
+                else:
+                    expanded.append(part)
+            else:
+                expanded.append(part)
+        out.extend(expanded)
     # de-dupe preserve order
     seen: set[str] = set()
     uniq: list[str] = []
@@ -197,19 +208,25 @@ def _sync_mediacrawler_browser_config(
     enable_cdp: bool,
     sleep_sec: int = 6,
     max_notes: int = 8,
+    get_comments: bool = False,
+    get_sub_comments: bool = False,
+    get_medias: bool = False,
 ) -> None:
-    """Align MediaCrawler base_config (CLI has no CDP / sleep switches)."""
+    """Align MediaCrawler base_config (CLI has no CDP / media-download switches)."""
     path = root / "config" / "base_config.py"
     if not path.is_file():
         return
     try:
-        text = path.read_text(encoding="utf-8")
+        text = path.read_text(encoding="utf-8-sig")
     except OSError:
         return
     original = text
     for name, value in (
         ("CDP_CONNECT_EXISTING", connect_existing),
         ("ENABLE_CDP_MODE", enable_cdp),
+        ("ENABLE_GET_MEIDAS", bool(get_medias)),
+        ("ENABLE_GET_COMMENTS", bool(get_comments)),
+        ("ENABLE_GET_SUB_COMMENTS", bool(get_sub_comments)),
         ("HEADLESS", False),
         ("CDP_HEADLESS", False),
     ):
@@ -233,9 +250,10 @@ def _sync_mediacrawler_browser_config(
         text,
         count=1,
     )
-    if text != original:
+    if text != original or path.read_bytes()[:3] == b"\xef\xbb\xbf":
         try:
-            path.write_text(text, encoding="utf-8")
+            # utf-8 without BOM — OpenCV-adjacent tooling and some exec() paths choke on U+FEFF.
+            path.write_text(text, encoding="utf-8", newline="\n")
         except OSError:
             pass
 
@@ -393,6 +411,13 @@ def _child_env() -> dict[str, str]:
     env["TERM"] = "dumb"
     # Prefer installed Google Chrome so a window pops even without playwright install.
     env.setdefault("MEDIA_CRAWLER_USE_SYSTEM_CHROME", "1")
+    # bagel_entry.py reads these; defaults stay discovery-only.
+    from bagel.settings import get_settings
+
+    s = get_settings()
+    env["BAGEL_MC_GET_COMMENTS"] = "true" if s.media_crawler_get_comments else "false"
+    env["BAGEL_MC_GET_SUB_COMMENTS"] = "true" if s.media_crawler_get_sub_comments else "false"
+    env["BAGEL_MC_GET_MEDIAS"] = "true" if s.media_crawler_get_medias else "false"
     return env
 
 
@@ -575,6 +600,15 @@ def _humanize_error(raw: str, *, platform: str) -> str:
             f"{label}：未完成扫码登录（页面未出现二维码或超时）。"
             "请在弹出的浏览器窗口内手动打开登录弹层并扫码；不要关窗口。"
         )
+    if "u+feff" in lower or "non-printable character" in lower or (
+        "syntaxerror" in lower and "feff" in lower
+    ) or "ascii with bom" in lower or "encoding problem" in lower and "bom" in lower:
+        return (
+            f"{label}：依赖库 Python 文件带 UTF-8 BOM（常见于 Windows 环境）。"
+            "Bagel 会自动剥离 MediaCrawler/.venv 与项目内 .py 的 BOM；请再试一次。"
+            "若反复出现，删除 third_party/MediaCrawler/.venv 后重装依赖，"
+            "或运行 uv run bagel setup-media。"
+        )
     if "invalid media platform" in lower or "not within the supported" in lower:
         return f"{label}：平台参数无效（MediaCrawler 每次只能跑一个平台）"
     if "timeout" in lower:
@@ -591,6 +625,8 @@ def _build_cmd(
     settings: Settings,
     platform: str,
     keywords: list[str],
+    crawl_type: str = "search",
+    creator_ids: list[str] | None = None,
 ) -> list[str]:
     venv_python = root / (
         ".venv/Scripts/python.exe" if os_name_is_windows() else ".venv/bin/python"
@@ -612,25 +648,40 @@ def _build_cmd(
     login = (settings.media_crawler_login_type or "qrcode").strip() or "qrcode"
     # QR login needs a visible browser; cookie mode can stay non-headless for CAPTCHA.
     headless = "false"
-    return [
+    get_comment = "true" if settings.media_crawler_get_comments else "false"
+    get_sub = (
+        "true"
+        if settings.media_crawler_get_comments and settings.media_crawler_get_sub_comments
+        else "false"
+    )
+    ctype = (crawl_type or "search").strip().lower() or "search"
+    if ctype not in {"search", "creator", "detail"}:
+        ctype = "search"
+    cmd = [
         *base,
         "--platform",
         platform,
         "--lt",
         login,
         "--type",
-        "search",
+        ctype,
         "--keywords",
-        ",".join(keywords),
+        ",".join(keywords) if keywords else "creator",
         "--save_data_option",
         "jsonl",
         "--crawler_max_notes_count",
         str(settings.media_crawler_max_notes),
         "--get_comment",
-        "false",
+        get_comment,
+        "--get_sub_comment",
+        get_sub,
         "--headless",
         headless,
     ]
+    creators = [c.strip() for c in (creator_ids or []) if c and str(c).strip()]
+    if ctype == "creator" and creators:
+        cmd.extend(["--creator_id", ",".join(creators)])
+    return cmd
 
 
 def _run_one_platform(
@@ -642,10 +693,19 @@ def _run_one_platform(
     index: int,
     total: int,
     on_progress: ProgressCallback | None,
+    crawl_type: str = "search",
+    creator_ids: list[str] | None = None,
 ) -> tuple[list[MediaPost], str | None]:
     """Run MediaCrawler once for a single platform. Returns (posts, error_or_None)."""
     label = _platform_label(platform)
-    cmd = _build_cmd(root=root, settings=settings, platform=platform, keywords=keywords)
+    cmd = _build_cmd(
+        root=root,
+        settings=settings,
+        platform=platform,
+        keywords=keywords,
+        crawl_type=crawl_type,
+        creator_ids=creator_ids,
+    )
     login = (settings.media_crawler_login_type or "qrcode").strip()
     # Each platform owns 100 progress units so a single-platform crawl is not stuck at 0%.
     units = 100
@@ -794,6 +854,8 @@ def run_media_crawl(
     keywords: list[str] | None = None,
     settings: Settings | None = None,
     on_progress: ProgressCallback | None = None,
+    crawl_type: str = "search",
+    creator_ids: list[str] | None = None,
 ) -> MediaCrawlResult:
     """
     Spawn MediaCrawler **once per platform** (MediaCrawler accepts a single --platform).
@@ -811,10 +873,17 @@ def run_media_crawl(
         )
 
     plats = [p.strip() for p in (platforms or settings.media_platform_list) if p and p.strip()]
+    ctype = (crawl_type or "search").strip().lower() or "search"
+    creators = [c.strip() for c in (creator_ids or []) if c and str(c).strip()]
     kws = _normalize_keywords(keywords or settings.media_keyword_list)
     if not plats:
         raise MediaCrawlerError("请至少选择一个平台")
-    if not kws:
+    if ctype == "creator":
+        if not creators:
+            raise MediaCrawlerError("博主模式请填写抖音主页链接或 sec_user_id")
+        if not kws:
+            kws = ["creator"]
+    elif not kws:
         raise MediaCrawlerError("请至少填写一个关键词")
 
     max_kw = max(1, int(getattr(settings, "media_crawler_max_keywords", 2) or 2))
@@ -824,19 +893,32 @@ def run_media_crawl(
         capped = True
 
     print(
-        f"[MediaCrawler] start platforms={plats} keywords={kws} "
+        f"[MediaCrawler] start platforms={plats} type={ctype} keywords={kws} "
+        f"creators={creators[:3]} "
         f"max_notes={settings.media_crawler_max_notes} "
         f"sleep={getattr(settings, 'media_crawler_sleep_sec', 6)}",
         flush=True,
     )
 
     # Prefer Playwright (no CDP :9222). Entry script also forces this in-process.
+    from bagel.services.media_setup import install_entry_shim, sanitize_mediacrawler_utf8_bom
+
+    try:
+        install_entry_shim(root)
+    except OSError:
+        sanitize_mediacrawler_utf8_bom(root)
+    else:
+        sanitize_mediacrawler_utf8_bom(root)
+
     _sync_mediacrawler_browser_config(
         root,
         connect_existing=settings.media_crawler_cdp_connect_existing,
         enable_cdp=settings.media_crawler_enable_cdp_mode,
         sleep_sec=int(getattr(settings, "media_crawler_sleep_sec", 6) or 6),
         max_notes=int(settings.media_crawler_max_notes or 8),
+        get_comments=bool(settings.media_crawler_get_comments),
+        get_sub_comments=bool(settings.media_crawler_get_sub_comments),
+        get_medias=bool(settings.media_crawler_get_medias),
     )
     # Without Chromium binary there is no popup window — fail fast / auto-install.
     _ensure_playwright_browsers(root, on_progress=on_progress)
@@ -871,6 +953,8 @@ def run_media_crawl(
                 index=i,
                 total=total,
                 on_progress=on_progress,
+                crawl_type=ctype,
+                creator_ids=creators,
             )
         except Exception as exc:  # noqa: BLE001
             posts, err = [], f"{_platform_label(platform)}：{exc}"

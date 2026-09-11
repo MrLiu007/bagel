@@ -1,4 +1,4 @@
-"""Monthly / weekly brief service — generate, persist, export markdown.
+﻿"""Monthly / weekly brief service — generate, persist, export markdown.
 
 Period membership is defined strictly by item.published_at (source publish time),
 never by fetched_at / first_seen_at (ingest time).
@@ -256,6 +256,7 @@ def write_monthly_brief(
         BriefKind.EDUCATION,
         BriefKind.MODEL,
         BriefKind.MEDIA,
+        BriefKind.AV,
         BriefKind.STOCK,
     }:
         raise ValueError(f"unsupported brief kind: {kind}")
@@ -266,20 +267,77 @@ def write_monthly_brief(
     ptype = period_type_of(ym)
 
     items = collect_period_items(session, kind=kind, period_key=ym)
+    enrich_meta: dict | None = None
+    if (
+        settings.brief_auto_enrich_media
+        and kind in {BriefKind.MEDIA, BriefKind.AV}
+        and items
+    ):
+        from bagel.services.av_bridge import enrich_items_for_brief
+
+        enrich_meta = enrich_items_for_brief(
+            session,
+            list(items),
+            max_items=int(settings.brief_enrich_max_items or 8),
+        )
+        session.flush()
+        # Reload so content/subtitle fields are visible to the renderer.
+        for it in items:
+            session.refresh(it)
+
     now = datetime.now(UTC)
-    user_prompt, system_prompt, prompt_used = resolve_prompt_used(kind, custom_prompt)
-    if save_prompt_default and user_prompt:
+    # Only the form's custom_prompt triggers LLM; saved defaults just pre-fill the UI.
+    explicit_prompt = (custom_prompt or "").strip()
+    if save_prompt_default and explicit_prompt:
         from bagel.services import brief_prompts as bp
 
-        bp.save_default(kind, user_prompt)
-    md = render_monthly_brief(
-        kind=kind,
-        year_month=ym,
-        items=items,
-        generated_at=now,
-        period_type=ptype,
-        custom_prompt=user_prompt or None,
-    )
+        bp.save_default(kind, explicit_prompt)
+    user_prompt, system_prompt, prompt_used = resolve_prompt_used(kind, explicit_prompt or None)
+
+    generation_mode = "template"
+    llm_error: str | None = None
+    md: str
+    if explicit_prompt:
+        from bagel.services.brief_llm import generate_llm_brief_markdown
+
+        llm_md, llm_error = generate_llm_brief_markdown(
+            kind=kind,
+            year_month=ym,
+            period_type=ptype,
+            items=items,
+            user_prompt=explicit_prompt,
+            system_prompt=system_prompt,
+            settings=settings,
+        )
+        if llm_md:
+            md = llm_md
+            generation_mode = "llm"
+        else:
+            # Degraded: keep structured template so the page still has a manuscript.
+            md = render_monthly_brief(
+                kind=kind,
+                year_month=ym,
+                items=items,
+                generated_at=now,
+                period_type=ptype,
+                custom_prompt=explicit_prompt,
+            )
+            note = llm_error or "LLM 生成失败"
+            md = (
+                f"> **提示**：自定义提示词未能经 LLM 生成终稿（{note}），"
+                f"已回退为结构模板；请检查 LLM 配置后重试「按自定义提示词生成」。\n\n"
+                + md
+            )
+            generation_mode = "template_fallback"
+    else:
+        md = render_monthly_brief(
+            kind=kind,
+            year_month=ym,
+            items=items,
+            generated_at=now,
+            period_type=ptype,
+            custom_prompt=None,
+        )
     kind_labels = {
         BriefKind.NEWS: "新闻总结",
         BriefKind.GITHUB: "项目总结",
@@ -287,6 +345,7 @@ def write_monthly_brief(
         BriefKind.EDUCATION: "教育总结",
         BriefKind.MODEL: "模型总结",
         BriefKind.MEDIA: "自媒体总结",
+        BriefKind.AV: "音视频总结",
         BriefKind.STOCK: "股票总结",
     }
     kind_label = kind_labels[kind]
@@ -302,9 +361,14 @@ def write_monthly_brief(
         "period_type": ptype,
         "user_prompt": user_prompt,
         "system_prompt": system_prompt,
-        "prompt_used": prompt_used,
+        "prompt_used": prompt_used if explicit_prompt else "",
         "prompt_version": TEMPLATE_VERSION,
+        "generation_mode": generation_mode,
     }
+    if llm_error and generation_mode != "llm":
+        meta["llm_error"] = llm_error
+    if enrich_meta:
+        meta["enrich"] = enrich_meta
     if brief is None:
         brief = IntelMonthlyBrief(
             year_month=ym,

@@ -1,4 +1,4 @@
-"""Network probing and health checks with degraded-mode support.
+﻿"""Network probing and health checks with degraded-mode support.
 
 Used by `bagel doctor`, `/settings/health`, and boot-time diagnostics.
 Individual check failures set ``degraded`` / ``can_run`` rather than crashing

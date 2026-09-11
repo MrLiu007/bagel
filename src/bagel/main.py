@@ -1,4 +1,4 @@
-"""FastAPI application entry point.
+﻿"""FastAPI application entry point.
 
 `create_app()` wires routes, session auth, and lifespan hooks that:
 1. init / seed the DB (degraded boot if DB is temporarily down)
@@ -25,12 +25,15 @@ from bagel.web.auth_gate import AuthGateMiddleware
 from bagel.web.proxy_prefix import ForwardedPrefixMiddleware, PrefixLocationMiddleware
 from bagel.web.deps import NotAuthenticated
 from bagel.web.nav import NAV_ITEMS
+from bagel.web.routes.av import router as av_router
 from bagel.web.routes.auth import router as auth_router
 from bagel.web.routes.briefs import router as briefs_router
 from bagel.web.routes.collect import router as collect_router
 from bagel.web.routes.feishu import router as feishu_router
+from bagel.web.routes.github_learn import router as github_learn_router
 from bagel.web.routes.health import router as health_router
 from bagel.web.routes.media import router as media_router
+from bagel.web.routes.papers_api import router as papers_api_router
 from bagel.web.routes.review import router as review_router
 from bagel.web.routes.wechat import router as wechat_router
 from bagel.web.templating import templates
@@ -71,9 +74,18 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
     from bagel.jobs.scheduler import start_scheduler, stop_scheduler
     from bagel.services.media_setup import ensure_mediacrawler_on_startup
+    from bagel.services.ytdlp_setup import ensure_ytdlp_on_startup
     from bagel.storage.database import init_db
 
     log = logging.getLogger(__name__)
+    # Surface yt-dlp streaming lines in the process console (uvicorn inherits root handlers).
+    ytdlp_log = logging.getLogger("bagel.ytdlp")
+    ytdlp_log.setLevel(logging.INFO)
+    if not ytdlp_log.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [yt-dlp] %(message)s"))
+        ytdlp_log.addHandler(handler)
+        ytdlp_log.propagate = False
     try:
         init_db(seed=True)
     except Exception as exc:  # noqa: BLE001 — boot even if DB temporarily down
@@ -83,6 +95,16 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         ensure_mediacrawler_on_startup()
     except Exception as exc:  # noqa: BLE001
         log.warning("mediacrawler ensure failed: %s", exc)
+    try:
+        ensure_ytdlp_on_startup()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("ytdlp ensure failed: %s", exc)
+    try:
+        from bagel.services.archify_setup import ensure_archify_on_startup
+
+        ensure_archify_on_startup()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("archify ensure failed: %s", exc)
     try:
         start_scheduler()
     except Exception as exc:  # noqa: BLE001
@@ -109,6 +131,9 @@ def create_app() -> FastAPI:
     application.include_router(health_router)
     application.include_router(collect_router)
     application.include_router(media_router)
+    application.include_router(av_router)
+    application.include_router(papers_api_router)
+    application.include_router(github_learn_router)
     application.include_router(wechat_router)
     application.include_router(feishu_router)
 

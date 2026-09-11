@@ -1,4 +1,4 @@
-"""Ops helper: merge duplicate PAPER rows via ``ItemRepository.dedupe_papers``.
+﻿"""Ops helper: merge duplicate PAPER rows via ``ItemRepository.dedupe_papers``.
 
 Usage (from repo root)::
 

@@ -1,4 +1,4 @@
-"""Alembic environment."""
+﻿"""Alembic environment."""
 
 from __future__ import annotations
 

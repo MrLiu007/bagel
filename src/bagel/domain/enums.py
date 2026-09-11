@@ -1,4 +1,4 @@
-"""Domain enums for IntelItem lifecycle and related types.
+﻿"""Domain enums for IntelItem lifecycle and related types.
 
 Values are stored as plain strings in the DB for SQLite/Postgres portability.
 Keep enum members stable — renaming breaks existing rows and seed data.
@@ -21,6 +21,7 @@ class ItemType(StrEnum):
     STOCK_NEWS = "STOCK_NEWS"
     MODEL = "MODEL"
     EDUCATION = "EDUCATION"
+    AV = "AV"
     # Reserved for future collectors (not wired in MVP UI):
     BLOG = "BLOG"
     DATASET = "DATASET"
@@ -53,6 +54,7 @@ class SourceType(StrEnum):
     STOCK = "STOCK"
     MODEL = "MODEL"
     EDUCATION = "EDUCATION"
+    AV = "AV"
 
 
 class Region(StrEnum):
@@ -88,6 +90,7 @@ class KeywordScope(StrEnum):
     EDUCATION = "education"
     MEDIA = "media"
     WECHAT = "wechat"
+    AV = "av"
 
 
 class BriefKind(StrEnum):
@@ -100,6 +103,7 @@ class BriefKind(StrEnum):
     STOCK = "STOCK"
     MODEL = "MODEL"
     EDUCATION = "EDUCATION"
+    AV = "AV"
 
 
 class JobStatus(StrEnum):

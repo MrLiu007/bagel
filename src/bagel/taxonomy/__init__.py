@@ -1,4 +1,4 @@
-"""Bagel domain taxonomy — structure inspired by os-taxonomy, content is Bagel's own.
+﻿"""Bagel domain taxonomy — structure inspired by os-taxonomy, content is Bagel's own.
 
 Pure data + loader. Not Marble curriculum. Used by wiki compile and GBrain.
 """

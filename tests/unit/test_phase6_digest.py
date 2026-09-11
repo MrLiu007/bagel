@@ -1,4 +1,4 @@
-"""Phase 6: LLM summary + daily digest."""
+﻿"""Phase 6: LLM summary + daily digest."""
 
 from __future__ import annotations
 

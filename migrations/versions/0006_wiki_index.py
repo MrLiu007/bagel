@@ -1,4 +1,4 @@
-"""add wiki_page + wiki_edge indexes for MD wiki compile
+﻿"""add wiki_page + wiki_edge indexes for MD wiki compile
 
 Revision ID: 0006_wiki_index
 Revises: 0005a_app_user

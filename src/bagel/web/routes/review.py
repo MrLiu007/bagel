@@ -1,4 +1,4 @@
-"""Web review routes — news / github / favorites with DB pagination."""
+﻿"""Web review routes — news / github / favorites with DB pagination."""
 
 from __future__ import annotations
 
@@ -435,20 +435,90 @@ async def papers(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     category: str | None = Query(None),
+    school: str | None = Query(None, description="Paper source family key, e.g. arxiv / openalex"),
     q: str | None = Query(None, description="Title keyword"),
 ) -> HTMLResponse:
+    from bagel.domain.enums import ItemStatus, SourceType
+    from bagel.pipeline.paper_sources import family_for_source
+    from bagel.storage.repositories import ItemRepository, SourceRepository, normalize_title_q
+
     owner = _owner_id(request)
+    title_q = normalize_title_q(q)
+    used_ids = set(
+        ItemRepository(db).list_source_ids_for_status(
+            ItemStatus.CANDIDATE,
+            item_type=ItemType.PAPER,
+            owner_id=owner,
+        )
+    )
+    sources = [
+        s
+        for s in SourceRepository(db).list_all()
+        if s.source_type == SourceType.PAPER and (s.enabled or s.id in used_ids)
+    ]
+    sources.sort(key=lambda s: (s.priority, s.name))
+    source_names = {str(s.id): s.name for s in sources}
+
+    # Aggregate arXiv cs.AI / cs.LG / … into one「arXiv」tab (and HF / OpenAlex / S2).
+    buckets: dict[str, dict] = {}
+    for s in sources:
+        fam = family_for_source(name=s.name, url=s.url or "")
+        bucket = buckets.setdefault(
+            fam.key, {"key": fam.key, "label": fam.label, "ids": []}
+        )
+        bucket["ids"].append(s.id)
+    ordered = sorted(buckets.values(), key=lambda b: b["label"].lower())
+    family_key = (school or "").strip().lower() or None
+    if family_key and family_key not in buckets:
+        family_key = None
+    filter_ids = buckets[family_key]["ids"] if family_key else None
+
     result = review_svc.list_candidates(
         db,
         item_type=ItemType.PAPER,
         category=category,
+        source_ids=filter_ids,
         owner_id=owner,
-        q=q,
+        q=title_q,
         page=page,
         page_size=page_size,
     )
-    _log_list_search(db, q=q, item_type=ItemType.PAPER, hit_count=result.total, owner_id=owner)
-    return _page(request, title="论文", result=result, active="papers", category=category, q=q)
+    _log_list_search(db, q=title_q, item_type=ItemType.PAPER, hit_count=result.total, owner_id=owner)
+
+    source_tabs = [("", "全部")] + [(b["key"], b["label"]) for b in ordered]
+    source_urls = {
+        code: _page_url(
+            "/papers",
+            page=1,
+            page_size=page_size,
+            category=category,
+            school=code or None,
+            q=title_q,
+        )
+        for code, _label in source_tabs
+    }
+
+    return _page(
+        request,
+        title="论文",
+        result=result,
+        active="papers",
+        category=category,
+        school=family_key,
+        q=title_q,
+        extra={
+            "page_intro": (
+                "列表默认仅摘要。无开放 PDF 时先「探测开放 PDF」；找到地址后才出现「下载PDF并识别」"
+                "（MinerU / Kimi，见 docs/paper-parse.md）。数据源按家族聚合（arXiv 各分类合一）。"
+            ),
+            "source_tabs": source_tabs,
+            "source_urls": source_urls,
+            "source_filter": family_key or "",
+            "source_filter_style": "tabs",
+            "source_filter_label": "数据源",
+            "source_names": source_names,
+        },
+    )
 
 
 @router.get("/education", response_class=HTMLResponse)
@@ -779,6 +849,143 @@ async def science_redirect() -> RedirectResponse:
     return RedirectResponse(url="/papers", status_code=301)
 
 
+@router.get("/av", response_class=HTMLResponse)
+async def av_list(
+    request: Request,
+    db: Session = Depends(get_db),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    category: str | None = Query(None),
+    platform: str | None = Query(None),
+    source_id: str | None = Query(None),
+    media_kind: str | None = Query(None, description="video | audio"),
+    q: str | None = Query(None, description="Title keyword"),
+    fragment: str | None = Query(None),
+) -> HTMLResponse:
+    from bagel.domain.enums import ItemStatus, SourceType
+    from bagel.integrations.ytdlp import AV_PLATFORMS, PLATFORM_LABELS, status_dict
+    from bagel.services.tasks import task_manager
+    from bagel.settings import get_settings
+    from bagel.storage.repositories import ItemRepository, SourceRepository, normalize_title_q
+
+    settings = get_settings()
+    platform_key = (platform or "").strip().lower() or None
+    if platform_key and platform_key not in PLATFORM_LABELS:
+        platform_key = None
+    kind_key = (media_kind or "").strip().lower() or None
+    if kind_key not in {None, "video", "audio"}:
+        kind_key = None
+    sid: UUID | None = None
+    if source_id:
+        try:
+            sid = UUID(str(source_id))
+        except (TypeError, ValueError):
+            sid = None
+    owner = _owner_id(request)
+    title_q = normalize_title_q(q)
+    used_ids = set(
+        ItemRepository(db).list_source_ids_for_status(
+            ItemStatus.CANDIDATE,
+            item_type=ItemType.AV,
+            owner_id=owner,
+        )
+    )
+    sources = [
+        s
+        for s in SourceRepository(db).list_all()
+        if s.source_type == SourceType.AV and (s.enabled or s.id in used_ids)
+    ]
+    sources.sort(key=lambda s: (s.priority, s.name))
+    source_names = {str(s.id): s.name for s in sources}
+
+    result = review_svc.list_candidates(
+        db,
+        item_type=ItemType.AV,
+        category=category,
+        platform=platform_key,
+        source_id=sid,
+        owner_id=owner,
+        q=title_q,
+        page=page,
+        page_size=page_size,
+    )
+    if kind_key:
+        filtered = []
+        for item in result.items:
+            meta = item.metadata_ if isinstance(item.metadata_, dict) else {}
+            if str(meta.get("media_kind") or "video") == kind_key:
+                filtered.append(item)
+        result.items = filtered
+        result.total = len(filtered)
+
+    _log_list_search(db, q=title_q, item_type=ItemType.AV, hit_count=result.total, owner_id=owner)
+    platform_tabs = [("", "全部")] + list(AV_PLATFORMS)
+    kind_tabs = [("", "全部"), ("video", "视频"), ("audio", "音频")]
+    source_tabs = [("", "全部")] + [(str(s.id), s.name) for s in sources]
+    path = "/av"
+
+    if (fragment or "").strip().lower() == "items":
+        nav = _list_nav(
+            path, result=result, category=category, platform=platform_key, source_id=str(sid or ""), q=title_q
+        )
+        return templates.TemplateResponse(
+            request,
+            "_items_list.html",
+            {
+                "request": request,
+                "items": [
+                    present_item(i, source_name=source_names.get(str(getattr(i, "source_id", "") or "")))
+                    for i in result.items
+                ],
+                "category": category or "",
+                "categories": result.categories,
+                "page": result.page,
+                "page_size": result.page_size,
+                "total": result.total,
+                "empty_hint": "暂无音视频条目。请配置数据源后点击「立即采集」。",
+                "platform_tabs": platform_tabs,
+                "platform_filter": platform_key or "",
+                "platform_urls": _platform_urls(
+                    path, page_size=page_size, tabs=platform_tabs, category=category, source_id=str(sid or ""), q=title_q
+                ),
+                "show_av_download": True,
+                **nav,
+            },
+        )
+
+    latest = task_manager.latest("collect_av")
+    source_urls = {
+        code: _page_url(path, page=1, page_size=page_size, category=category, platform=platform_key, source_id=code or None, q=title_q)
+        for code, _ in source_tabs
+    }
+    return _page(
+        request,
+        title="音视频",
+        result=result,
+        active="av",
+        category=category,
+        platform=platform_key,
+        source_id=str(sid or ""),
+        q=title_q,
+        template="av.html",
+        extra={
+            "status": status_dict(settings),
+            "latest_task": latest.to_dict() if latest else None,
+            "empty_hint": "暂无音视频条目。请在系统设置添加数据源，再点击「立即采集」。",
+            "platform_tabs": platform_tabs,
+            "platform_filter": platform_key or "",
+            "source_tabs": source_tabs,
+            "source_filter": str(sid or ""),
+            "source_urls": source_urls,
+            "source_filter_style": "select",
+            "source_filter_label": "数据源",
+            "source_names": source_names,
+            "show_av_download": True,
+            "kind_tabs": kind_tabs,
+        },
+    )
+
+
 @router.get("/media", response_class=HTMLResponse)
 async def media(
     request: Request,
@@ -925,6 +1132,7 @@ async def favorites(
         "github": [ItemType.GITHUB_REPO, ItemType.GITHUB_RELEASE],
         "papers": [ItemType.PAPER],
         "education": [ItemType.EDUCATION],
+        "av": [ItemType.AV],
         "models": [ItemType.MODEL],
         "stocks": [ItemType.STOCK_NEWS],
         "media": [ItemType.MEDIA_POST],
@@ -963,6 +1171,7 @@ async def favorites(
             ("github", "项目"),
             ("papers", "论文"),
             ("education", "教育"),
+            ("av", "音视频"),
             ("models", "模型"),
             ("stocks", "股票"),
             ("media", "自媒体"),
@@ -1051,6 +1260,7 @@ _TYPE_LABELS = {
     ItemType.PAPER: "论文",
     ItemType.MODEL: "模型",
     ItemType.EDUCATION: "教育",
+    ItemType.AV: "音视频",
     ItemType.STOCK_NEWS: "股票",
     ItemType.GITHUB_REPO: "GitHub 项目",
     ItemType.GITHUB_RELEASE: "GitHub Release",
@@ -1063,6 +1273,7 @@ _TYPE_BACK = {
     ItemType.PAPER: "/papers",
     ItemType.MODEL: "/models",
     ItemType.EDUCATION: "/education",
+    ItemType.AV: "/av",
     ItemType.STOCK_NEWS: "/stocks",
     ItemType.GITHUB_REPO: "/github",
     ItemType.GITHUB_RELEASE: "/github",
@@ -1132,6 +1343,7 @@ async def item_related(
         ItemType.PAPER: "papers",
         ItemType.MODEL: "models",
         ItemType.EDUCATION: "education",
+        ItemType.AV: "av",
         ItemType.STOCK_NEWS: "stocks",
         ItemType.GITHUB_REPO: "github",
         ItemType.GITHUB_RELEASE: "github",

@@ -1,4 +1,4 @@
-"""Collect UI — manual triggers, scheduled history, and task detail."""
+﻿"""Collect UI — manual triggers, scheduled history, and task detail."""
 
 from __future__ import annotations
 
@@ -16,11 +16,11 @@ ALLOWED_KINDS = {
     "collect_github",
     "collect_papers",
     "collect_education",
+    "collect_av",
     "collect_models",
     "collect_stocks",
     "collect_all",
     "summarize",
-    "compile_wiki",
 }
 
 

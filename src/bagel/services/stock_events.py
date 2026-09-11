@@ -1,4 +1,4 @@
-"""Aggregate stock news into timelines and per-symbol bundles."""
+﻿"""Aggregate stock news into timelines and per-symbol bundles."""
 
 from __future__ import annotations
 

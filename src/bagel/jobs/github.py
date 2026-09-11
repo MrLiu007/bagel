@@ -1,4 +1,4 @@
-"""GitHub collection job — queries, releases, and star snapshots."""
+﻿"""GitHub collection job — queries, releases, and star snapshots."""
 
 from __future__ import annotations
 
@@ -13,6 +13,11 @@ from sqlalchemy.orm import Session
 from bagel.collectors.github import COLLECTOR_VERSION, GithubCollector
 from bagel.domain.enums import ItemStatus, JobStatus, KeywordScope
 from bagel.jobs.metrics import elapsed_ms, source_stat
+from bagel.jobs.source_guard import (
+    MAX_SOURCE_ATTEMPTS,
+    raise_for_retryable_error_code,
+    safe_source_fetch,
+)
 from bagel.pipeline.category import classify_title
 from bagel.pipeline.filter import apply_keyword_rules
 from bagel.pipeline.keyword_scopes import rules_for_scope
@@ -21,7 +26,7 @@ from bagel.pipeline.recency import (
     is_within_lookback,
     sort_key_published,
 )
-from bagel.pipeline.textutil import strip_html, truncate
+from bagel.pipeline.textutil import coalesce_item_content, strip_html, truncate
 from bagel.settings import Settings, get_settings
 from bagel.storage.repositories import (
     GithubQueryRepository,
@@ -133,31 +138,59 @@ def run_collect_github(
         }
 
     progress(0, total, f"准备执行 {total} 组 GitHub Query（近 {lookback_days} 天）…")
+    rate_limit_cooldown = 0.0
 
     for index, query in enumerate(queries, start=1):
         src_t0 = time.perf_counter()
         src_found = src_created = src_updated = src_skipped = 0
-        progress(index - 1, total, f"查询中 ({index}/{total})：{query.name}")
+        if rate_limit_cooldown > 0:
+            progress(index - 1, total, f"限流冷却 {rate_limit_cooldown:.0f}s 后继续…")
+            time.sleep(rate_limit_cooldown)
+            rate_limit_cooldown = 0.0
+
         recent_q = github_query_with_recency(query.query, days=lookback_days)
         logger.info("collect_github.query name=%s q=%s", query.name, recent_q)
-        try:
-            result = collector.search_repos(query, query_override=recent_q)
-        except Exception as exc:  # noqa: BLE001
+
+        def _notify(attempt: int, _total: int, message: str) -> None:
+            progress(index - 1, total, message)
+
+        def _fetch(q=query, rq=recent_q):
+            result = collector.search_repos(q, query_override=rq)
+            if not result.ok:
+                raise_for_retryable_error_code(result.error_code, result.error_message)
+            return result
+
+        result, err_info = safe_source_fetch(
+            _fetch,
+            source_name=query.name,
+            max_attempts=MAX_SOURCE_ATTEMPTS,
+            on_attempt=_notify,
+        )
+        if err_info is not None:
             session.rollback()
-            query_repo.mark_run(query, result_count=0, error=str(exc)[:200])
-            errors.append(f"{query.name}: {exc}")
-            logger.exception("collect_github.query_exception name=%s", query.name)
+            hint = str(err_info["error"])
+            status = str(err_info["status"])
+            query_repo.mark_run(query, result_count=0, error=hint[:200])
+            errors.append(f"{query.name}: {hint}")
+            if status == "rate_limited":
+                rate_limit_cooldown = 5.0
+            logger.warning(
+                "collect_github.query_guard name=%s status=%s",
+                query.name,
+                status,
+            )
             source_stats.append(
                 source_stat(
                     query.name,
-                    status="failed",
+                    status=status,
                     duration_ms=elapsed_ms(src_t0),
-                    error=str(exc),
+                    error=hint,
                 )
             )
-            progress(index, total, f"失败：{query.name}")
+            progress(index, total, f"跳过：{query.name}（{status}）")
             continue
 
+        assert result is not None
         if not result.ok:
             detail = result.error_message or result.error_code or "unknown"
             query_repo.mark_run(query, result_count=0, error=str(result.error_code))
@@ -247,6 +280,7 @@ def run_collect_github(
                         "boost": filt.matched_boost,
                     }
                     summary = truncate(normalized.summary or normalized.content, 400) or None
+                    content = coalesce_item_content(normalized.content, normalized.summary)
                     category = classify_title(normalized.title, summary)
                     tags = list(
                         {*(normalized.tags or []), *filt.matched_include, *filt.matched_boost}
@@ -261,7 +295,7 @@ def run_collect_github(
                         title=strip_html(normalized.title) or normalized.title,
                         url=normalized.url,
                         summary=summary,
-                        content=normalized.content,
+                        content=content,
                         author=normalized.author,
                         language=normalized.language,
                         published_at=normalized.published_at,
@@ -361,6 +395,7 @@ def run_collect_github(
                     collector_version=COLLECTOR_VERSION,
                 )
                 summary = truncate(release.summary or release.content, 400) or None
+                content = coalesce_item_content(release.content, release.summary)
                 category = classify_title(release.title, summary)
                 _item, was_created = items_repo.upsert_from_normalized(
                     item_type=release.item_type,
@@ -369,7 +404,7 @@ def run_collect_github(
                     title=strip_html(release.title) or release.title,
                     url=release.url,
                     summary=summary,
-                    content=release.content,
+                    content=content,
                     author=release.author,
                     published_at=release.published_at,
                     tags=list(release.tags or []),

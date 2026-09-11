@@ -1,4 +1,4 @@
-"""Feishu digest builder + env config UI helpers."""
+﻿"""Feishu digest builder + env config UI helpers."""
 
 from __future__ import annotations
 

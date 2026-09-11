@@ -1,4 +1,4 @@
-"""News source filter + overseas collect skip behaviour."""
+﻿"""News source filter + overseas collect skip behaviour."""
 
 from __future__ import annotations
 

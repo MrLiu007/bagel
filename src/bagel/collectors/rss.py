@@ -1,4 +1,4 @@
-"""RSS / RSSHub feed collector.
+﻿"""RSS / RSSHub feed collector.
 
 Collectors only fetch + normalize into `NormalizedItem`. Persistence, keyword
 filtering, and category assignment belong in jobs / pipeline layers.

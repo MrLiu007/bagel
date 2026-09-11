@@ -1,4 +1,4 @@
-"""User isolation for collect tasks and per-user config overlays."""
+﻿"""User isolation for collect tasks and per-user config overlays."""
 
 from __future__ import annotations
 
@@ -64,4 +64,33 @@ def test_user_config_overlay(tmp_path, monkeypatch) -> None:
     assert llm["source"] == "user"
     port = next(f for f in flat if f["key"] == "APP_PORT")
     assert port["readonly"] is True
+    get_settings.cache_clear()
+
+
+def test_settings_for_user_applies_mineru_token(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("MINERU_API_TOKEN", "")
+    monkeypatch.setenv("ENABLE_MINERU", "true")
+    from bagel.settings import get_settings
+
+    get_settings.cache_clear()
+    uid = "33333333-3333-3333-3333-333333333333"
+    user_cfg.save_user_overrides(
+        uid,
+        {
+            "MINERU_API_TOKEN": "user-mineru-tok",
+            "ENABLE_MINERU": "true",
+            "KIMI_API_KEY": "user-kimi-key",
+            "ENABLE_KIMI_FILES": "true",
+        },
+    )
+    s = user_cfg.settings_for_user(uid)
+    assert s.mineru_api_token == "user-mineru-tok"
+    assert s.kimi_api_key == "user-kimi-key"
+    from bagel.integrations import mineru, kimi_files
+
+    assert mineru.is_configured(s)
+    assert kimi_files.is_configured(s)
+    # Process-wide settings still empty (personal overlay only)
+    assert not (get_settings().mineru_api_token or "").strip()
     get_settings.cache_clear()

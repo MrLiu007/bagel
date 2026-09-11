@@ -1,4 +1,4 @@
-"""Period sharing briefs — kind-specific, presentation-ready manuscripts.
+﻿"""Period sharing briefs — kind-specific, presentation-ready manuscripts.
 
 Each brief kind has its own section recipe so a presenter has enough to say,
 and the audience gets concrete knowledge (facts, contrasts, examples, takeaways).
@@ -19,7 +19,7 @@ from bagel.domain.enums import BriefKind, ItemType
 from bagel.domain.models import IntelItem
 from bagel.pipeline.textutil import strip_html, truncate
 
-TEMPLATE_VERSION = "share-period-v11-deck"
+TEMPLATE_VERSION = "share-period-v13-full-body"
 
 # Old LLM / template leftovers that must not reappear as “关键点”.
 _BAD_WHY_RE = re.compile(
@@ -27,6 +27,52 @@ _BAD_WHY_RE = re.compile(
     r"这股趋势会不会|若忽略它|最小可借鉴)",
     re.I,
 )
+
+# Minimum plain length to treat a field as useful (CJK is denser than Latin).
+_MIN_USEFUL_CONTENT = 24
+
+# Hard ceiling only for pathological blobs (matches paper_parse store cap) — not an editorial budget.
+_BODY_HARD_CAP = 200_000
+
+
+def _candidate_chain(item: IntelItem) -> tuple[str | None, ...]:
+    """Ordered body sources: content-first; papers keep curated abstract ahead of PDF dump."""
+    t = item.item_type
+    if t == ItemType.PAPER:
+        # Abstract in summary is the shareable core; full parse markdown is often front-matter heavy.
+        return (item.summary, item.content, item.llm_summary)
+    # Raw evidence first; LLM rewrite is last-resort (never displace specific news body).
+    return (item.content, item.summary, item.llm_summary)
+
+
+def _body_text(item: IntelItem, *, limit: int | None = None) -> str:
+    """Content-first body for weekly/monthly briefs — no editorial truncation.
+
+    Prefer persisted raw ``content`` (RSS body / release notes / transcript), then
+    collector ``summary``, then ``llm_summary``. Skip empty/tiny fields so a teaser
+    or 400-char list summary does not block richer text later in the chain.
+
+    ``limit`` is optional (tests / callers); default keeps the full chosen field
+    up to ``_BODY_HARD_CAP`` only as a safety rail against corrupt multi-MB blobs.
+    """
+    plains: list[str] = []
+    for cand in _candidate_chain(item):
+        plain = strip_html(cand or "")
+        if plain:
+            plains.append(plain)
+    if not plains:
+        return ""
+    chosen = ""
+    for plain in plains:
+        if len(plain) >= _MIN_USEFUL_CONTENT:
+            chosen = plain
+            break
+    if not chosen:
+        chosen = plains[0]
+    cap = limit if limit is not None else _BODY_HARD_CAP
+    if len(chosen) <= cap:
+        return chosen
+    return truncate(chosen, cap)
 
 
 @dataclass(frozen=True)
@@ -151,14 +197,6 @@ class BriefSlotItem:
 
 def _display_title(item: IntelItem) -> str:
     return strip_html(item.llm_title_zh or item.title) or item.title
-
-
-def _body_text(item: IntelItem, *, limit: int = 560) -> str:
-    text = item.llm_summary or item.summary or item.content or ""
-    text = strip_html(text)
-    if not text:
-        return ""
-    return truncate(text, limit)
 
 
 def _why_text(item: IntelItem) -> str:
@@ -467,6 +505,31 @@ def _entry_stock(slot: BriefSlotItem) -> list[str]:
     ]
 
 
+def _entry_av(slot: BriefSlotItem) -> list[str]:
+    bridge = _bridge(slot.category)
+    why = _distinct_why(slot)
+    return [
+        "#### 讲什么（文稿要点）",
+        "",
+        _facts(slot),
+        "",
+        "#### 关键片段",
+        "",
+        why or bridge.contrast,
+        "",
+        "#### 可信度与边界",
+        "",
+        "口播内容区分「演示结论」与「可核对事实」；没有字幕/文稿时只保留标题线索，讲解时打开原片核对。",
+        "",
+        "#### 可迁移启发",
+        "",
+        bridge.takeaway,
+        "",
+        f"可对照例子：{bridge.example}",
+        "",
+    ]
+
+
 def _entry_blocks(slot: BriefSlotItem, *, kind: str) -> list[str]:
     if kind == BriefKind.GITHUB:
         return _entry_github(slot)
@@ -478,6 +541,8 @@ def _entry_blocks(slot: BriefSlotItem, *, kind: str) -> list[str]:
         return _entry_model(slot)
     if kind == BriefKind.MEDIA:
         return _entry_media(slot)
+    if kind == BriefKind.AV:
+        return _entry_av(slot)
     if kind == BriefKind.STOCK:
         return _entry_stock(slot)
     return _entry_news(slot)
@@ -534,7 +599,7 @@ def _render_kind_brief(
         guide = [
             "## 讲解口径（论文）",
             "",
-            "- **问题**：这篇要解决什么（白话，少堆公式名）。",
+            "- **问题**：这篇要解决什么（白话；优先用摘要 abstract，而非 PDF 前言噪声）。",
             "- **对比**：做法与朴素 baseline 差在哪。",
             "- **例子**：给一个听众能记住的直观例子。",
             "- **启发**：教育或工程各落一句，不展开教案。",
@@ -610,7 +675,7 @@ def _render_kind_brief(
         guide = [
             "## 讲解口径（自媒体）",
             "",
-            "- **说什么**：先还原帖子事实与观点。",
+            "- **说什么**：优先用帖子/提文稿正文，摘要仅兜底。",
             "- **提炼**：去掉情绪词后还剩什么判断。",
             "- **可信度**：亲历/数据 vs 营销/情绪。",
             "- **启发**：教育或工作可带走的一句。",
@@ -622,6 +687,25 @@ def _render_kind_brief(
             "3. **有链接才算数**：无法回溯的帖子不进终稿。",
         ]
         section_title = "## 精选动态"
+        with_stars = False
+    elif kind == BriefKind.AV:
+        title_label = "音视频"
+        duration = "约 6～8 分钟"
+        guide = [
+            "## 讲解口径（音视频）",
+            "",
+            "- **文稿**：优先字幕/提文稿正文，没有再退回短摘要。",
+            "- **片段**：点出可复述的关键论断或演示步骤。",
+            "- **边界**：口播≠可核对事实。",
+            "- **迁移**：课程或工作能带走的一点。",
+            "",
+        ]
+        takeaways = [
+            "1. **有文稿才好讲**：缺字幕时先补提文稿再进终稿。",
+            "2. **片段留住听众**：不要只报标题。",
+            "3. **有链接才算数**：无法打开原片的不进终稿。",
+        ]
+        section_title = "## 精选音视频"
         with_stars = False
     elif kind == BriefKind.STOCK:
         title_label = "股票 / 市场资讯"
@@ -648,7 +732,7 @@ def _render_kind_brief(
         guide = [
             "## 讲解口径（新闻）",
             "",
-            "- **事实**：这条新闻到底发生了什么。",
+            "- **事实**：优先引用条目**正文**（RSS content），摘要只作兜底；忌只用一句话摘要。",
             "- **对比**：相对常见做法或上一阶段，增量在哪。",
             "- **例子**：给一个生活/工作中能感知的例子。",
             "- **启发**：对教育或业务的一句落地判断。",
@@ -728,15 +812,9 @@ def render_monthly_brief(
 ) -> str:
     _ = generated_at
     ordered = _prioritize_by_prompt(list(items), custom_prompt)
-    body = _render_kind_brief(
+    return _render_kind_brief(
         kind=kind, year_month=year_month, items=ordered, period_type=period_type
     )
-    if custom_prompt and custom_prompt.strip():
-        focus = custom_prompt.strip().replace("\n", " ")
-        header = f"> **自定义聚焦**：{focus}\n\n"
-        return header + body
-    return body
-
 
 def _prioritize_by_prompt(items: list[IntelItem], custom_prompt: str | None) -> list[IntelItem]:
     prompt = (custom_prompt or "").strip().lower()
@@ -745,7 +823,9 @@ def _prioritize_by_prompt(items: list[IntelItem], custom_prompt: str | None) -> 
     tokens = [t for t in re.split(r"[\s,，、;；]+", prompt) if len(t) >= 2]
 
     def score(item: IntelItem) -> int:
-        blob = f"{item.title} {item.summary or ''} {item.category or ''}".lower()
+        # Include content so MEDIA/AV transcripts and news bodies can match focus terms.
+        body = strip_html(item.content or "")[:4000]
+        blob = f"{item.title} {body} {item.summary or ''} {item.category or ''}".lower()
         return sum(1 for t in tokens if t in blob)
 
     return sorted(items, key=lambda i: (score(i), float(i.score or 0)), reverse=True)
@@ -762,6 +842,8 @@ def item_types_for_kind(kind: str) -> list[str]:
         return [ItemType.MODEL]
     if kind == BriefKind.MEDIA:
         return [ItemType.MEDIA_POST]
+    if kind == BriefKind.AV:
+        return [ItemType.AV]
     if kind == BriefKind.STOCK:
         return [ItemType.STOCK_NEWS]
     return [ItemType.NEWS]

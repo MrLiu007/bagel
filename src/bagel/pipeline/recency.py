@@ -1,4 +1,4 @@
-"""Recency helpers — prefer recently published items on each collect."""
+﻿"""Recency helpers — prefer recently published items on each collect."""
 
 from __future__ import annotations
 

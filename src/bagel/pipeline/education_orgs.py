@@ -1,4 +1,4 @@
-"""Map education IntelSource rows → school / institution buckets for UI tabs."""
+﻿"""Map education IntelSource rows → school / institution buckets for UI tabs."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Fixed taxonomy category classifier — never invent unbounded labels."""
+﻿"""Fixed taxonomy category classifier — never invent unbounded labels."""
 
 from __future__ import annotations
 

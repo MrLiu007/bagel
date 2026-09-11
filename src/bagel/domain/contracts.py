@@ -1,4 +1,4 @@
-"""Shared domain contracts / DTOs exchanged between collectors and storage."""
+﻿"""Shared domain contracts / DTOs exchanged between collectors and storage."""
 
 from __future__ import annotations
 

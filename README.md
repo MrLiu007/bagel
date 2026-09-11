@@ -1,4 +1,4 @@
-# Bagel · 贝果
+﻿# Bagel · 贝果
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Python](https://img.shields.io/badge/Python-%3E%3D3.14-blue.svg)](https://www.python.org/)
@@ -24,7 +24,8 @@ Bagel 把多源采集归一成同一套 `IntelItem`，用 Web 审阅 + 周月汇
 | 本地可控 | 默认 SQLite；数据在你机器上 |
 | 少组件 | 单进程 FastAPI；FreshRSS/RSSHub 仅作隐藏基建 |
 | 国内可用 | 海外源失败不阻断国内采集；代理可选 |
-| 触达现场 | 飞书指令查询 + 定时摘要推送 |
+| 视频也能读 | yt-dlp + openspeech ASR，烧录字幕可转文稿 |
+| 触达现场 | 飞书指令查询 + 定时摘要推送；周会投屏 / PPT |
 | 看得懂关联 | Taxonomy + Wiki + 资源优先的 3D 图谱 |
 
 **不是什么：** 不是托管 SaaS、不是荐股产品、不是向量库/RAG 全家桶（Wiki MD 可给 Obsidian/RAG，**不能替代**事务库）。
@@ -33,14 +34,18 @@ Bagel 把多源采集归一成同一套 `IntelItem`，用 Web 审阅 + 周月汇
 
 ## 你得到什么
 
-- **多渠道采集** — 新闻 / GitHub / 论文 / 教育 / 模型 / 股票 / 自媒体 / 微信，统一入库与去重  
-- **Web 审阅台** — 列表、收藏、兴趣标签、关联侧栏；明暗主题  
-- **周月汇总** — 可自定义提示词；可选 LLM 润色  
+- **多渠道采集** — 新闻 / GitHub / 论文 / 教育 / 模型 / 股票 / 自媒体 / **音视频** / 微信，统一入库与去重  
+- **Web 审阅台** — 列表搜索、收藏、兴趣标签、关联侧栏；明暗主题  
+- **音视频学习** — yt-dlp 订阅下载；平台字幕 / soft-sub / **openspeech ASR** 文稿链路（抖音烧录字幕靠 ASR）  
+- **论文深读** — 开放 PDF 探测 → 本地下载 → MinerU / Kimi 负载识别写入 `content`  
+- **GitHub 学习** — 懒加载仓库 Wiki + Archify 架构图（Node，gitignore）  
+- **周月汇总** — 自定义提示词；**投屏 / PPT（reveal.js，可缓存）/ HTML / Markdown** 导出  
 - **飞书双场景** — 自然语言查库 + 定时推送  
 - **个人空间** — 看板统计 + 全幅 **GBrain**（倒锥 3D、SUBJECTS 八频道、摘要+原文知识卡）  
 - **Wiki 编译** — Markdown 正文 + DB 索引；taxonomy 结构可扩展  
+- **反向代理友好** — 支持 Nginx 前缀（如 `/bagel`）多应用同机挂载  
 
-完整能力表见 **[docs/capabilities.md](./docs/capabilities.md)**。
+完整能力表见 **[docs/capabilities.md](./docs/capabilities.md)**；文档总目录 **[docs/README.md](./docs/README.md)**。
 
 ---
 
@@ -60,13 +65,23 @@ uv run bagel dev --host 127.0.0.1 --port 8000 --reload
 | 命令 | 作用 |
 |------|------|
 | `bagel doctor` | 环境与依赖健康检查 |
-| `bagel dev` | 开发启动 Web（可自动拉取 MediaCrawler） |
-| `bagel setup-media` | 手动克隆自媒体依赖到 `third_party/`（gitignore） |
+| `bagel dev` | 开发启动 Web（可自动 ensure MediaCrawler / yt-dlp / Archify） |
+| `bagel setup-media` | 克隆自媒体 MediaCrawler → `third_party/`（gitignore） |
+| `bagel setup-ytdlp` | 克隆 yt-dlp → `third_party/`（gitignore） |
+| `bagel setup-archify` | 克隆 Archify（失败恢复；日常由 `dev` 自动 ensure） |
 | `bagel cli …` | 飞书 send / digest / ask |
 
 生产或无 reload：`uv run bagel dev --host 0.0.0.0 --port 8000 --no-reload`
 
-**自媒体 / MediaCrawler：** 源码不进 git；首次需要时自动 clone（海外网络可能需代理或镜像 URL）。详见 [docs/git-and-mediacrawler.md](./docs/git-and-mediacrawler.md)。
+**本机第三方（均不进 git）：**
+
+| 依赖 | 命令 / 触发 | 文档 |
+|------|-------------|------|
+| MediaCrawler | `setup-media` / 启动自动 | [git-and-mediacrawler.md](./docs/git-and-mediacrawler.md) |
+| yt-dlp | `setup-ytdlp` / 启动自动 | [git-and-ytdlp.md](./docs/git-and-ytdlp.md) |
+| Archify（需 Node ≥ 18） | `dev` ensure / `setup-archify` | [github-learn.md](./docs/github-learn.md) |
+
+抖音 / B 站下载需浏览器 Cookie：见 [media-vs-av.md](./docs/media-vs-av.md)。
 
 ---
 
@@ -80,27 +95,29 @@ uv run bagel dev --host 127.0.0.1 --port 8000 --reload
 |:---:|:---:|:---:|
 | ![论文](./static/3.art.png) | ![汇总](./static/7.汇总.png) | ![关联](./static/19.新闻&论文&项目&自媒体等关联依赖信息.png) |
 
-更多界面（股票 / 自媒体 / 微信 / 设置 / 采集等）见仓库 [`static/`](./static/) 目录。
+更多界面（股票 / 自媒体 / **音视频** / 微信 / 设置 / 采集 / GitHub 学习等）见仓库 [`static/`](./static/) 目录。
 
 ---
 
 ## 文档
 
+总目录：[docs/README.md](./docs/README.md)。常用入口：
+
 | 文档 | 内容 |
 |------|------|
-| [docs/capabilities.md](./docs/capabilities.md) | **能力全景归档**、入口速查、验收清单 |
-| [docs/github-presence.md](./docs/github-presence.md) | **GitHub About / Topics** 推荐文案 |
-| [AGENTS.md](./AGENTS.md) | 开发约束 |
+| [docs/capabilities.md](./docs/capabilities.md) | **能力全景**、入口速查、验收清单 |
+| [docs/media-vs-av.md](./docs/media-vs-av.md) | 自媒体 vs 音视频、抖音文稿、**openspeech ASR** |
+| [docs/paper-parse.md](./docs/paper-parse.md) | 论文 PDF 探测与 MinerU / Kimi 识别 |
+| [docs/github-learn.md](./docs/github-learn.md) | GitHub「学习」页 + Archify |
+| [docs/briefs-dashboard.md](./docs/briefs-dashboard.md) | 个人空间、**投屏 / PPT / 导出**、提示词 |
 | [docs/architecture.md](./docs/architecture.md) | 架构原则与包结构 |
-| [docs/wiki-taxonomy-gbrain.md](./docs/wiki-taxonomy-gbrain.md) | Wiki · Taxonomy · GBrain（含图谱 UX） |
-| [docs/briefs-dashboard.md](./docs/briefs-dashboard.md) | 个人空间、关联侧栏、学习 API |
-| [docs/storage.md](./docs/storage.md) | SQLite / Postgres / Wiki |
-| [docs/data-model.md](./docs/data-model.md) | 数据模型 |
+| [docs/storage.md](./docs/storage.md) | SQLite / Postgres / Wiki / 本地缓存 |
 | [docs/network.md](./docs/network.md) | 网络与代理 |
 | [docs/filter-tags.md](./docs/filter-tags.md) | 兴趣标签与排除词 |
-| [docs/default-news-sources.md](./docs/default-news-sources.md) | 默认新闻源 |
-| [docs/git-and-mediacrawler.md](./docs/git-and-mediacrawler.md) | MediaCrawler 与 git |
-| [docs/user-config-media-wechat.md](./docs/user-config-media-wechat.md) | 自媒体 + 微信 |
+| [docs/git-and-ytdlp.md](./docs/git-and-ytdlp.md) · [git-and-mediacrawler.md](./docs/git-and-mediacrawler.md) | 本机第三方与 git |
+| [docs/default-av-sources.md](./docs/default-av-sources.md) · [default-news-sources.md](./docs/default-news-sources.md) | 默认源 |
+| [docs/github-presence.md](./docs/github-presence.md) | GitHub About / Topics |
+| [AGENTS.md](./AGENTS.md) | 开发约束 |
 
 ---
 
@@ -131,8 +148,12 @@ docker compose up -d --build
 
 - Compose 覆盖 `STORAGE_BACKEND=postgres` 与容器内 `DATABASE_URL` / RSSHub / FreshRSS  
 - 镜像入口对 Postgres 跑 `alembic upgrade head`（含 `0005a_app_user`），失败时 `ensure_schema` 幂等补表后再重试；SQLite 由启动时 `init_db` 建表
-- MediaCrawler **不进镜像**；自媒体请在宿主机 `bagel setup-media` 或挂载本机目录  
+- MediaCrawler / yt-dlp / Archify **不进镜像**；请在宿主机 `setup-*` 或挂载本机 `third_party/`  
 - 拉取基础镜像超时：配置 Docker Hub 镜像或代理后再试  
+
+### 反向代理前缀（可选）
+
+同一 Nginx 后挂多个 Compose 应用时，可将 Bagel 挂在 `/bagel`：代理转发时带上 `X-Forwarded-Prefix: /bagel`（或 `X-Script-Name`），应用内链接会自动加前缀；内部路由仍为 `/login`、`/av` 等。
 
 ---
 
@@ -150,6 +171,10 @@ docker compose up -d --build
 | FastAPI · Uvicorn · SQLAlchemy · Alembic · uv | Web / ORM / 包管理 |
 | [RSSHub](https://github.com/DIYgod/RSSHub) · [FreshRSS](https://github.com/FreshRSS/FreshRSS) | 隐藏 RSS 基建（Compose 可选） |
 | [MediaCrawler](https://github.com/NanmiCoder/MediaCrawler) | 自媒体（本机克隆，不进 git） |
-| 3d-force-graph | 个人空间 GBrain 可视化 |
+| [yt-dlp](https://github.com/yt-dlp/yt-dlp) | 音视频元数据 / 下载 / 字幕（本机克隆） |
+| [火山引擎 openspeech](https://www.volcengine.com/docs/6561/1354868) | 豆包语音录音文件识别（ASR，可选） |
+| [Archify](https://github.com/tt-a1i/archify) | GitHub 学习页架构图（本机克隆，需 Node） |
+| MinerU Cloud · Kimi Files | 论文 PDF 文档识别（可选云 API） |
+| 3d-force-graph · reveal.js | GBrain 3D / 汇总 PPT 投屏 |
 
 欢迎 Issue / PR。推广时请同步 GitHub **About** / Topics：见 **[docs/github-presence.md](./docs/github-presence.md)**。

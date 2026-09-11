@@ -1,4 +1,4 @@
-"""Per-item collect failures should skip without aborting the job."""
+﻿"""Per-item collect failures should skip without aborting the job."""
 
 from __future__ import annotations
 

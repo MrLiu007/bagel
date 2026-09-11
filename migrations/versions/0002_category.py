@@ -1,4 +1,4 @@
-"""add intel_item.category for fixed taxonomy filtering
+﻿"""add intel_item.category for fixed taxonomy filtering
 
 Revision ID: 0002_category
 Revises: 0001_initial

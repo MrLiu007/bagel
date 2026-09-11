@@ -1,4 +1,4 @@
-"""add scopes column to intel_keyword_rule
+﻿"""add scopes column to intel_keyword_rule
 
 Revision ID: 0004_keyword_scopes
 Revises: 0003_monthly_brief

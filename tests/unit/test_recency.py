@@ -1,4 +1,4 @@
-"""Recency window helpers."""
+﻿"""Recency window helpers."""
 
 from __future__ import annotations
 

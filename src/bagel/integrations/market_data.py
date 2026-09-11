@@ -1,4 +1,4 @@
-"""Public market OHLC (read-only) — Yahoo chart API with disk cache."""
+﻿"""Public market OHLC (read-only) — Yahoo chart API with disk cache."""
 
 from __future__ import annotations
 

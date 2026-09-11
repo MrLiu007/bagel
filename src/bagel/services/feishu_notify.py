@@ -1,4 +1,4 @@
-"""Async Feishu notifications after scheduled collect jobs."""
+﻿"""Async Feishu notifications after scheduled collect jobs."""
 
 from __future__ import annotations
 

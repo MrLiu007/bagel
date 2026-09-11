@@ -1,4 +1,4 @@
-"""Shared navigation for review / collect / settings pages."""
+﻿"""Shared navigation for review / collect / settings pages."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ NAV_ITEMS: list[tuple[str, str, str]] = [
     ("GitHub项目", "/github", "github"),
     ("论文", "/papers", "papers"),
     ("教育", "/education", "education"),
+    ("音视频", "/av", "av"),
     ("模型", "/models", "models"),
     ("股票", "/stocks", "stocks"),
     ("自媒体", "/media", "media"),

@@ -1,4 +1,4 @@
-"""Phase 9: MVP acceptance smoke checks."""
+﻿"""Phase 9: MVP acceptance smoke checks."""
 
 from __future__ import annotations
 

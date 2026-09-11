@@ -1,4 +1,4 @@
-"""add gbrain_learn_event for flashcard learning logs
+﻿"""add gbrain_learn_event for flashcard learning logs
 
 Revision ID: 0007_gbrain_learn
 Revises: 0006_wiki_index

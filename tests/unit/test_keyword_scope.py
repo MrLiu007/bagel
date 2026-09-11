@@ -1,4 +1,4 @@
-"""Scoped keyword rules: INCLUDE per category, EXCLUDE multi-scope."""
+﻿"""Scoped keyword rules: INCLUDE per category, EXCLUDE multi-scope."""
 
 from __future__ import annotations
 

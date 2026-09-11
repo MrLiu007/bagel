@@ -1,4 +1,4 @@
-# 存储架构：SQLite 默认 · Postgres 可选 · LLM Wiki 导出
+﻿# 存储架构：SQLite 默认 · Postgres 可选 · LLM Wiki 导出
 
 ## 决策
 
@@ -52,3 +52,27 @@ data/wiki/
 ```
 
 每条卡片含：标题、发布时间、分类、摘要、原文链接、tags。可直接被本地 LLM 做检索增强。
+
+## 本地工作区目录（非事务真相源）
+
+事务真相仍在 DB。下列目录存**大文件 / 缓存 / 学习产物**（默认在 `DATA_DIR`，通常 `./data`）：
+
+```text
+data/
+  bagel.db                 # SQLite 默认库
+  av/
+    files/{item_id}/       # yt-dlp 下载的音视频
+    subs/{item_id}/        # 抽轨音轨、ASR 中间文件
+  cache/
+    brief_ppt/{brief_id}.json   # 汇总 PPT 幻灯片缓存（内容指纹）
+  github/
+    learn/{item_id}/       # GitHub 学习 Wiki / snippets / architecture.html
+  wiki/                    # 可选 Markdown Wiki 导出
+  user_config/{user_id}.json
+  brief_prompts.json
+  runtime_config.json      # 调度 / 飞书等 UI 覆盖
+```
+
+UI / 日志对外只展示**项目相对路径**，不暴露本机绝对路径（AGENTS.md）。
+
+相关：音视频 [media-vs-av.md](./media-vs-av.md)、PPT [briefs-dashboard.md](./briefs-dashboard.md)、学习页 [github-learn.md](./github-learn.md)。

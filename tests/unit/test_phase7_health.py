@@ -1,4 +1,4 @@
-"""Phase 7: network checks, doctor CLI text, health page."""
+﻿"""Phase 7: network checks, doctor CLI text, health page."""
 
 from __future__ import annotations
 

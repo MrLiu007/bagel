@@ -1,4 +1,4 @@
-"""Lightweight dedup helpers (canonical URL + title hash).
+﻿"""Lightweight dedup helpers (canonical URL + title hash).
 
 Production upsert uses repository uniqueness constraints; this module is a
 thin re-export for tests and ad-hoc checks.

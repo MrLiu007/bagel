@@ -1,4 +1,4 @@
-"""Taxonomy dataclasses — nodes / edges / clusters (os-taxonomy-shaped)."""
+﻿"""Taxonomy dataclasses — nodes / edges / clusters (os-taxonomy-shaped)."""
 
 from __future__ import annotations
 

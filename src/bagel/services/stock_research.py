@@ -1,4 +1,4 @@
-"""Lightweight multi-perspective stock research draft (LLM, evidence-bound)."""
+﻿"""Lightweight multi-perspective stock research draft (LLM, evidence-bound)."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Model hub collectors — Hugging Face Hub + ModelScope (魔搭)."""
+﻿"""Model hub collectors — Hugging Face Hub + ModelScope (魔搭)."""
 
 from __future__ import annotations
 

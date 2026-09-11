@@ -1,4 +1,4 @@
-"""Database engine and session factory.
+﻿"""Database engine and session factory.
 
 Default backend is file-backed SQLite under `data/`. Postgres uses the same
 ORM models; call `alembic upgrade head` for production schema upgrades.

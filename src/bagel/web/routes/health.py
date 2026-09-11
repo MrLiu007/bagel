@@ -1,4 +1,4 @@
-"""Settings routes — filter tags + news sources + system health."""
+﻿"""Settings routes — filter tags + news sources + system health."""
 
 from __future__ import annotations
 
@@ -50,6 +50,7 @@ async def settings_page(
         "github",
         "papers",
         "education",
+        "av",
         "models",
         "stocks",
         "excludes",
@@ -66,6 +67,8 @@ async def settings_page(
     paper_catalog = settings_svc.default_paper_catalog() if active_tab == "papers" else []
     education_sources = settings_svc.list_education_sources(db) if active_tab == "education" else []
     education_catalog = settings_svc.default_education_catalog() if active_tab == "education" else []
+    av_sources = settings_svc.list_av_sources(db) if active_tab == "av" else []
+    av_catalog = settings_svc.default_av_catalog() if active_tab == "av" else []
     model_sources = settings_svc.list_model_sources(db) if active_tab == "models" else []
     model_catalog = settings_svc.default_model_catalog() if active_tab == "models" else []
     stock_sources = settings_svc.list_stock_sources(db) if active_tab == "stocks" else []
@@ -155,6 +158,8 @@ async def settings_page(
             "paper_catalog": paper_catalog,
             "education_sources": education_sources,
             "education_catalog": education_catalog,
+            "av_sources": av_sources,
+            "av_catalog": av_catalog,
             "model_sources": model_sources,
             "model_catalog": model_catalog,
             "stock_sources": stock_sources,
@@ -470,6 +475,45 @@ async def delete_model_source(
     return RedirectResponse(url="/settings?tab=models", status_code=303)
 
 
+@router.post("/settings/av")
+async def add_av_source(
+    name: str = Form(...),
+    url: str = Form(...),
+    region: str = Form("GLOBAL"),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    try:
+        settings_svc.add_av_source(db, name=name, url=url, region=region)
+    except settings_svc.SettingsError as exc:
+        raise HTTPException(status_code=400, detail=exc.message) from exc
+    return RedirectResponse(url="/settings?tab=av", status_code=303)
+
+
+@router.post("/settings/av/{source_id}/toggle")
+async def toggle_av_source(
+    source_id: UUID,
+    enabled: str = Form("1"),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    try:
+        settings_svc.toggle_av_source(db, source_id, enabled=enabled in {"1", "true", "on"})
+    except settings_svc.SettingsError as exc:
+        raise HTTPException(status_code=404, detail=exc.message) from exc
+    return RedirectResponse(url="/settings?tab=av", status_code=303)
+
+
+@router.post("/settings/av/{source_id}/delete")
+async def delete_av_source(
+    source_id: UUID,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    try:
+        settings_svc.delete_av_source(db, source_id)
+    except settings_svc.SettingsError as exc:
+        raise HTTPException(status_code=404, detail=exc.message) from exc
+    return RedirectResponse(url="/settings?tab=av", status_code=303)
+
+
 @router.post("/settings/stocks")
 async def add_stock_source(
     name: str = Form(...),
@@ -518,6 +562,7 @@ async def save_schedule(
     schedule_collect_github: str | None = Form(None),
     schedule_collect_stocks: str | None = Form(None),
     schedule_collect_models: str | None = Form(None),
+    schedule_collect_av: str | None = Form(None),
     enable_keyword_growth: str | None = Form(None),
     enable_wiki_compile: str | None = Form(None),
 ) -> RedirectResponse:
@@ -539,6 +584,7 @@ async def save_schedule(
         schedule_collect_github=schedule_collect_github in {"1", "true", "on"},
         schedule_collect_stocks=schedule_collect_stocks in {"1", "true", "on"},
         schedule_collect_models=schedule_collect_models in {"1", "true", "on"},
+        schedule_collect_av=schedule_collect_av in {"1", "true", "on"},
         enable_keyword_growth=enable_keyword_growth in {"1", "true", "on"},
         enable_wiki_compile=enable_wiki_compile in {"1", "true", "on"},
     )

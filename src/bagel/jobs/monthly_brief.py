@@ -1,4 +1,4 @@
-"""Jobs for monthly news / github sharing briefs."""
+﻿"""Jobs for monthly news / github sharing briefs."""
 
 from __future__ import annotations
 
@@ -32,6 +32,7 @@ def run_build_monthly_briefs(
         BriefKind.EDUCATION,
         BriefKind.MODEL,
         BriefKind.MEDIA,
+        BriefKind.AV,
         BriefKind.STOCK,
     ]
     results: list[dict[str, Any]] = []

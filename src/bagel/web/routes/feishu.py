@@ -1,4 +1,4 @@
-"""Feishu inbound events + command API (public, no login)."""
+﻿"""Feishu inbound events + command API (public, no login)."""
 
 from __future__ import annotations
 

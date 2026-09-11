@@ -1,4 +1,4 @@
-"""Alembic revision graph — app_user must precede wiki_page FKs."""
+﻿"""Alembic revision graph — app_user must precede wiki_page FKs."""
 
 from __future__ import annotations
 

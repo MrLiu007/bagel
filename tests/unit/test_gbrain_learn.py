@@ -1,4 +1,4 @@
-"""GBrain learn cards, subtopics, and subject filters."""
+﻿"""GBrain learn cards, subtopics, and subject filters."""
 
 from __future__ import annotations
 

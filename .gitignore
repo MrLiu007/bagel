@@ -16,3 +16,5 @@ htmlcov/
 
 # Third-party MediaCrawler is cloned locally, not vendored (see third_party/README.md)
 third_party/MediaCrawler/
+third_party/yt-dlp/
+third_party/archify/

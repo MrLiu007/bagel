@@ -1,4 +1,4 @@
-"""Shared Jinja2 environment for all HTML routes."""
+﻿"""Shared Jinja2 environment for all HTML routes."""
 
 from __future__ import annotations
 
@@ -10,6 +10,12 @@ from jinja2 import pass_context
 from starlette.requests import Request
 
 from bagel.domain.enums import ItemType
+from bagel.services.av_bridge import (
+    can_enrich_media_transcript,
+    is_importable_media_post,
+    item_has_rich_transcript,
+    linked_av_id,
+)
 from bagel.web.proxy_prefix import app_url
 from bagel.pipeline.textutil import (
     format_datetime,
@@ -78,7 +84,39 @@ def present_item(item, *, preview: bool | None = None, source_name: str | None =
         fs = first_seen if first_seen.tzinfo else first_seen.replace(tzinfo=UTC)
         is_new = fs >= datetime.now(UTC) - timedelta(hours=24)
 
-    return {
+    download_status = ""
+    download_label = ""
+    local_play_url = ""
+    if item_type == ItemType.AV and isinstance(meta, dict):
+        dl = meta.get("download") if isinstance(meta.get("download"), dict) else {}
+        download_status = str(dl.get("status") or "none")
+        labels = {
+            "none": "未下载",
+            "pending": "下载中",
+            "done": "已下载",
+            "failed": "下载失败",
+            "skipped_drm": "DRM 不可用",
+        }
+        download_label = labels.get(download_status, download_status)
+        if download_status == "done" and dl.get("local_path"):
+            local_play_url = f"/api/av/files/{item.id}"
+
+    av_detail_url = ""
+    show_av_import = False
+    show_av_enrich = False
+    has_rich_transcript = False
+    if item_type == ItemType.MEDIA_POST:
+        av_id = linked_av_id(item)
+        if av_id:
+            av_detail_url = f"/av/items/{av_id}"
+        elif is_importable_media_post(item):
+            show_av_import = True
+        show_av_enrich = can_enrich_media_transcript(item)
+        has_rich_transcript = item_has_rich_transcript(item)
+    elif item_type == ItemType.AV:
+        has_rich_transcript = item_has_rich_transcript(item)
+
+    row = {
         "id": str(item.id),
         "url": item.url,
         "title": title or raw_title,
@@ -98,6 +136,7 @@ def present_item(item, *, preview: bool | None = None, source_name: str | None =
             ItemType.MEDIA_POST,
             ItemType.MODEL,
             ItemType.EDUCATION,
+            ItemType.AV,
         },
         "tickers": tickers,
         "sentiment": sentiment,
@@ -110,4 +149,47 @@ def present_item(item, *, preview: bool | None = None, source_name: str | None =
         "is_new": is_new,
         "item_type": item.item_type,
         "status": item.status,
+        "download_status": download_status,
+        "download_label": download_label,
+        "local_play_url": local_play_url,
+        "show_av_download": item_type == ItemType.AV,
+        "detail_url": f"/av/items/{item.id}" if item_type == ItemType.AV else "",
+        "show_av_import": show_av_import,
+        "av_detail_url": av_detail_url,
+        "show_av_enrich": show_av_enrich,
+        "has_rich_transcript": has_rich_transcript,
+        "show_paper_parse": False,
+        "show_paper_probe": False,
+        "paper_parse_label": "",
+        "show_github_learn": item_type
+        in {ItemType.GITHUB_REPO, ItemType.GITHUB_RELEASE},
+        "github_learn_url": (
+            f"/github/learn/{item.id}"
+            if item_type in {ItemType.GITHUB_REPO, ItemType.GITHUB_RELEASE}
+            else ""
+        ),
+        "github_learn_done": bool(
+            item_type in {ItemType.GITHUB_REPO, ItemType.GITHUB_RELEASE}
+            and isinstance(meta, dict)
+            and isinstance(meta.get("learn"), dict)
+            and meta["learn"].get("status") in {"done", "indexed"}
+        ),
     }
+    if item_type == ItemType.PAPER:
+        from bagel.collectors.papers import paper_has_resolvable_pdf
+
+        parsed = (
+            isinstance(meta, dict)
+            and isinstance(meta.get("parse"), dict)
+            and meta["parse"].get("status") == "done"
+        )
+        has_pdf = paper_has_resolvable_pdf(
+            page_url=item.url,
+            external_id=str((meta or {}).get("external_id") or ""),
+            raw=(meta or {}).get("raw") if isinstance((meta or {}).get("raw"), dict) else None,
+            stored_pdf_url=str((meta or {}).get("pdf_url") or "") or None,
+        )
+        row["paper_parse_label"] = "已解析正文" if parsed else ""
+        row["show_paper_parse"] = bool(has_pdf and not parsed)
+        row["show_paper_probe"] = bool(not has_pdf and not parsed)
+    return row

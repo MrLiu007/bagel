@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block content %}
 <h1>{{ title }}</h1>
 <div class="tabs">
@@ -6,6 +6,7 @@
   <a href="{{ u('/settings?tab=github') }}" class="{% if tab == 'github' %}on{% endif %}">GitHub</a>
   <a href="{{ u('/settings?tab=papers') }}" class="{% if tab == 'papers' %}on{% endif %}">论文数据源</a>
   <a href="{{ u('/settings?tab=education') }}" class="{% if tab == 'education' %}on{% endif %}">教育数据源</a>
+  <a href="{{ u('/settings?tab=av') }}" class="{% if tab == 'av' %}on{% endif %}">音视频数据源</a>
   <a href="{{ u('/settings?tab=models') }}" class="{% if tab == 'models' %}on{% endif %}">模型数据源</a>
   <a href="{{ u('/settings?tab=stocks') }}" class="{% if tab == 'stocks' %}on{% endif %}">股票数据源</a>
   <a href="{{ u('/settings?tab=excludes') }}" class="{% if tab == 'excludes' %}on{% endif %}">系统排除词</a>
@@ -23,8 +24,8 @@
 {% if tab == 'sources' %}
 <div class="panel">
   <p class="hint">
-    下方为当前库内新闻数据源（首次启动由默认种子写入）。可启停、删除，或追加自定义 RSS。
-    默认清单见 <span class="mono">docs/default-news-sources.md</span>。
+    下方为当前库内新闻数据源（首次启动由默认种子写入）。聚焦<strong>科技 / AI / 大模型 / 机器人</strong>：海外以 OpenAI、Google AI、TechCrunch AI、Wired AI、IEEE Spectrum 等为主；国内保留 InfoQ / Solidot / 爱范儿 / OSCHINA，已默认关闭消费数码与空壳源。
+    兴趣标签务必含 <code>GPT</code>（标题写 GPT-6 时不含 LLM）。海外源需 <code>ENABLE_OVERSEAS_SOURCES=true</code> 且代理可用。清单见 <span class="mono">docs/default-news-sources.md</span>。
   </p>
   <form class="inline" method="post" action="{{ u('/settings/sources') }}">
     <input type="text" name="name" placeholder="名称" required />
@@ -88,7 +89,8 @@
 {% if tab == 'github' %}
 <div class="panel">
   <p class="hint">
-    GitHub 采集使用下方 Search Query（种子写入）。可启停；兴趣标签对本类目单独生效，与新闻 INCLUDE 互不强制共享。
+    GitHub 只有一个数据源：<code>api.github.com</code> Search。下方保留<strong>一条</strong>宽检索 Query；
+    主题筛选请用本页「兴趣标签 INCLUDE」（与多条 topic Query 等价，后者会重复限流且结果不稳定）。
   </p>
 </div>
 <div class="panel">
@@ -180,8 +182,9 @@
 {% if tab == 'papers' %}
 <div class="panel">
   <p class="hint">
-    科普 Tab 使用的论文数据源。默认包含 arXiv（cs.AI / LG / CL / CV / RO）、Hugging Face Papers、OpenAlex；Semantic Scholar 默认关闭（无 API Key 时易 429）。
-    URL 约定：<code>arxiv:cs.AI</code>、<code>hf:daily</code>、<code>openalex:C154945302</code>、<code>s2:large language model</code>。
+    论文 Tab 使用的数据源。默认包含 arXiv（cs.AI / LG / CL / CV / RO）与 OpenAlex；Semantic Scholar 默认关闭（无 API Key 时易 429）。
+    已移除 Hugging Face Papers：Daily Papers 实质是 arXiv 策展，入库后按 arXiv id 去重，过滤 Tab 无法形成独立目录。
+    URL 约定：<code>arxiv:cs.AI</code>、<code>openalex:C154945302</code>、<code>s2:large language model</code>。
     如需启用 Semantic Scholar，请在 <code>.env</code> 配置 <code>SEMANTIC_SCHOLAR_API_KEY</code> 后于本页打开该源。
   </p>
   <form class="inline" method="post" action="{{ u('/settings/papers') }}">
@@ -234,8 +237,8 @@
 {% if tab == 'education' %}
 <div class="panel">
   <p class="hint">
-    教育 Tab 使用的高校开放学习资源（MIT OCW、Stanford AI Lab、耶鲁 OYC、Class Central、fast.ai 等）。
-    支持完整 RSS URL，或 RSSHub 相对路径。启动时会自动修复已知失效源地址。
+    教育 Tab：全球开放课程与 AI 教学资讯（MIT OCW、Yale OYC、Coursera、Khan、CMU OLI、fast.ai、Distill、Lil'Log 等）。
+    已移除校园综合新闻、Class Central（403）、国内 RSSHub 适配。支持完整 RSS URL。
   </p>
   <form class="inline" method="post" action="{{ u('/settings/education') }}">
     <input type="text" name="name" placeholder="名称，如 MIT OCW" required />
@@ -276,6 +279,66 @@
 <details class="panel">
   <summary style="cursor:pointer;font-family:var(--font-mono);color:var(--accent-2);">查看内置默认教育源清单</summary>
   {% for d in education_catalog %}
+  <div class="row">
+    <div>
+      <div class="kw">{{ d.name }}</div>
+      <div class="meta">{{ d.region }} · 默认{% if d.enabled %}启用{% else %}关闭{% endif %} · {{ d.url }}</div>
+    </div>
+  </div>
+  {% endfor %}
+</details>
+{% endif %}
+{% include "_interest_tags.html" %}
+{% endif %}
+
+{% if tab == 'av' %}
+<div class="panel">
+  <p class="hint">
+    内置仅 4 个已核对 B 站 UP + 验通样片；其它频道请手动添加（<code>https://</code> 或 <code>av:</code> 前缀）。
+    自定义源不会被自动清理。抖音关键词请走 <a href="{{ u('/media') }}">自媒体</a>。
+    <strong>采集仅元数据</strong>；B 站需登录，建议
+    <code>AV_COOKIES_FROM_BROWSER=edge</code>。清单见
+    <span class="mono">docs/default-av-sources.md</span>。
+  </p>
+  <form class="inline" method="post" action="{{ u('/settings/av') }}">
+    <input type="text" name="name" placeholder="名称，如 3Blue1Brown" required />
+    <input type="text" name="url" placeholder="av:youtube:channel:@handle 或 https://…" required style="flex:2;min-width:260px;" />
+    <select name="region">
+      <option value="GLOBAL">海外</option>
+      <option value="CN">国内</option>
+    </select>
+    <button type="submit">添加</button>
+  </form>
+</div>
+<div class="panel">
+  {% if av_sources %}
+    {% for s in av_sources %}
+    <div class="row {% if not s.enabled %}is-off{% endif %}">
+      <div>
+        <div class="kw">{{ s.name }}
+          <span class="badge {% if s.enabled %}on{% else %}off{% endif %}">{% if s.enabled %}ON{% else %}OFF{% endif %}</span>
+        </div>
+        <div class="meta" style="word-break:break-all;">{{ s.region }} · {{ s.url }}</div>
+      </div>
+      <div class="actions">
+        <form method="post" action="{{ u('/settings/av/' ~ s.id ~ '/toggle') }}">
+          <input type="hidden" name="enabled" value="{% if s.enabled %}0{% else %}1{% endif %}" />
+          <button type="submit" class="{% if s.enabled %}btn-state-off{% else %}btn-state-on{% endif %}">{% if s.enabled %}停用{% else %}启用{% endif %}</button>
+        </form>
+        <form method="post" action="{{ u('/settings/av/' ~ s.id ~ '/delete') }}" onsubmit="return confirm('确认删除该音视频源？');">
+          <button class="danger" type="submit">删除</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <p class="empty">暂无音视频源。可手动添加，或重启应用以写入默认种子。</p>
+  {% endif %}
+</div>
+{% if av_catalog %}
+<details class="panel">
+  <summary style="cursor:pointer;font-family:var(--font-mono);color:var(--accent-2);">查看内置默认音视频源清单</summary>
+  {% for d in av_catalog %}
   <div class="row">
     <div>
       <div class="kw">{{ d.name }}</div>
@@ -349,8 +412,8 @@
 {% if tab == 'stocks' %}
 <div class="panel">
   <p class="hint">
-    股票 Tab 使用的资讯源（与新闻数据源隔离）。支持完整 RSS URL，或 RSSHub 相对路径（如 <code>/cls/telegraph</code>）。
-    默认含 Yahoo / MarketWatch / CNBC / BBC Business 等海外源；国内 RSSHub 源默认关闭，需自建 RSSHub 后启用。
+    股票 Tab 使用的资讯源（与新闻数据源隔离）。默认仅保留海外直连 RSS：Yahoo / MarketWatch / CNBC / BBC Business / Investing.com。
+    已删除国内 RSSHub 适配（财联社 / 东方财富 / 华尔街见闻），常见 <code>HTTP_ERROR</code> 且依赖自建 RSSHub。
   </p>
   <form class="inline" method="post" action="{{ u('/settings/stocks') }}">
     <input type="text" name="name" placeholder="名称，如 CNBC" required />
@@ -453,6 +516,10 @@
     <label class="check" style="display:flex;align-items:center;gap:0.4rem;margin:0.35rem 0;color:var(--muted);">
       <input type="checkbox" name="schedule_collect_models" value="1" {% if schedule_cfg.schedule_collect_models %}checked{% endif %} />
       定时采集模型
+    </label>
+    <label class="check" style="display:flex;align-items:center;gap:0.4rem;margin:0.35rem 0;color:var(--muted);">
+      <input type="checkbox" name="schedule_collect_av" value="1" {% if schedule_cfg.schedule_collect_av %}checked{% endif %} />
+      定时采集音视频
     </label>
     <label class="check" style="display:flex;align-items:center;gap:0.4rem;margin:0.35rem 0;color:var(--muted);">
       <input type="checkbox" name="enable_keyword_growth" value="1" {% if schedule_cfg.enable_keyword_growth %}checked{% endif %} />

@@ -1,6 +1,11 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block content %}
 <h1>{{ title }} <span class="mono">/ media</span></h1>
+<p class="hint">
+  <strong>本页 = 关键词发现</strong>：通过 MediaCrawler 按关键词在各平台搜索，入库标题/正文/链接等元数据。
+  视频学习与字幕请用 <a href="{{ u('/av') }}">音视频</a>（yt-dlp）。列表里 B 站/抖音/快手可「加入音视频学习」或「提取文稿」。
+  <strong>抖音提文稿/下载</strong>前请用 Edge 打开 douyin.com，并设 <code>AV_COOKIES_FROM_BROWSER=edge</code>（关闭浏览器后再点）。
+</p>
 <p class="hint">
   关键词在本页<strong>动态填写</strong>。多平台会<strong>依次</strong>各启动一次 MediaCrawler（单次只能一个平台）。
   抓取完成后<strong>不会整页刷新</strong>，平台勾选与关键词会保留。{{ docs_hint }}
@@ -20,7 +25,21 @@
       <div class="label">Login</div>
       <div class="value" style="font-size:0.95rem;">{{ status.login_type }}</div>
     </div>
+    <div class="viz-card">
+      <div class="label">评论</div>
+      <div class="value" style="font-size:0.95rem;">{% if status.get_comments %}ON{% else %}OFF{% endif %}</div>
+    </div>
+    <div class="viz-card">
+      <div class="label">媒体下载</div>
+      <div class="value" style="font-size:0.95rem;">{% if status.get_medias %}ON{% else %}OFF{% endif %}</div>
+    </div>
   </div>
+  <p class="hint" style="margin-top:0.35rem;">
+    评论 / MediaCrawler 媒体下载默认关闭，可在
+    <a href="{{ u('/settings?tab=config') }}">系统设置 → 配置</a>
+    打开 <code>MEDIA_CRAWLER_GET_COMMENTS</code> / <code>MEDIA_CRAWLER_GET_MEDIAS</code>。
+    汇总用文稿请点列表「提取文稿」（yt-dlp），勿依赖 MediaCrawler 下载。
+  </p>
 
   {% if not status.enabled %}
   <p class="hint">默认已开启；若仍显示关闭，请检查 .env 是否被覆盖。</p>
@@ -235,5 +254,61 @@
   {% elif latest_task %}
   render({{ latest_task|tojson }});
   {% endif %}
+
+  document.addEventListener('click', async (ev) => {
+    const enrichBtn = ev.target.closest('.av-enrich-btn');
+    if (enrichBtn) {
+      const itemId = enrichBtn.dataset.itemId;
+      enrichBtn.disabled = true;
+      enrichBtn.textContent = '提取中…';
+      try {
+        const resp = await fetch(bagelUrl('/api/av/enrich-from-media/' + itemId), { method: 'POST' });
+        const task = await resp.json();
+        if (!resp.ok) {
+          enrichBtn.textContent = task.detail || '启动失败';
+          enrichBtn.disabled = false;
+          return;
+        }
+        const poll = setInterval(async () => {
+          try {
+            const s = await (await fetch(bagelUrl('/api/tasks/' + task.id))).json();
+            enrichBtn.textContent = s.message || s.status;
+            if (s.status === 'success' || s.status === 'failed') {
+              clearInterval(poll);
+              if (s.status === 'success') {
+                const url = (s.result && s.result.detail_url) || '/av';
+                location.href = bagelUrl(url);
+              } else {
+                enrichBtn.textContent = s.error || '提取失败';
+                enrichBtn.disabled = false;
+              }
+            }
+          } catch (_) {}
+        }, 1200);
+      } catch (_) {
+        enrichBtn.textContent = '提取失败';
+        enrichBtn.disabled = false;
+      }
+      return;
+    }
+    const btn = ev.target.closest('.av-import-btn');
+    if (!btn) return;
+    const itemId = btn.dataset.itemId;
+    btn.disabled = true;
+    btn.textContent = '导入中…';
+    try {
+      const resp = await fetch(bagelUrl('/api/av/import-from-media/' + itemId), { method: 'POST' });
+      const data = await resp.json();
+      if (!resp.ok) {
+        btn.textContent = data.detail || '导入失败';
+        btn.disabled = false;
+        return;
+      }
+      location.href = bagelUrl(data.detail_url);
+    } catch (_) {
+      btn.textContent = '导入失败';
+      btn.disabled = false;
+    }
+  });
 </script>
 {% endblock %}

@@ -1,4 +1,4 @@
-"""HTTP auth gate — session check before route handlers.
+﻿"""HTTP auth gate — session check before route handlers.
 
 Design notes:
 - HTML navigations without a session → 303 to ``/login?next=…``

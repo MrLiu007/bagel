@@ -1,4 +1,4 @@
-"""Reddit headers, scheduler jitter config, CLI runtime, Feishu webhook."""
+﻿"""Reddit headers, scheduler jitter config, CLI runtime, Feishu webhook."""
 
 from __future__ import annotations
 

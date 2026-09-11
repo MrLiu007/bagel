@@ -1,4 +1,4 @@
-"""Load / validate / match Bagel taxonomy seed JSON."""
+﻿"""Load / validate / match Bagel taxonomy seed JSON."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block content %}
 <h1>{{ title }}</h1>
 <div class="tabs">
@@ -8,6 +8,7 @@
 
 {% if tab == 'manual' %}
 <p class="hint">当前为<strong>主动触发</strong>模式。每次拉取只保留<strong>近 {{ lookback_days | default(14) }} 天内发布</strong>的条目（按发布时间，而非入库时间），列表也按发布时间倒序。点击任务可查看各数据源明细。</p>
+<p class="hint"><strong>采集音视频</strong>仅扫描元数据（标题/链接/时长），<em>不下载</em>媒体文件；下载与字幕提取请在 <a href="{{ u('/av') }}">音视频</a> Tab 条目详情中操作。</p>
 
 <div class="panel">
   <div class="actions" id="collect-kinds">
@@ -15,9 +16,9 @@
     <button data-kind="collect_github" type="button">采集 GitHub</button>
     <button data-kind="collect_papers" type="button">采集论文</button>
     <button data-kind="collect_education" type="button">采集教育</button>
+    <button data-kind="collect_av" type="button">采集音视频</button>
     <button data-kind="collect_models" type="button">采集模型</button>
     <button data-kind="collect_stocks" type="button">采集股票</button>
-    <button data-kind="compile_wiki" type="button">编译 Wiki</button>
   </div>
   <div class="progress-wrap">
     <div class="bar"><span id="bar"></span></div>
@@ -68,7 +69,7 @@
     collect_education: { label: '教育', href: '/education' },
     collect_models: { label: '模型', href: '/models' },
     collect_stocks: { label: '股票', href: '/stocks' },
-    compile_wiki: { label: 'Wiki 编译', href: '/briefs/space' },
+    collect_av: { label: '音视频', href: '/av' },
     collect_all: { label: '全部', href: '/news' },
     summarize: { label: '摘要', href: '/briefs' }
   };

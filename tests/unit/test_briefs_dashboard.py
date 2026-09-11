@@ -129,17 +129,38 @@ def test_keyword_growth_from_search(db: Session) -> None:
     assert result["include_added"] >= 1
 
 
-def test_brief_custom_prompt_stored(db: Session) -> None:
+def test_brief_custom_prompt_stored(db: Session, monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    monkeypatch.setenv("DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("LLM_ENABLED", "false")
+    get_settings.cache_clear()
+    sample = "汇报对象：管理层；请基于素材写投屏终稿"
     bundle = write_monthly_brief(
         db,
         kind=BriefKind.NEWS,
         year_month="2099-01",
-        custom_prompt="重点讲 LLM 推理成本",
+        custom_prompt=sample,
         save_prompt_default=True,
     )
-    assert "LLM" in bundle.brief.metadata_.get("user_prompt", "")
+    assert "管理层" in bundle.brief.metadata_.get("user_prompt", "")
     assert bundle.brief.metadata_.get("prompt_used")
-    assert brief_prompts.load_default(BriefKind.NEWS) == "重点讲 LLM 推理成本"
+    assert brief_prompts.load_default(BriefKind.NEWS) == sample
+    # Without LLM, still falls back to template — must not dump prompt into body.
+    assert "自定义聚焦" not in bundle.markdown
+
+
+def test_legacy_demo_prompt_not_loaded(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True)
+    (data_dir / "brief_prompts.json").write_text(
+        '{"NEWS": "重点讲 LLM 推理成本"}',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("DATA_DIR", str(data_dir))
+    get_settings.cache_clear()
+    assert brief_prompts.load_default(BriefKind.NEWS) == ""
+    # File scrubbed on load.
+    raw = (data_dir / "brief_prompts.json").read_text(encoding="utf-8")
+    assert "推理成本" not in raw
 
 
 def test_briefs_dashboard_route(monkeypatch: pytest.MonkeyPatch, db: Session) -> None:
@@ -166,6 +187,39 @@ def test_briefs_dashboard_route(monkeypatch: pytest.MonkeyPatch, db: Session) ->
         assert "GBrain" in resp.text
         resp2 = client.get("/briefs/space?q=Agent")
         assert resp2.status_code == 200
+    finally:
+        app.dependency_overrides.clear()
+        get_settings.cache_clear()
+
+
+def test_briefs_hub_defaults_to_news(monkeypatch: pytest.MonkeyPatch, db: Session) -> None:
+    monkeypatch.setenv("AUTH_REQUIRED", "false")
+    get_settings.cache_clear()
+    from bagel.storage.database import get_db
+    from bagel.web.nav import NAV_ITEMS
+
+    assert ("汇总", "/briefs", "briefs") in NAV_ITEMS
+
+    app = create_app()
+
+    def _override():
+        try:
+            yield db
+        finally:
+            pass
+
+    app.dependency_overrides[get_db] = _override
+    try:
+        client = TestClient(app)
+        resp = client.get("/briefs")
+        assert resp.status_code == 200
+        assert "新闻" in resp.text
+        # News tab selected; personal space is no longer the first / default tab.
+        assert 'class="on">新闻</a>' in resp.text or "class=\"on\">新闻</a>" in resp.text
+        news_pos = resp.text.find(">新闻</a>")
+        space_pos = resp.text.find(">个人空间</a>")
+        assert news_pos != -1 and space_pos != -1
+        assert news_pos < space_pos
     finally:
         app.dependency_overrides.clear()
         get_settings.cache_clear()
