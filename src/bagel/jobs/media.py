@@ -1,4 +1,4 @@
-"""Ingest MediaCrawler results into IntelItem rows."""
+﻿"""Ingest MediaCrawler results into IntelItem rows."""
 
 from __future__ import annotations
 

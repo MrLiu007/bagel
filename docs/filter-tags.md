@@ -1,4 +1,4 @@
-# 兴趣过滤与各类型关键词（Filter Tags）
+﻿# 兴趣过滤与各类型关键词（Filter Tags）
 
 Bagel 按**资源类目**管理关键词，避免全局 INCLUDE 误伤自媒体 / 微信。
 
@@ -6,8 +6,8 @@ Bagel 按**资源类目**管理关键词，避免全局 INCLUDE 误伤自媒体 
 
 | 类型 | 在哪里配置 | 作用 |
 |------|------------|------|
-| **兴趣标签 INCLUDE** | 系统设置 → 新闻 / GitHub / 股票 / 论文 / 模型 / **教育** 各数据源页 | 有启用标签时，标题/摘要须命中至少一个才进候选；支持添加、删除、启停 |
-| **系统排除词 EXCLUDE** | 系统设置 → **系统排除词** | 命中则拒绝入库；可多选适用类目（新闻、GitHub、股票、论文、模型、教育、自媒体、微信）；支持添加、删除、启停、改类目 |
+| **兴趣标签 INCLUDE** | 系统设置 → 新闻 / GitHub / 股票 / 论文 / 模型 / **教育 / 音视频** 各数据源页 | 有启用标签时，标题/摘要须命中至少一个才进候选；支持添加、删除、启停 |
+| **系统排除词 EXCLUDE** | 系统设置 → **系统排除词** | 命中则拒绝入库；可多选适用类目（新闻、GitHub、股票、论文、模型、教育、**音视频**、自媒体、微信）；支持添加、删除、启停、改类目 |
 | **自媒体拉取词** | `.env` / 配置页 `MEDIA_CRAWLER_KEYWORDS`，或自媒体页表单 | 决定去哪些平台搜什么；入库后再套该类目 EXCLUDE |
 | **微信拉取词** | `.env` `GEWE_KEYWORDS` | 回调须命中才入库；再套微信类目 EXCLUDE |
 
@@ -17,7 +17,10 @@ Bagel 按**资源类目**管理关键词，避免全局 INCLUDE 误伤自媒体 
 2. 在「兴趣标签」中添加 `LLM`、`Agent` 等，可启停或删除。
 3. 同一关键词若在多个类目都需要，可在各页分别添加（会合并到同一规则的 `scopes`）。
 4. **删光某类目下全部 INCLUDE** = 该类目不过兴趣门禁（仍受排除词约束）。
-5. 默认种子仅挂在**新闻**，并已去掉语义重复项（如 `AI Agent`/`Agent`、`大语言模型`/`大模型`、`GPT`/`LLM`）。
+5. 默认种子覆盖 **科技 / AI / 大模型 / 机器人**：含 `GPT`、`OpenAI`、`Claude`、`Gemini`、`大模型`、`机器人` 等。  
+   **不要**再把 `GPT` 当成 `LLM` 的重复项删除——标题写「GPT-6」时往往不含 `LLM`。  
+   `开源` 仅作 BOOST，不作 INCLUDE 门禁。
+6. 拉丁短词按词边界匹配（`GPT` 可命中 `GPT-6`；`ai` 不会误伤 `said`）。
 
 自媒体 / 微信**不提供** INCLUDE UI（用各自拉取关键词）。
 
@@ -44,4 +47,4 @@ Bagel 按**资源类目**管理关键词，避免全局 INCLUDE 误伤自媒体 
 - 规则表：`intel_keyword_rule.scopes`（CSV，见迁移 `0004_keyword_scopes`）
 - 作用域解析：`bagel.pipeline.keyword_scopes`
 - 匹配：`bagel.pipeline.filter.apply_keyword_rules`
-- 各 job 按 `KeywordScope` 取规则：`news` / `github` / `stocks` / `papers` / `models` / `media` / `wechat`
+- 各 job 按 `KeywordScope` 取规则：`news` / `github` / `stocks` / `papers` / `models` / `av` / `media` / `wechat`

@@ -1,4 +1,4 @@
-"""Normalize collector payloads into `NormalizedItem` DTOs.
+﻿"""Normalize collector payloads into `NormalizedItem` DTOs.
 
 All collectors should funnel through helpers here (or equivalent) so URL
 canonicalization and datetime parsing stay consistent before upsert.

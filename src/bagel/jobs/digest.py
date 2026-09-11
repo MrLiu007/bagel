@@ -1,4 +1,4 @@
-"""Jobs for LLM summarization and digest generation."""
+﻿"""Jobs for LLM summarization and digest generation."""
 
 from __future__ import annotations
 

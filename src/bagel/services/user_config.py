@@ -1,4 +1,4 @@
-"""Per-user config overlays on top of system .env defaults.
+﻿"""Per-user config overlays on top of system .env defaults.
 
 Unconfigured keys fall back to `.env` / live Settings. User saves write only
 to `data/user_config/<user_id>.json` and never mutate shared `.env`.
@@ -115,6 +115,67 @@ def merged_config_for_user(user_id: UUID | str | None) -> dict[str, str]:
     merged = defaults_map()
     merged.update(load_user_overrides(user_id))
     return merged
+
+
+def _coerce_override(field_name: str, raw: str) -> Any:
+    """Coerce a string overlay value to the Settings field type."""
+    from bagel.settings import Settings
+
+    field = Settings.model_fields.get(field_name)
+    if field is None:
+        return raw
+    ann = field.annotation
+    origin = getattr(ann, "__origin__", None)
+    # Unwrap Optional[T]
+    if origin is type(None):  # pragma: no cover
+        pass
+    args = getattr(ann, "__args__", ())
+    if origin is not None and type(None) in args and len(args) == 2:
+        ann = args[0] if args[1] is type(None) else args[1]
+
+    text = (raw or "").strip()
+    if ann is bool or ann == bool:
+        return text.lower() in {"1", "true", "on", "yes"}
+    if ann is int or ann == int:
+        return int(text)
+    if ann is float or ann == float:
+        return float(text)
+    # StrEnum / Enum
+    try:
+        from enum import Enum
+
+        if isinstance(ann, type) and issubclass(ann, Enum):
+            return ann(text)
+    except TypeError:
+        pass
+    return text
+
+
+def settings_for_user(user_id: UUID | str | None = None):
+    """Live Settings with this user's personal overlays applied (MinerU/Kimi etc.).
+
+    Settings UI writes to ``data/user_config/<id>.json``; collectors/parsers that
+    only call ``get_settings()`` would miss those keys — use this for user-scoped
+    work such as paper parse.
+    """
+    from bagel.settings import Settings, get_settings
+
+    base = get_settings()
+    overrides = load_user_overrides(user_id)
+    if not overrides:
+        return base
+    updates: dict[str, Any] = {}
+    for env_key, value in overrides.items():
+        field_name = env_key.lower()
+        if field_name not in Settings.model_fields:
+            continue
+        try:
+            updates[field_name] = _coerce_override(field_name, value)
+        except (TypeError, ValueError):
+            continue
+    if not updates:
+        return base
+    return base.model_copy(update=updates)
 
 
 def catalog_for_ui(user_id: UUID | str | None = None, *, is_admin: bool = False) -> list[dict[str, Any]]:

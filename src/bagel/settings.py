@@ -1,4 +1,4 @@
-"""Application settings loaded from environment / `.env` only.
+﻿"""Application settings loaded from environment / `.env` only.
 
 UI overrides for scheduler / Feishu live in `data/runtime_config.json`
 (see `services.runtime_config`) and intentionally do not replace these env
@@ -112,6 +112,11 @@ class Settings(BaseSettings):
 
     # Collect recency: only keep items published within this window
     collect_lookback_days: int = 14
+    # News job pacing (sequential sources; sleep reduces Reddit/GLOBAL 429s)
+    news_source_sleep_sec: float = 1.5
+    news_reddit_sleep_sec: float = 8.0
+    news_rate_limit_cooldown_sec: float = 18.0
+    news_source_max_attempts: int = 2
 
     # MediaCrawler — enabled by default for out-of-box 自媒体 tab
     enable_media_crawler: bool = True
@@ -134,6 +139,69 @@ class Settings(BaseSettings):
     media_crawler_cdp_connect_existing: bool = False
     # False = Playwright standard browser (recommended for QR). True = CDP/Chrome debug.
     media_crawler_enable_cdp_mode: bool = False
+    # Optional MediaCrawler rich output (default off — discovery stays lightweight).
+    media_crawler_get_comments: bool = False
+    media_crawler_get_sub_comments: bool = False
+    media_crawler_get_medias: bool = False  # upstream typo ENABLE_GET_MEIDAS
+
+    # yt-dlp — learning AV (third_party clone, not vendored)
+    enable_ytdlp: bool = True
+    ytdlp_enabled: bool = True
+    ytdlp_path: str = "./third_party/yt-dlp"
+    ytdlp_auto_setup: bool = True
+    ytdlp_git_url: str = ""
+    ytdlp_git_ref: str = "2026.08.19"
+    av_max_items_per_source: int = 30
+    av_download_dir: str = "data/av/files"
+    av_default_audio_only: bool = False  # 音视频学习默认保留视频；仅音频可在 .env 打开
+
+    av_max_height: int = 720
+    av_max_file_size_mb: int = 2048
+    av_write_subtitles: bool = True
+    av_subtitle_langs: str = "zh,en"
+    av_cookies_file: str = ""
+    av_cookies_from_browser: str = ""
+    av_bilibili_browser: str = "edge"  # B 站空间列表需登录态；空=不自动注入
+    av_scan_sleep_sec: int = 2
+    av_scan_timeout_sec: int = 120
+    ffmpeg_path: str = ""
+    # Local transcript when platform has no soft CC (Douyin burned-in captions, etc.)
+    av_asr_enabled: bool = True
+    av_asr_backend: str = "auto"  # auto | volcengine | openai | faster_whisper | off
+    av_asr_model: str = "whisper-1"  # openai model, or small/base/medium for faster-whisper
+    av_asr_language: str = "zh"
+    # Author description is NOT on-screen captions; off by default for transcript jobs
+    av_fallback_author_desc: bool = False
+    # Volcengine openspeech / 豆包语音 录音文件识别（submit/query + flash）
+    volc_asr_api_key: str = ""  # 新版控制台 X-Api-Key
+    volc_asr_app_id: str = ""  # 旧版 APP ID → X-Api-App-Key
+    volc_asr_access_key: str = ""  # 旧版 Access Token → X-Api-Access-Key
+    volc_asr_resource_id: str = "volc.seedasr.auc"  # 2.0; 1.0=volc.bigasr.auc
+    volc_asr_flash_resource_id: str = "volc.bigasr.auc_turbo"
+    volc_asr_mode: str = "auto"  # auto | async | flash
+    volc_asr_language: str = ""  # empty → reuse AV_ASR_LANGUAGE
+    volc_asr_uid: str = "bagel"
+    volc_asr_poll_interval_sec: float = 2.0
+    volc_asr_poll_timeout_sec: float = 900.0  # long Douyin clips
+    volc_asr_http_timeout_sec: float = 120.0
+    volc_asr_max_retries: int = 3
+    volc_asr_max_file_mb: int = 200
+    volc_asr_flash_max_mb: int = 8  # auto: short clips use flash first
+    # Before MEDIA/AV briefs: yt-dlp subtitle enrich for video items lacking content
+    brief_auto_enrich_media: bool = True
+    brief_enrich_max_items: int = 8
+
+    # Paper PDF download + document parse (MinerU Cloud / Kimi file-extract)
+    enable_paper_parse: bool = True
+    paper_parse_providers: str = "mineru,kimi"  # order for load-balance / failover
+    paper_parse_strategy: str = "round_robin"  # round_robin | failover
+    paper_parse_timeout_sec: int = 300
+    enable_mineru: bool = True
+    mineru_api_token: str = ""
+    mineru_model_version: str = "vlm"
+    enable_kimi_files: bool = True
+    kimi_api_key: str = ""  # empty → reuse LLM_API_KEY when provider is moonshot
+    kimi_files_base_url: str = ""  # empty → moonshot / llm base
 
     # Gewe WeChat bridge
     enable_wechat: bool = False
@@ -143,6 +211,21 @@ class Settings(BaseSettings):
     gewe_app_id: str = ""
     gewe_callback_url: str = "http://127.0.0.1:8000/api/wechat/webhook"
     gewe_keywords: str = "大模型,AI,Agent"
+
+    unpaywall_email: str = "bagel@localhost"
+
+    # Archify — GitHub learn architecture diagrams (third_party clone, Node CLI)
+    enable_archify: bool = True
+    archify_path: str = "./third_party/archify"
+    archify_auto_setup: bool = True
+    archify_git_url: str = ""
+    archify_git_ref: str = "main"
+    enable_github_learn: bool = True
+    github_learn_max_files: int = 80
+    github_learn_max_snippets: int = 24
+    github_learn_snippet_chars: int = 4000
+    github_learn_snippet_total_chars: int = 48000
+    github_learn_timeout_sec: int = 900
 
     # Paths
     data_dir: str = Field(default="data")
@@ -183,6 +266,10 @@ class Settings(BaseSettings):
     @property
     def media_active(self) -> bool:
         return bool(self.enable_media_crawler or self.media_crawler_enabled)
+
+    @property
+    def ytdlp_active(self) -> bool:
+        return bool(self.enable_ytdlp or self.ytdlp_enabled)
 
     @property
     def wechat_active(self) -> bool:

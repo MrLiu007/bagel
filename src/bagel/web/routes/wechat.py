@@ -1,4 +1,4 @@
-"""微信（Gewe）页面与 Webhook。"""
+﻿"""微信（Gewe）页面与 Webhook。"""
 
 from __future__ import annotations
 

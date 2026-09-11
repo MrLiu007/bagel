@@ -1,4 +1,4 @@
-{% if title_search | default(true) %}
+﻿{% if title_search | default(true) %}
 <form class="title-search" method="get" action="{{ u(base_path) }}" role="search">
   {% if kind %}<input type="hidden" name="kind" value="{{ kind }}" />{% endif %}
   {% if platform_filter %}<input type="hidden" name="platform" value="{{ platform_filter }}" />{% endif %}
@@ -77,7 +77,13 @@
 {% else %}
   {% for item in items %}
   <article class="item" data-item-id="{{ item.id }}">
-    <h2><a href="{{ item.url }}" target="_blank" rel="noopener">{{ item.title }}</a></h2>
+    <h2>
+      {% if item.detail_url %}
+      <a href="{{ u(item.detail_url) }}">{{ item.title }}</a>
+      {% else %}
+      <a href="{{ item.url }}" target="_blank" rel="noopener">{{ item.title }}</a>
+      {% endif %}
+    </h2>
     <div class="meta">
       {% if item.is_new %}<span class="badge on">新</span>{% endif %}
       {% if item.source_name %}<span class="badge src">{{ item.source_name }}</span>{% endif %}
@@ -101,6 +107,7 @@
       {% if item.author %}<span class="time">{{ item.author }}</span>{% endif %}
       {% if item.time_label %}<span class="time">{{ item.time_prefix }}{{ item.time_label }}</span>{% endif %}
       {% if item.is_favorite %}<span class="badge on">收藏</span>{% endif %}
+      {% if item.download_label %}<span class="badge tag">{{ item.download_label }}</span>{% endif %}
       {% if item.tags and not item.tickers %}
         {% for t in item.tags %}<span class="badge tag">{{ t }}</span>{% endfor %}
       {% endif %}
@@ -114,6 +121,44 @@
       </form>
       {% if item.show_related %}
       <button type="button" class="btn related-open" data-item-id="{{ item.id }}">关联</button>
+      {% endif %}
+      {% if item.detail_url %}
+      <a class="btn" href="{{ u(item.detail_url) }}">详情</a>
+      {% endif %}
+      {% if item.show_av_import %}
+      <button type="button" class="btn av-import-btn" data-item-id="{{ item.id }}">加入音视频学习</button>
+      {% elif item.av_detail_url %}
+      <a class="btn" href="{{ u(item.av_detail_url) }}">音视频详情</a>
+      {% endif %}
+      {% if item.show_av_enrich %}
+      <button type="button" class="btn av-enrich-btn" data-item-id="{{ item.id }}">提取文稿</button>
+      {% elif item.has_rich_transcript and item.item_type == 'MEDIA_POST' %}
+      <span class="badge on">已有文稿</span>
+      {% endif %}
+      {% if item.show_github_learn %}
+      <a class="btn{% if item.github_learn_done %} primary{% endif %}" href="{{ u(item.github_learn_url) }}">学习</a>
+      {% endif %}
+      {% if item.show_paper_parse %}
+        {% if item.paper_parse_label %}
+        <span class="badge on">{{ item.paper_parse_label }}</span>
+        {% else %}
+        <button type="button" class="btn paper-parse-btn" data-item-id="{{ item.id }}">下载PDF并识别</button>
+        {% endif %}
+      {% elif item.show_paper_probe %}
+        {% if item.paper_parse_label %}
+        <span class="badge on">{{ item.paper_parse_label }}</span>
+        {% else %}
+        <button type="button" class="btn paper-probe-btn" data-item-id="{{ item.id }}">探测开放 PDF</button>
+        {% endif %}
+      {% elif item.paper_parse_label %}
+        <span class="badge on">{{ item.paper_parse_label }}</span>
+      {% endif %}
+      {% if show_av_download | default(item.show_av_download) %}
+        {% if item.local_play_url %}
+        <a class="btn" href="{{ u(item.local_play_url) }}" target="_blank" rel="noopener">本地播放</a>
+        {% elif item.download_status != 'done' %}
+        <button type="button" class="btn av-download-btn" data-item-id="{{ item.id }}">下载</button>
+        {% endif %}
       {% endif %}
     </div>
   </article>

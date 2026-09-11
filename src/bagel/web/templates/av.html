@@ -1,0 +1,141 @@
+﻿{% extends "base.html" %}
+{% block content %}
+<h1>{{ title }} <span class="mono">/ av</span></h1>
+<p class="hint">
+  <strong>采集 = 仅元数据</strong>（标题、链接、时长、封面），不下载大文件。
+  进入条目<strong>详情</strong>后可按需「下载音视频」「提取字幕文字」或「下载并解析文稿」。
+  兴趣标签见 <a href="{{ u('/settings?tab=av') }}">系统设置 → 音视频数据源</a>。
+  抖音 / B 站 / 快手<strong>关键词发现</strong>请用 <a href="{{ u('/media') }}">自媒体</a>；列表里可「加入音视频学习」或「提取文稿」。
+  抖音「下载/解析文稿」需 Cookie：Edge 打开 douyin.com → <code>AV_COOKIES_FROM_BROWSER=edge</code> → 关闭浏览器再操作。
+  默认下载<strong>视频</strong>（非仅音频）；若只要音频设 <code>AV_DEFAULT_AUDIO_ONLY=true</code>。
+  B 站源请先在 <strong>Edge</strong> 登录，并配置同上。详见 <code>docs/media-vs-av.md</code>。
+</p>
+
+<div class="panel">
+  <div class="viz-strip" style="margin-bottom:0.75rem;">
+    <div class="viz-card">
+      <div class="label">Feature</div>
+      <div class="value">{% if status.enabled %}ON{% else %}OFF{% endif %}</div>
+    </div>
+    <div class="viz-card">
+      <div class="label">Checkout</div>
+      <div class="value" style="font-size:0.95rem;">{% if status.checkout_ready %}OK{% else %}MISS{% endif %}</div>
+    </div>
+    <div class="viz-card">
+      <div class="label">venv</div>
+      <div class="value" style="font-size:0.95rem;">{% if status.venv_ready %}OK{% else %}MISS{% endif %}</div>
+    </div>
+    <div class="viz-card">
+      <div class="label">Cookie</div>
+      <div class="value" style="font-size:0.85rem;">{% if status.cookies_browser %}{{ status.cookies_browser }}{% else %}auto(B站){% endif %}</div>
+    </div>
+    <div class="viz-card">
+      <div class="label">yt-dlp</div>
+      <div class="value" style="font-size:0.8rem;">{% if status.git_ref_actual %}{{ status.git_ref_actual }}{% else %}—{% endif %}</div>
+    </div>
+  </div>
+
+  {% if not status.enabled %}
+  <p class="hint warn">请在 .env 设置 ENABLE_YTDLP=true</p>
+  {% elif not status.checkout_ready %}
+  <p class="hint warn">yt-dlp 未克隆：运行 <code>uv run bagel setup-ytdlp</code></p>
+  {% elif not status.venv_ready %}
+  <p class="hint warn">venv 未就绪：运行 <code>uv run bagel setup-ytdlp</code></p>
+  {% elif status.outdated %}
+  <p class="hint warn">
+    yt-dlp 版本偏旧（当前 {{ status.git_ref_actual }}，建议 {{ status.git_ref_pinned }}），
+    B 站易报 HTTP 412。请运行 <code>uv run bagel setup-ytdlp --ref {{ status.git_ref_pinned }}</code>
+  </p>
+  {% else %}
+  <span class="status-pill ok"><span class="dot"></span> yt-dlp 就绪 · 采集不写盘</span>
+  {% endif %}
+
+  <div class="actions" style="margin-top:0.85rem;">
+    <button class="primary" id="collectBtn" type="button"
+      {% if not status.enabled or not status.venv_ready %}disabled{% endif %}>采集元数据</button>
+  </div>
+  <div class="progress-wrap" style="margin-top:0.65rem;">
+    <div class="bar"><span id="bar"></span></div>
+    <div class="meta" id="meta">{% if latest_task %}上次：{{ latest_task.status }}{% else %}尚未采集{% endif %}</div>
+    <div class="hint" id="tips" style="margin-top:0.45rem;display:none;"></div>
+    <pre id="taskLog" class="hint" style="display:none;margin-top:0.45rem;max-height:160px;overflow:auto;white-space:pre-wrap;font-size:0.78rem;line-height:1.4;border:1px solid var(--line);border-radius:6px;padding:0.45rem;"></pre>
+  </div>
+</div>
+
+<div id="itemsPanel">
+{% include "_items_list.html" %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const btn = document.getElementById('collectBtn');
+  const bar = document.getElementById('bar');
+  const meta = document.getElementById('meta');
+  const tips = document.getElementById('tips');
+  const logEl = document.getElementById('taskLog');
+  let pollTimer = null;
+
+  function setProgress(pct, msg, hint) {
+    bar.style.width = (pct || 0) + '%';
+    meta.textContent = msg || '';
+    if (hint) {
+      tips.style.display = 'block';
+      tips.textContent = hint;
+    }
+  }
+
+  function setLog(lines) {
+    if (!logEl) return;
+    if (!lines || !lines.length) {
+      logEl.style.display = 'none';
+      logEl.textContent = '';
+      return;
+    }
+    logEl.style.display = 'block';
+    logEl.textContent = lines.slice(-30).join('\n');
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function poll(taskId) {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(async () => {
+      try {
+        const r = await fetch('{{ u("/api/tasks/") }}' + taskId);
+        const t = await r.json();
+        const hint = (t.result && t.result.hint) || t.error || '';
+        setProgress(t.percent, t.message || t.status, hint);
+        setLog(t.log || []);
+        if (t.status === 'success' || t.status === 'failed') {
+          clearInterval(pollTimer);
+          pollTimer = null;
+          btn.disabled = false;
+          if (t.status === 'success') {
+            const frag = await fetch('{{ u("/av?fragment=items") }}');
+            if (frag.ok) {
+              document.getElementById('itemsPanel').innerHTML = await frag.text();
+            }
+          }
+        }
+      } catch (e) { /* ignore */ }
+    }, 800);
+  }
+
+  btn?.addEventListener('click', async () => {
+    btn.disabled = true;
+    tips.style.display = 'none';
+    setLog([]);
+    setProgress(5, '元数据采集中（不下载文件）…');
+    try {
+      const r = await fetch('{{ u("/api/av/collect") }}', { method: 'POST' });
+      const t = await r.json();
+      poll(t.id);
+    } catch (e) {
+      setProgress(0, '启动失败');
+      btn.disabled = false;
+    }
+  });
+})();
+</script>
+{% endblock %}

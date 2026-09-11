@@ -1,4 +1,4 @@
-"""HTTP client helpers with network-mode / proxy awareness.
+﻿"""HTTP client helpers with network-mode / proxy awareness.
 
 `NETWORK_MODE=AUTO` tries direct first; on failure with a configured proxy,
 `fetch_text` retries once via proxy so CN sources stay reachable when overseas

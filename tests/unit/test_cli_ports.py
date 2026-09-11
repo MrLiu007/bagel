@@ -1,4 +1,4 @@
-"""Bind-port diagnostics for `bagel dev`."""
+﻿"""Bind-port diagnostics for `bagel dev`."""
 
 from __future__ import annotations
 

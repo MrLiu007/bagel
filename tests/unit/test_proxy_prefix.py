@@ -1,4 +1,4 @@
-"""Reverse-proxy path prefix (X-Forwarded-Prefix / X-Script-Name)."""
+﻿"""Reverse-proxy path prefix (X-Forwarded-Prefix / X-Script-Name)."""
 
 from __future__ import annotations
 

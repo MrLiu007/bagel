@@ -1,4 +1,4 @@
-"""News collection job — idempotent, isolated failures per source/item.
+﻿"""News collection job — idempotent, isolated failures per source/item.
 
 CN sources run first. Overseas / GLOBAL failures are recorded and skipped so
 they never abort domestic collection. Task status is PARTIAL (UI success) when
@@ -18,11 +18,15 @@ from sqlalchemy.orm import Session
 from bagel.collectors.rss import COLLECTOR_VERSION, RssCollector
 from bagel.domain.enums import JobStatus, KeywordScope, Region, SourceType
 from bagel.jobs.metrics import elapsed_ms, source_stat
+from bagel.jobs.source_guard import (
+    raise_for_retryable_error_code,
+    safe_source_fetch,
+)
 from bagel.pipeline.category import classify_title
 from bagel.pipeline.filter import apply_keyword_rules
 from bagel.pipeline.keyword_scopes import rules_for_scope
 from bagel.pipeline.recency import is_within_lookback, sort_key_published
-from bagel.pipeline.textutil import strip_html, truncate
+from bagel.pipeline.textutil import coalesce_item_content, strip_html, truncate
 from bagel.settings import Settings, get_settings
 from bagel.storage.repositories import (
     ItemRepository,
@@ -46,6 +50,33 @@ def _item_label(title: str | None, url: str | None) -> str:
 def _is_networkish(error: str) -> bool:
     upper = error.upper()
     return any(tok in upper for tok in _NETWORKISH)
+
+
+def _is_reddit_source(url: str | None) -> bool:
+    u = (url or "").lower()
+    return "reddit.com" in u or u.startswith("/reddit/")
+
+
+def _pace_before_source(
+    *,
+    index: int,
+    source_url: str | None,
+    settings: Settings,
+    progress: Callable[[int, str], None] | None,
+) -> None:
+    """Sleep between sequential sources; Reddit gets a longer gap to avoid 429."""
+    if index <= 1:
+        return
+    if _is_reddit_source(source_url):
+        wait = float(getattr(settings, "news_reddit_sleep_sec", 8.0) or 0.0)
+    else:
+        wait = float(getattr(settings, "news_source_sleep_sec", 1.5) or 0.0)
+    wait = max(0.0, wait)
+    if wait <= 0:
+        return
+    if progress:
+        progress(index - 1, f"源间休眠 {wait:.1f}s…")
+    time.sleep(wait)
 
 
 def run_collect_news(
@@ -106,39 +137,78 @@ def run_collect_news(
     progress(0, f"准备采集 {total} 个新闻源（近 {lookback_days} 天）…")
 
     # Interest INCLUDE / EXCLUDE filtered by KeywordScope.NEWS.
+    # Sequential only (no thread pool) — pacing + cooldown cut Reddit 429s.
+    rate_limit_cooldown = 0.0
+    cooldown_sec = float(getattr(settings, "news_rate_limit_cooldown_sec", 18.0) or 18.0)
+    max_attempts = max(1, int(getattr(settings, "news_source_max_attempts", 2) or 2))
 
     for index, source in enumerate(sources, start=1):
         region_tag = "CN" if source.region == Region.CN else "GLOBAL"
         src_t0 = time.perf_counter()
         src_found = src_created = src_updated = src_skipped = 0
-        progress(index - 1, f"采集中 ({index}/{total})：{source.name}")
-        try:
-            result = collector.collect_source(source)
-        except Exception as exc:  # noqa: BLE001 — keep other sources running
+        if rate_limit_cooldown > 0:
+            progress(index - 1, f"限流冷却 {rate_limit_cooldown:.0f}s 后继续…")
+            time.sleep(rate_limit_cooldown)
+            rate_limit_cooldown = 0.0
+        else:
+            _pace_before_source(
+                index=index,
+                source_url=source.url,
+                settings=settings,
+                progress=progress,
+            )
+
+        def _notify(attempt: int, _total: int, message: str) -> None:
+            progress(index - 1, message)
+
+        def _fetch(src=source):
+            result = collector.collect_source(src)
+            if not result.ok:
+                raise_for_retryable_error_code(result.error_code, result.error_message)
+            return result
+
+        result, err_info = safe_source_fetch(
+            _fetch,
+            source_name=source.name,
+            max_attempts=max_attempts,
+            on_attempt=_notify,
+        )
+        if err_info is not None:
             session.rollback()
-            SourceRepository(session).mark_error(source, "COLLECT_ERROR")
-            errors.append(f"[{region_tag}] {source.name}: {exc}")
+            hint = str(err_info["error"])
+            status = str(err_info["status"])
+            SourceRepository(session).mark_error(source, status.upper())
+            errors.append(f"[{region_tag}] {source.name}: {hint}"[:200])
             if source.region == Region.GLOBAL:
                 global_failed += 1
+            if status == "rate_limited":
+                # Longer cool-down after Reddit/GLOBAL 429; next sources wait.
+                rate_limit_cooldown = max(cooldown_sec, 8.0)
+                if _is_reddit_source(source.url):
+                    rate_limit_cooldown = max(
+                        rate_limit_cooldown,
+                        float(getattr(settings, "news_reddit_sleep_sec", 8.0) or 8.0) * 2,
+                    )
             logger.warning(
-                "collect_news.source_exception name=%s region=%s err=%s",
+                "collect_news.source_guard name=%s region=%s status=%s",
                 source.name,
                 region_tag,
-                exc,
+                status,
             )
             source_stats.append(
                 source_stat(
                     source.name,
-                    status="failed",
+                    status=status,
                     region=region_tag,
                     source_id=str(source.id),
                     duration_ms=elapsed_ms(src_t0),
-                    error=str(exc),
+                    error=hint,
                 )
             )
-            progress(index, f"跳过：{source.name}（异常）")
+            progress(index, f"跳过：{source.name}（{status}）")
             continue
 
+        assert result is not None
         if not result.ok:
             code = result.error_code or "UNKNOWN_ERROR"
             SourceRepository(session).mark_error(source, code)
@@ -208,6 +278,8 @@ def run_collect_news(
                         }
                     )
                     summary = truncate(normalized.summary or normalized.content, 400) or None
+                    # Keep full RSS body/description in content — briefs are content-first.
+                    content = coalesce_item_content(normalized.content, normalized.summary)
                     category = classify_title(normalized.title, summary)
                     _item, was_created = items_repo.upsert_from_normalized(
                         item_type=normalized.item_type,
@@ -216,7 +288,7 @@ def run_collect_news(
                         title=strip_html(normalized.title) or normalized.title,
                         url=normalized.url,
                         summary=summary,
-                        content=normalized.content,
+                        content=content,
                         author=normalized.author,
                         language=normalized.language,
                         published_at=normalized.published_at,

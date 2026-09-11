@@ -1,4 +1,4 @@
-"""add app_user (required before wiki_page / gbrain FKs)
+﻿"""add app_user (required before wiki_page / gbrain FKs)
 
 Revision ID: 0005a_app_user
 Revises: 0005_search_event

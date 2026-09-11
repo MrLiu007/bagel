@@ -1,4 +1,4 @@
-"""Gewe WeChat HTTP client + keyword matching helpers."""
+﻿"""Gewe WeChat HTTP client + keyword matching helpers."""
 
 from __future__ import annotations
 

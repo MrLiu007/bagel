@@ -1,4 +1,4 @@
-"""Shared per-source / duration metrics for collect job results."""
+﻿"""Shared per-source / duration metrics for collect job results."""
 
 from __future__ import annotations
 

@@ -64,11 +64,13 @@ SAMPLE_RELEASE = {
 }
 
 
-def test_seed_has_at_least_8_github_queries(db: Session) -> None:
+def test_seed_has_single_github_query(db: Session) -> None:
     result = seed_if_empty(db)
-    assert result["github_queries"] >= 8
-    assert len(DEFAULT_GITHUB_QUERIES) >= 8
-    assert db.query(IntelGithubQuery).count() >= 8
+    assert result["github_queries"] == 1
+    assert len(DEFAULT_GITHUB_QUERIES) == 1
+    assert db.query(IntelGithubQuery).count() == 1
+    row = db.query(IntelGithubQuery).one()
+    assert row.name == "GitHub"
 
 
 def test_snapshot_star_delta(db: Session) -> None:

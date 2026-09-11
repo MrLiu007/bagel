@@ -1,4 +1,4 @@
-"""Portable path helpers — never surface machine-absolute paths in UI/logs."""
+﻿"""Portable path helpers — never surface machine-absolute paths in UI/logs."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""FreshRSS integration — infrastructure only, never the business source of truth."""
+﻿"""FreshRSS integration — infrastructure only, never the business source of truth."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Feishu / Lark open-platform bot: event receive + OpenAPI reply.
+﻿"""Feishu / Lark open-platform bot: event receive + OpenAPI reply.
 
 Custom-bot webhooks are outbound-only. Inbound commands need an enterprise app
 with event subscription pointing at POST /api/feishu/events.

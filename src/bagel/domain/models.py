@@ -1,4 +1,4 @@
-"""SQLAlchemy domain models — SQLite (default) or PostgreSQL as transactional store."""
+﻿"""SQLAlchemy domain models — SQLite (default) or PostgreSQL as transactional store."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Job: collect AI models from Hugging Face / ModelScope sources."""
+﻿"""Job: collect AI models from Hugging Face / ModelScope sources."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from bagel.collectors.models import COMMUNITY_LABELS, fetch_from_source
 from bagel.domain.enums import ItemStatus, ItemType, KeywordScope, SourceType
 from bagel.domain.models import IntelSource
 from bagel.jobs.metrics import elapsed_ms, source_stat
+from bagel.jobs.source_guard import MAX_SOURCE_ATTEMPTS, safe_source_fetch
 from bagel.pipeline.category import classify_title
 from bagel.pipeline.filter import apply_keyword_rules
 from bagel.pipeline.keyword_scopes import rules_for_scope
@@ -65,24 +66,45 @@ def run_collect_models(
     created = updated = found = skipped = 0
     errors: list[str] = []
     source_stats: list[dict[str, Any]] = []
+    rate_limit_cooldown = 0.0
 
     for i, src in enumerate(sources, start=1):
         src_t0 = time.perf_counter()
         src_created = src_updated = src_found = src_skipped = 0
-        if on_progress:
-            on_progress(current=i - 1, total=len(sources), message=f"拉取 {src.name}")
-        try:
-            models = fetch_from_source(src.name, src.url)
-        except Exception as exc:  # noqa: BLE001
-            errors.append(f"{src.name}: {exc}"[:200])
-            src.last_error_code = "FETCH_ERROR"
+        if rate_limit_cooldown > 0:
+            if on_progress:
+                on_progress(
+                    current=i - 1,
+                    total=len(sources),
+                    message=f"限流冷却 {rate_limit_cooldown:.0f}s 后继续…",
+                )
+            time.sleep(rate_limit_cooldown)
+            rate_limit_cooldown = 0.0
+
+        def _notify(attempt: int, total: int, message: str) -> None:
+            if on_progress:
+                on_progress(current=i - 1, total=len(sources), message=message)
+
+        models, err_info = safe_source_fetch(
+            lambda s=src: fetch_from_source(s.name, s.url),
+            source_name=src.name,
+            max_attempts=MAX_SOURCE_ATTEMPTS,
+            on_attempt=_notify,
+        )
+        if err_info is not None:
+            hint = str(err_info["error"])
+            status = str(err_info["status"])
+            errors.append(f"{src.name}: {hint}"[:200])
+            src.last_error_code = status.upper()
+            if status == "rate_limited":
+                rate_limit_cooldown = 3.0
             source_stats.append(
                 source_stat(
                     src.name,
-                    status="failed",
+                    status=status,
                     source_id=str(src.id),
                     duration_ms=elapsed_ms(src_t0),
-                    error=str(exc),
+                    error=hint,
                 )
             )
             continue

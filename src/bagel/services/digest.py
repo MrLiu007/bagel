@@ -31,7 +31,14 @@ def _title(item: IntelItem) -> str:
 
 
 def _summary(item: IntelItem) -> str:
-    return item.llm_summary or item.summary or ""
+    """Content-first blurb for digest bullets (keep short)."""
+    from bagel.pipeline.textutil import strip_html, truncate
+
+    for cand in (item.content, item.summary, item.llm_summary):
+        plain = strip_html(cand or "")
+        if plain:
+            return truncate(plain, 280)
+    return ""
 
 
 def _bullet(item: IntelItem) -> str:

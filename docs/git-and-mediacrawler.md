@@ -1,4 +1,4 @@
-# Git 提交与 MediaCrawler（体积 / VPN）
+﻿# Git 提交与 MediaCrawler（体积 / VPN）
 
 > Bagel 仓库**不包含** MediaCrawler 源码，以保持工程小、避免 submodule 提交失败。
 

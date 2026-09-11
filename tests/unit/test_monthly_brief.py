@@ -1,4 +1,4 @@
-"""Monthly sharing briefs — kind-specific templates + export."""
+﻿"""Monthly sharing briefs — kind-specific templates + export."""
 
 from __future__ import annotations
 
@@ -213,7 +213,11 @@ def test_news_tab_link_from_github_page(client: TestClient, db: Session):
     page = client.get("/briefs/github")
     assert page.status_code == 200
     assert 'href="/briefs?period=' in page.text
-    assert "新闻总结" in page.text
+    assert "新闻" in page.text
+    assert "自定义提示词" in page.text
+    assert "brief-fold" in page.text
+    assert "brief-wait" in page.text
+    assert "brief-custom-btn" in page.text
 
 
 def test_collect_month_uses_published_at_only(db: Session):
@@ -283,6 +287,8 @@ def test_write_and_export_monthly_brief(client: TestClient, db: Session, tmp_pat
     assert "brief-body" in present.text
     assert "开源大模型发布" in present.text
     assert "mermaid" in present.text.lower() or "发生了什么" in present.text
+    assert "max-width: 68ch" not in present.text
+    assert "1180px" in present.text
 
     html_export = client.get("/briefs/news/2026-08.html")
     assert html_export.status_code == 200

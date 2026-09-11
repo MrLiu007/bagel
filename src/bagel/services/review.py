@@ -1,4 +1,4 @@
-"""Human review actions — favorite / ignore / top / deep-read."""
+﻿"""Human review actions — favorite / ignore / top / deep-read."""
 
 from __future__ import annotations
 

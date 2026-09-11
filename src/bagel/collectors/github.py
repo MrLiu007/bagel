@@ -1,4 +1,4 @@
-"""GitHub REST API collector — repos, releases, and star snapshots."""
+﻿"""GitHub REST API collector — repos, releases, and star snapshots."""
 
 from __future__ import annotations
 

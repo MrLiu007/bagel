@@ -1,4 +1,4 @@
-# Wiki 编译层 + 领域 Taxonomy + GBrain
+﻿# Wiki 编译层 + 领域 Taxonomy + GBrain
 
 ## 分层（落地约定）
 
@@ -13,8 +13,7 @@
 
 ## 操作
 
-- **手动**：采集页 →「编译 Wiki」→ 任务 kind `compile_wiki`
-- **定时**：设置 → 定时任务 →「定时编译 Wiki」（默认每日 04:10，`enable_wiki_compile`）
+- **定时**：设置 → 定时任务 →「定时编译 Wiki」（默认每日 04:10，`enable_wiki_compile`）。手动采集页不再提供该按钮。
 - **浏览**：`/briefs/space?view=graph` 全幅 GBrain（主题实线 about / 先修虚线 prerequisite）
 
 编译幂等：按 `content_hash` 跳过未变 MD；边表按 relation 重建 about/prerequisite/contains。
@@ -40,20 +39,21 @@
 
 SUBJECTS 固定：新闻 · GitHub项目 · 教育 · 论文 · 模型 · 股票 · 自媒体 · 微信（不含 AI 等 taxonomy subject）。
 
-## 图谱 UX（3D 倒锥）
+## 图谱 UX（3D 倒锥 / 龙卷风）
 
-目标：资源优先、全幅沉浸、统计可读，避免「画布框」抢注意力。
+目标：对齐 [cn-k12-math-knowledge-graph](https://github.com/haojing8312/cn-k12-math-knowledge-graph)（os-taxonomy 式）：细暗默认态 + 点击邻域高亮，避免 lit 球体塑料感。
 
 | 项 | 约定 |
 |----|------|
-| 渲染 | `3d-force-graph`；高度层 `fy` = 资源/概念层；倒锥/龙卷风布局 |
-| 顶部统计 | 单行：`N 资源 · N 主题 · N 关联`；数字用 `stats.resources` / topics / links（**勿用** Jinja `dict.items`，会撞方法名） |
-| 禁止展示 | 不再展示 `taxonomy … micro-topics · 先修` 等内部 taxonomy 计数行（易误导） |
-| 舞台 | `.gbrain-stage` 无边框、背景透明，与页面底色融合；高度约 `88vh` |
-| 居中 | 锥体高度中点对齐世界原点（`midY = maxH * 0.5`）；生长结束后 `zoomToFit` 框住 |
+| 渲染 | `three` + `3d-force-graph` + `static/js/gbrain-tornado.js` |
+| 节点材质 | `MeshBasicMaterial`（枢纽可 AdditiveBlending）；**禁止**默认 Phong 高光球 |
+| 默认态 | 小球分级尺寸；连线极细、低透明度、无粒子 |
+| 点击态 | `setHighlight`：邻域球/线变亮变粗，其余压暗但仍可见（不整图过滤） |
+| 布局 | 高度层 `fy`；黄金角螺旋 + 高度扭转；尖底宽顶 |
+| 动效 | 自下而上生长、慢速自转、径向约束 |
+| 顶部统计 | 单行：`N 资源 · N 主题 · N 关联` |
 | SUBJECTS | 左下半透明浮层；仅 8 资源频道 toggle |
-| 知识卡 | 右上浮层；资源卡 = 摘要 + 打开原文；主题卡 = 挂载资源列表 |
-| 学习记录 | 页底；`gbrain_learn_event`（view / focus / review） |
+| 关联抽屉 | 同一 tornado 脚本 |
 
 ## 闪卡产品逻辑（资源优先）
 

@@ -1,4 +1,4 @@
-"""Title keyword (`q`) filter on list_by_status / list_candidates."""
+﻿"""Title keyword (`q`) filter on list_by_status / list_candidates."""
 
 from __future__ import annotations
 

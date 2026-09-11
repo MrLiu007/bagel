@@ -1,10 +1,13 @@
-# 用户配置说明：自媒体（MediaCrawler）与微信（Gewe）
+﻿# 用户配置说明：自媒体（MediaCrawler）与微信（Gewe）
 
 两者均对最终用户「无感」底层细节：UI 只暴露平台勾选、关键词、启停；密钥与路径全部进 `.env`。
 
 ---
 
 ## 1. 自媒体 Tab（`/media`）
+
+> **与「音视频」分工**：本页默认只做 **关键词发现**（标题/正文/链接）。
+> 评论 / MediaCrawler 媒体下载在配置中可选（默认关）；视频文稿与下载请用 [`/av`](./media-vs-av.md) + yt-dlp（见 [media-vs-av.md](./media-vs-av.md)）。
 
 ### 交互设计
 

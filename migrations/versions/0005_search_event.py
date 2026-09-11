@@ -1,4 +1,4 @@
-"""add intel_search_event for analytics and keyword growth
+﻿"""add intel_search_event for analytics and keyword growth
 
 Revision ID: 0005_search_event
 Revises: 0004_keyword_scopes

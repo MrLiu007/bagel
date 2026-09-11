@@ -1,4 +1,4 @@
-"""Build Feishu-ready digests from local intel DB (lists + weekly briefs)."""
+﻿"""Build Feishu-ready digests from local intel DB (lists + weekly briefs)."""
 
 from __future__ import annotations
 
@@ -28,6 +28,7 @@ _TYPE_SPECS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("模型", "models", (ItemType.MODEL,)),
     ("股票", "stocks", (ItemType.STOCK_NEWS,)),
     ("自媒体", "media", (ItemType.MEDIA_POST,)),
+    ("音视频", "av", (ItemType.AV,)),
     ("微信", "wechat", (ItemType.WECHAT_MSG,)),
 )
 

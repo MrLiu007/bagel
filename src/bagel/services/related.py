@@ -1,4 +1,4 @@
-"""Related-item discovery — core keywords from summary (摘要).
+﻿"""Related-item discovery — core keywords from summary (摘要).
 
 Titles are often meaningless clickbait; tags are too coarse.
 Primary signal: overlapping core keywords extracted from summary/content.
@@ -295,17 +295,40 @@ def _github_owner(item: IntelItem) -> str:
 
 
 def _summary_text(item: IntelItem) -> str:
-    """Prefer摘要; fall back to content then title."""
-    parts = [
-        getattr(item, "llm_summary", None) or "",
-        item.summary or "",
-        item.content or "",
-    ]
-    body = strip_html(" ".join(p for p in parts if p))
+    """Text used for related-keyword extraction.
+
+    Prefer parsed paper body when present; otherwise LLM摘要 → RSS摘要 → title.
+    Full markdown is capped so keyword extraction stays focused.
+    """
+    title = strip_html(item.title or "")
+    llm = strip_html(getattr(item, "llm_summary", None) or "")
+    summary = strip_html(item.summary or "")
+    content = strip_html(item.content or "")
+    meta = item.metadata_ if isinstance(item.metadata_, dict) else {}
+    parse = meta.get("parse") if isinstance(meta.get("parse"), dict) else {}
+    parsed = parse.get("status") == "done" or (
+        item.item_type == ItemType.PAPER and len(content) >= 800
+    )
+
+    if parsed and content:
+        # Lead with body so extract_core_keywords ranks正文 terms ahead of short abstract fillers.
+        body = f"{title}\n{content[:8000]}\n{llm}\n{summary}".strip()
+        return body
+
+    parts = [p for p in (llm, summary, content[:4000]) if p]
+    body = " ".join(parts).strip()
     if len(body) >= 24:
         return body
-    title = strip_html(item.title or "")
     return f"{body} {title}".strip()
+
+
+def _keyword_reason_label(item: IntelItem) -> str:
+    meta = item.metadata_ if isinstance(item.metadata_, dict) else {}
+    parse = meta.get("parse") if isinstance(meta.get("parse"), dict) else {}
+    content = (item.content or "").strip()
+    if parse.get("status") == "done" or (item.item_type == ItemType.PAPER and len(content) >= 800):
+        return "正文关键词"
+    return "摘要关键词"
 
 
 def extract_core_keywords(text: str | None, *, limit: int = 28) -> set[str]:
@@ -427,6 +450,7 @@ def _pool_for(
             ItemType.GITHUB_REPO,
             ItemType.GITHUB_RELEASE,
             ItemType.MEDIA_POST,
+            ItemType.AV,
             ItemType.WECHAT_MSG,
         ]
     else:
@@ -490,7 +514,7 @@ def _score_pair(
 
     if keyword_hit:
         score += 12.0 * sim + 1.5 * min(4, len(shared))
-        reasons.append(f"摘要关键词 · {_shared_label(shared)}")
+        reasons.append(f"{_keyword_reason_label(seed)} · {_shared_label(shared)}")
     elif author_hit:
         score += 1.0
     else:
@@ -526,7 +550,7 @@ def _group_hits(hits: list[RelatedHit]) -> list[tuple[str, list[RelatedHit]]]:
             continue
         used.add(h.item.id)
         rs = " ".join(h.reasons)
-        if "摘要关键词" in rs:
+        if "关键词" in rs:
             keywords.append(h)
         elif "同一作者" in rs or "同一作者/组织" in rs:
             authors.append(h)
@@ -534,7 +558,7 @@ def _group_hits(hits: list[RelatedHit]) -> list[tuple[str, list[RelatedHit]]]:
     out: list[tuple[str, list[RelatedHit]]] = []
     if keywords:
         keywords.sort(key=lambda x: (x.keyword_sim, x.score), reverse=True)
-        out.append(("摘要关键词相近", keywords))
+        out.append(("关键词相近", keywords))
     if authors:
         authors.sort(key=lambda x: x.score, reverse=True)
         out.append(("同一作者（其他作品）", authors))
@@ -578,6 +602,7 @@ def find_related_drawer(session: Session, item_id: UUID, *, limit: int = 36) -> 
         ItemType.GITHUB_REPO: "GitHub 项目",
         ItemType.GITHUB_RELEASE: "GitHub Release",
         ItemType.MEDIA_POST: "自媒体",
+        ItemType.AV: "音视频",
         ItemType.WECHAT_MSG: "微信",
     }
 
@@ -620,6 +645,7 @@ def supports_related(item_type: str | None) -> bool:
         ItemType.GITHUB_REPO,
         ItemType.GITHUB_RELEASE,
         ItemType.MEDIA_POST,
+        ItemType.AV,
         ItemType.MODEL,
         ItemType.EDUCATION,
     }

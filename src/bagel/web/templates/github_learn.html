@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+{% block head %}
+<link rel="stylesheet" href="{{ u('/static/css/learn.css') }}" />
+{% endblock %}
+
+{% block content %}
+<div class="learn-shell">
+  <p class="meta" style="margin-bottom:0.55rem;"><a href="{{ u('/github') }}">← GitHub 项目</a></p>
+
+  <header class="learn-hero">
+    <div>
+      <p class="learn-hero-kicker">Repo Wiki · 懒加载</p>
+      <h1>{{ item.title }}</h1>
+      <p class="learn-hero-desc">
+        左侧先出目录；正文按页生成并持久化。架构图由 Archify 渲染。
+        适合先扫结构，再点进真正要学的模块。
+      </p>
+    </div>
+    <div class="learn-hero-actions">
+      <a class="btn" href="{{ item.url }}" target="_blank" rel="noopener">打开仓库</a>
+      <button type="button" class="btn primary" id="btnLearn">{% if ready %}重建目录{% else %}开始分析{% endif %}</button>
+    </div>
+  </header>
+
+  <div class="learn-progress progress-wrap">
+    <div class="bar"><span id="taskBar"></span></div>
+    <div class="meta" id="taskMeta">{% if learn.status == 'indexed' or learn.status == 'done' %}目录已就绪 · 已生成 {{ pages_ready }}/{{ pages_total }} 页{% else %}等待分析{% endif %}</div>
+    <pre id="taskLog" class="hint" style="display:none;margin-top:0.4rem;max-height:140px;overflow:auto;white-space:pre-wrap;font-size:0.78rem;border:1px solid var(--line);border-radius:6px;padding:0.45rem;"></pre>
+  </div>
+
+  {% if not ready %}
+  <div class="learn-empty panel">
+    <p>尚未生成学习 Wiki。</p>
+    <p class="hint">点击「开始分析」：拉取源码证据 → 规划目录与首页 → Archify 出图；其余页面打开时再写，节省等待。</p>
+  </div>
+  {% else %}
+  <div class="learn-layout">
+    <nav class="learn-toc" aria-label="Wiki 目录">
+      <div class="learn-toc-head">
+        <span>目录</span>
+        <span class="learn-toc-count">{{ pages_ready }}/{{ pages_total }}</span>
+      </div>
+      {% for p in pages %}
+      <a href="{{ u('/github/learn/' ~ item_id ~ '?page=' ~ (p.file|urlencode)) }}"
+         class="{% if active_page and active_page.file == p.file %}on{% endif %}{% if p.parent %} child{% endif %}">
+        {{ p.title }}{% if p.status == 'pending' %}<span class="pending-tag">待生成</span>{% endif %}
+      </a>
+      {% endfor %}
+      {% if has_diagram %}
+      <a class="diagram-link" href="#archify-diagram">架构图 · Archify</a>
+      {% endif %}
+    </nav>
+
+    <div class="learn-main">
+      {% if active_page %}
+      <div class="learn-main-bar">
+        <h2>{{ active_page.title }}</h2>
+        {% if page_pending %}
+        <span class="learn-badge pending">生成中</span>
+        {% else %}
+        <span class="learn-badge ready">已缓存</span>
+        {% endif %}
+      </div>
+
+      <article class="learn-article wiki-prose" id="pageBody">
+        {% if page_pending %}
+        <div class="learn-generating" id="pageGenHint">
+          <span class="pulse" aria-hidden="true"></span>
+          本页尚未生成，正在按需撰写并写入本地…
+        </div>
+        {% else %}
+        {{ article_html | safe }}
+        {% endif %}
+      </article>
+      {% else %}
+      <div class="learn-empty">请从左侧选择一页开始阅读。</div>
+      {% endif %}
+
+      {% if has_diagram %}
+      <section class="learn-diagram" id="archify-diagram">
+        <div class="learn-diagram-hd">
+          <div>
+            <h3>系统架构图</h3>
+            <p class="hint">默认嵌入预览；点 Archify 工具栏「演示」进入<strong>浏览器全屏</strong>，Esc 退出。</p>
+          </div>
+          <button type="button" class="btn" id="btnArchifyFullscreen" title="全屏演示">全屏演示</button>
+        </div>
+        <div class="learn-diagram-stage" id="archifyStage">
+          <iframe
+            id="archifyFrame"
+            title="Archify architecture"
+            src="{{ u('/api/github/learn/' ~ item_id ~ '/diagram') }}"
+            allow="fullscreen"
+          ></iframe>
+        </div>
+      </section>
+      {% elif learn.diagram_error %}
+      <p class="learn-warn">架构图未生成：{{ learn.diagram_error }}</p>
+      {% endif %}
+
+      {% if learn.path %}
+      <p class="learn-meta-foot">产物 · {{ learn.path }}</p>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const itemId = {{ item_id | tojson }};
+  const pagePending = {{ page_pending | tojson }};
+  const pageFile = {{ (active_page.file if active_page else '') | tojson }};
+  const bar = document.getElementById('taskBar');
+  const meta = document.getElementById('taskMeta');
+  const logEl = document.getElementById('taskLog');
+  const btn = document.getElementById('btnLearn');
+
+  function setProgress(pct, msg) {
+    if (bar) bar.style.width = (pct || 0) + '%';
+    if (meta) meta.textContent = msg || '';
+  }
+  function setLog(lines) {
+    if (!logEl) return;
+    if (!lines || !lines.length) { logEl.style.display = 'none'; return; }
+    logEl.style.display = 'block';
+    logEl.textContent = lines.slice(-30).join('\n');
+  }
+  function pollTask(taskId, onOk) {
+    const t = setInterval(async () => {
+      try {
+        const s = await (await fetch(bagelUrl('/api/tasks/' + taskId))).json();
+        setProgress(s.percent, s.message || s.status);
+        setLog(s.log || []);
+        if (s.status === 'success' || s.status === 'failed') {
+          clearInterval(t);
+          if (s.status === 'success') onOk(s);
+          else {
+            if (btn) btn.disabled = false;
+            alert(s.error || s.message || '失败');
+          }
+        }
+      } catch (e) {}
+    }, 1000);
+  }
+
+  btn?.addEventListener('click', async () => {
+    btn.disabled = true;
+    setProgress(5, '排队分析目录…');
+    setLog([]);
+    const r = await fetch(bagelUrl('/api/github/learn/' + itemId), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ force: true }),
+    });
+    const task = await r.json();
+    pollTask(task.id, () => location.reload());
+  });
+
+  if (pagePending && pageFile) {
+    setProgress(8, '按需生成当前页…');
+    fetch(bagelUrl('/api/github/learn/' + itemId + '/pages/' + encodeURIComponent(pageFile)), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ force: false }),
+    }).then(r => r.json()).then(task => {
+      pollTask(task.id, () => location.reload());
+    }).catch(err => alert(err.message || '启动页面生成失败'));
+  }
+
+  // Archify「演示」→ 浏览器全屏；非演示保持嵌入预览尺寸。
+  (function wireArchifyFullscreen() {
+    const stage = document.getElementById('archifyStage');
+    const iframe = document.getElementById('archifyFrame');
+    const btnFs = document.getElementById('btnArchifyFullscreen');
+    if (!stage || !iframe) return;
+
+    function isPresent() {
+      try {
+        return iframe.contentDocument?.documentElement?.getAttribute('data-present') === 'true';
+      } catch (e) {
+        return false;
+      }
+    }
+    function enterFs() {
+      const req = stage.requestFullscreen || stage.webkitRequestFullscreen;
+      if (req) req.call(stage).catch(function () {});
+    }
+    function exitFs() {
+      if (!document.fullscreenElement && !document.webkitFullscreenElement) return;
+      const ex = document.exitFullscreen || document.webkitExitFullscreen;
+      if (ex) ex.call(document).catch(function () {});
+    }
+    function syncFromPresent() {
+      if (isPresent()) enterFs();
+      else exitFs();
+    }
+    function exitPresentInFrame() {
+      try {
+        const api = iframe.contentWindow && iframe.contentWindow.Archify;
+        if (api && api.presentation && api.presentation.active && api.presentation.active()) {
+          api.presentation.exit();
+        } else {
+          const html = iframe.contentDocument?.documentElement;
+          if (html) html.removeAttribute('data-present');
+          const btn = iframe.contentDocument?.getElementById('btn-present');
+          if (btn) btn.setAttribute('aria-pressed', 'false');
+        }
+      } catch (e) {}
+    }
+
+    function bindFrame() {
+      try {
+        const doc = iframe.contentDocument;
+        if (!doc) return;
+        const html = doc.documentElement;
+        const obs = new MutationObserver(syncFromPresent);
+        obs.observe(html, { attributes: true, attributeFilter: ['data-present'] });
+        doc.getElementById('btn-present')?.addEventListener('click', function () {
+          setTimeout(syncFromPresent, 30);
+        });
+        // Direct link ?present=1
+        syncFromPresent();
+      } catch (e) {}
+    }
+
+    iframe.addEventListener('load', bindFrame);
+    if (iframe.contentDocument?.readyState === 'complete') bindFrame();
+
+    document.addEventListener('fullscreenchange', function () {
+      const fs = document.fullscreenElement === stage || document.webkitFullscreenElement === stage;
+      if (!fs && isPresent()) exitPresentInFrame();
+      if (btnFs) btnFs.textContent = fs ? '退出全屏' : '全屏演示';
+    });
+
+    btnFs?.addEventListener('click', function () {
+      const fs = document.fullscreenElement === stage || document.webkitFullscreenElement === stage;
+      if (fs) {
+        exitFs();
+        exitPresentInFrame();
+        return;
+      }
+      try {
+        const api = iframe.contentWindow && iframe.contentWindow.Archify;
+        if (api && api.presentation && api.presentation.enter) api.presentation.enter();
+        else {
+          iframe.contentDocument?.documentElement?.setAttribute('data-present', 'true');
+        }
+      } catch (e) {}
+      enterFs();
+    });
+  })();
+})();
+</script>
+{% endblock %}

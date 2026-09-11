@@ -1,4 +1,4 @@
-"""Phase 5: web review — favorite / ignore / top / deep-read / tags."""
+﻿"""Phase 5: web review — favorite / ignore / top / deep-read / tags."""
 
 from __future__ import annotations
 

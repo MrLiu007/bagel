@@ -1,4 +1,4 @@
-"""Phase 1 unit tests: settings, health, CLI wiring."""
+﻿"""Phase 1 unit tests: settings, health, CLI wiring."""
 
 from __future__ import annotations
 

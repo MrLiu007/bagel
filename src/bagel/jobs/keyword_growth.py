@@ -1,4 +1,4 @@
-"""Scheduled job: expand interest tags / exclude words from search analytics."""
+﻿"""Scheduled job: expand interest tags / exclude words from search analytics."""
 
 from __future__ import annotations
 
@@ -29,6 +29,7 @@ _TYPE_TO_SCOPE: dict[str, str] = {
     ItemType.EDUCATION: "education",
     ItemType.MODEL: "models",
     ItemType.MEDIA_POST: "media",
+    ItemType.AV: "av",
     ItemType.WECHAT_MSG: "wechat",
 }
 

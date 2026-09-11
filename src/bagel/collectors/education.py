@@ -1,4 +1,4 @@
-"""Education / OCW collectors — university open learning RSS feeds."""
+﻿"""Education / OCW collectors — university open learning RSS feeds."""
 
 from __future__ import annotations
 

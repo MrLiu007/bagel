@@ -24,6 +24,23 @@ def truncate(value: str | None, limit: int = 160) -> str:
     return text[: max(0, limit - 1)].rstrip() + "…"
 
 
+def coalesce_item_content(
+    content: str | None,
+    summary: str | None,
+    *,
+    max_len: int = 80_000,
+) -> str | None:
+    """Persist full body for briefs: prefer content, else keep untruncated summary.
+
+    List UIs still use a short ``summary`` column; weekly/monthly manuscripts need
+    the longer raw text in ``content``. Many RSS feeds only ship ``description``.
+    """
+    raw = (content or "").strip() or (summary or "").strip()
+    if not raw:
+        return None
+    return raw[:max_len]
+
+
 def headline_from_body(value: str | None, *, limit: int = 48) -> str:
     """Build a list title from long social-post body (Weibo etc. have no real title)."""
     text = strip_html(value)

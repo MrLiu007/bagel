@@ -1,4 +1,4 @@
-"""Stock news collection — STOCK sources with stocks-scoped keyword rules."""
+﻿"""Stock news collection — STOCK sources with stocks-scoped keyword rules."""
 
 from __future__ import annotations
 
@@ -12,11 +12,16 @@ from sqlalchemy.orm import Session
 from bagel.collectors.rss import COLLECTOR_VERSION, RssCollector
 from bagel.domain.enums import ItemType, JobStatus, KeywordScope, Region, SourceType
 from bagel.jobs.metrics import elapsed_ms, source_stat
+from bagel.jobs.source_guard import (
+    MAX_SOURCE_ATTEMPTS,
+    raise_for_retryable_error_code,
+    safe_source_fetch,
+)
 from bagel.pipeline.filter import apply_keyword_rules
 from bagel.pipeline.keyword_scopes import rules_for_scope
 from bagel.pipeline.recency import is_within_lookback, sort_key_published
 from bagel.pipeline.stock_extract import enrich_stock_text
-from bagel.pipeline.textutil import strip_html, truncate
+from bagel.pipeline.textutil import coalesce_item_content, strip_html, truncate
 from bagel.settings import Settings, get_settings
 from bagel.storage.repositories import (
     ItemRepository,
@@ -111,33 +116,56 @@ def run_collect_stocks(
             on_progress(current=i, total=total, message=message)
 
     progress(0, f"准备采集 {total} 个股票源（近 {lookback_days} 天）…")
+    rate_limit_cooldown = 0.0
 
     for index, source in enumerate(sources, start=1):
         src_t0 = time.perf_counter()
         src_found = src_created = src_updated = src_skipped = 0
         region_tag = "CN" if source.region == Region.CN else "GLOBAL"
-        progress(index - 1, f"采集中 ({index}/{total})：{source.name}")
-        try:
-            result = collector.collect_source(source)
-        except Exception as exc:  # noqa: BLE001
+        if rate_limit_cooldown > 0:
+            progress(index - 1, f"限流冷却 {rate_limit_cooldown:.0f}s 后继续…")
+            time.sleep(rate_limit_cooldown)
+            rate_limit_cooldown = 0.0
+
+        def _notify(attempt: int, _total: int, message: str) -> None:
+            progress(index - 1, message)
+
+        def _fetch(src=source):
+            result = collector.collect_source(src)
+            if not result.ok:
+                raise_for_retryable_error_code(result.error_code, result.error_message)
+            return result
+
+        result, err_info = safe_source_fetch(
+            _fetch,
+            source_name=source.name,
+            max_attempts=MAX_SOURCE_ATTEMPTS,
+            on_attempt=_notify,
+        )
+        if err_info is not None:
             session.rollback()
-            SourceRepository(session).mark_error(source, "COLLECT_ERROR")
-            errors.append(f"{source.name}: {exc}")
+            hint = str(err_info["error"])
+            status = str(err_info["status"])
+            SourceRepository(session).mark_error(source, status.upper())
+            errors.append(f"{source.name}: {hint}"[:200])
+            if status == "rate_limited":
+                rate_limit_cooldown = 3.0
             source_stats.append(
                 source_stat(
                     source.name,
-                    status="failed",
+                    status=status,
                     region=region_tag,
                     source_id=str(source.id),
                     duration_ms=elapsed_ms(src_t0),
-                    error=str(exc),
+                    error=hint,
                 )
             )
-            progress(index, f"失败：{source.name}")
+            progress(index, f"跳过：{source.name}（{status}）")
             continue
 
+        assert result is not None
         if not result.ok:
-            SourceRepository(session).mark_error(source, result.error_code or "UNKNOWN_ERROR")
+            SourceRepository(session).mark_error(source, result.error_code or "COLLECT_ERROR")
             errors.append(f"{source.name}: {result.error_code}")
             source_stats.append(
                 source_stat(
@@ -146,10 +174,10 @@ def run_collect_stocks(
                     region=region_tag,
                     source_id=str(source.id),
                     duration_ms=elapsed_ms(src_t0),
-                    error=str(result.error_code),
+                    error=str(result.error_code or result.error_message),
                 )
             )
-            progress(index, f"失败：{source.name} ({result.error_code})")
+            progress(index, f"失败：{source.name}")
             continue
 
         SourceRepository(session).mark_success(source)
@@ -185,6 +213,7 @@ def run_collect_stocks(
                     )
                     tags = list({*filt.matched_include, *filt.matched_boost})
                     summary = truncate(normalized.summary or normalized.content, 400) or None
+                    content = coalesce_item_content(normalized.content, normalized.summary)
                     enrichment = None
                     category = "其他"
                     stock_meta: dict = {}
@@ -217,7 +246,7 @@ def run_collect_stocks(
                         title=strip_html(normalized.title) or normalized.title,
                         url=normalized.url,
                         summary=summary,
-                        content=normalized.content,
+                        content=content,
                         author=normalized.author,
                         language=normalized.language,
                         published_at=normalized.published_at,

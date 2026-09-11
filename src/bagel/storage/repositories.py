@@ -1,4 +1,4 @@
-"""Repositories — transactional persistence for Bagel domain objects.
+﻿"""Repositories — transactional persistence for Bagel domain objects.
 
 SQLite is the default backend; PostgreSQL is optional. All collectors and
 jobs should write through these repositories so dedup and status rules stay

@@ -1,4 +1,4 @@
-"""Local bind diagnostics for `bagel dev`.
+﻿"""Local bind diagnostics for `bagel dev`.
 
 On Windows, Hyper-V / Docker WinNAT may *temporarily* reserve TCP ranges that
 include 8000 (WinError 10013). Ranges move over time — 8000 remains the product

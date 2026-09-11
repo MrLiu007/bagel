@@ -1,4 +1,4 @@
-"""CLI entry: `uv run bagel ...`
+﻿"""CLI entry: `uv run bagel ...`
 
 - In-process commands: Typer + Rich
 - External binaries (Feishu etc.): integrations.cli_runtime + provider adapters
@@ -61,6 +61,94 @@ def setup_media(
         "then: .venv/Scripts/python.exe -m playwright install chromium"
     )
     console.print("Set MEDIA_CRAWLER_PATH=./third_party/MediaCrawler in .env")
+
+
+@app.command("setup-ytdlp")
+def setup_ytdlp_cmd(
+    ref: str = typer.Option("2026.08.19", "--ref", help="Upstream git tag or branch"),
+    force: bool = typer.Option(False, "--force", help="Remove broken non-git dir and re-clone"),
+    repo: str = typer.Option(
+        "https://github.com/yt-dlp/yt-dlp.git",
+        "--repo",
+        help="Upstream git URL",
+    ),
+    skip_venv: bool = typer.Option(False, "--skip-venv", help="Only clone, do not pip install"),
+) -> None:
+    """Clone yt-dlp into third_party/ (gitignored) and install its venv."""
+    from bagel.services.ytdlp_setup import setup_ytdlp
+
+    try:
+        info = setup_ytdlp(repo=repo, ref=ref, force=force, install_deps=not skip_venv)
+    except FileExistsError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    except subprocess.CalledProcessError as exc:
+        console.print(f"[red]command failed[/red] {exc.stderr or exc}")
+        raise typer.Exit(code=1) from exc
+    except RuntimeError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    console.print(f"[green]yt-dlp {info['action']}[/green] → {info['path']}")
+    console.print(f"venv: {info.get('venv', 'unknown')}")
+    console.print("Set YTDLP_PATH=./third_party/yt-dlp in .env")
+    console.print("Optional: install ffmpeg on PATH for merge/transcode")
+
+
+@app.command("setup-archify")
+def setup_archify_cmd(
+    ref: str = typer.Option("main", "--ref", help="Upstream git tag or branch"),
+    force: bool = typer.Option(False, "--force", help="Remove broken non-git dir and re-clone"),
+    repo: str = typer.Option(
+        "https://github.com/tt-a1i/archify.git",
+        "--repo",
+        help="Upstream git URL",
+    ),
+) -> None:
+    """Optional recovery: clone Archify. Prefer `bagel dev` auto-setup (ARCHIFY_AUTO_SETUP)."""
+    from bagel.services.archify_setup import is_node_ready, setup_archify
+
+    if not is_node_ready():
+        console.print("[red]未找到 node。Archify 需要 Node.js >= 18。[/red]")
+        raise typer.Exit(code=1)
+    try:
+        info = setup_archify(repo=repo, ref=ref, force=force)
+    except FileExistsError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    except RuntimeError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    console.print(f"[green]archify {info['action']}[/green] → {info['path']}")
+    console.print(f"package: {info.get('package')}")
+    console.print("[dim]日常开发无需本命令：`bagel dev` 启动时会自动 ensure Archify。[/dim]")
+
+
+def _ensure_dev_third_party(settings) -> None:
+    """Clone MediaCrawler / yt-dlp / Archify when missing — same as app lifespan."""
+    from bagel.services.archify_setup import ensure_archify_on_startup
+    from bagel.services.media_setup import ensure_mediacrawler_on_startup
+    from bagel.services.ytdlp_setup import ensure_ytdlp_on_startup
+
+    for label, fn in (
+        ("MediaCrawler", ensure_mediacrawler_on_startup),
+        ("yt-dlp", ensure_ytdlp_on_startup),
+        ("Archify", ensure_archify_on_startup),
+    ):
+        try:
+            info = fn(settings=settings)
+            if not info:
+                continue
+            action = info.get("action") or "ok"
+            if action in {"failed", "skipped"}:
+                err = info.get("error") or action
+                console.print(f"[yellow]{label} auto-setup {action}[/yellow]: {err}")
+            else:
+                path = info.get("path") or ""
+                console.print(f"[dim]{label} {action}[/dim]" + (f" → {path}" if path else ""))
+        except Exception as exc:  # noqa: BLE001
+            console.print(f"[yellow]{label} auto-setup failed[/yellow]: {exc}")
 
 
 @app.command()
@@ -131,10 +219,17 @@ def dev(
     else:
         console.print("[dim]Auth off (AUTH_REQUIRED=false).[/dim]")
 
+    console.print("[dim]Ensuring third_party tools (MediaCrawler / yt-dlp / Archify)…[/dim]")
+    _ensure_dev_third_party(settings)
+
     # Probe noise is filtered in create_app() so --reload child processes also quiet it.
     reload_excludes = [
         "third_party/MediaCrawler/*",
         "third_party\\MediaCrawler\\*",
+        "third_party/yt-dlp/*",
+        "third_party\\yt-dlp\\*",
+        "third_party/archify/*",
+        "third_party\\archify\\*",
         "data/*",
         "data\\*",
         ".venv/*",

@@ -112,7 +112,8 @@ def test_education_school_source_tabs(monkeypatch: pytest.MonkeyPatch, tmp_path)
         client = TestClient(app)
         page = client.get("/education")
         assert page.status_code == 200
-        assert "全部学校" in page.text
+        assert "全部" in page.text
+        assert "学校" in page.text
         assert ">MIT<" in page.text or ">MIT</a>" in page.text or "MIT" in page.text
         # Aggregated: not listing every feed name as its own tab label preference
         assert page.text.count("MIT OCW · New Courses") <= 1  # may appear in item source badge only
@@ -138,6 +139,12 @@ def test_default_education_sources() -> None:
     urls = {r["url"] for r in DEFAULT_EDUCATION_SOURCES}
     assert "https://ocw.mit.edu/rss/new/mit-allcourses.xml" not in urls
     assert "https://online.stanford.edu/news/rss.xml" not in urls
+    assert "https://www.classcentral.com/report/feed/" not in urls
+    assert "/xuetangx/courses" not in urls
+    assert "https://news.berkeley.edu/feed/" not in urls
+    assert "https://news.harvard.edu/gazette/feed/" not in urls
+    assert any("Coursera" in r["name"] for r in DEFAULT_EDUCATION_SOURCES)
+    assert any("Yale" in r["name"] for r in DEFAULT_EDUCATION_SOURCES)
 
 
 def test_repair_education_sources(tmp_path) -> None:
@@ -190,8 +197,7 @@ def test_repair_education_sources(tmp_path) -> None:
     urls = {r.url for r in rows}
     assert "https://old.ocw.mit.edu/rss/new/mit-newcourses.xml" in urls
     assert "https://ai.stanford.edu/blog/feed.xml" in urls
-    edx = next(r for r in rows if r.url == "https://blog.edx.org/feed")
-    assert edx.enabled is False
+    assert "https://blog.edx.org/feed" not in urls
     session.close()
     engine.dispose()
 

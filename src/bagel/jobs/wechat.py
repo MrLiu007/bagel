@@ -1,4 +1,4 @@
-"""Ingest Gewe WeChat webhook messages into IntelItem rows."""
+﻿"""Ingest Gewe WeChat webhook messages into IntelItem rows."""
 
 from __future__ import annotations
 

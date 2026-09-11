@@ -1,4 +1,4 @@
-"""Backfill stock enrichment for existing STOCK_NEWS rows."""
+﻿"""Backfill stock enrichment for existing STOCK_NEWS rows."""
 
 from __future__ import annotations
 

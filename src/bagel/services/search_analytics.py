@@ -1,4 +1,4 @@
-"""Search event logging and dashboard aggregates."""
+﻿"""Search event logging and dashboard aggregates."""
 
 from __future__ import annotations
 
@@ -27,6 +27,7 @@ _TYPE_LABELS: dict[str, str] = {
     ItemType.MODEL: "模型",
     ItemType.STOCK_NEWS: "股票",
     ItemType.MEDIA_POST: "自媒体",
+    ItemType.AV: "音视频",
     ItemType.WECHAT_MSG: "微信",
 }
 

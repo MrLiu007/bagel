@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="meta"><a href="{{ u('/av') }}">← 音视频列表</a></p>
+<h1>{{ item.title }}</h1>
+
+<div class="panel" style="display:flex;gap:1.25rem;flex-wrap:wrap;align-items:flex-start;">
+  {% if thumbnail %}
+  <img src="{{ thumbnail }}" alt="" style="max-width:280px;border-radius:8px;border:1px solid var(--line);" loading="lazy" />
+  {% endif %}
+  <div style="flex:1;min-width:240px;">
+    <div class="meta">
+      {% if platform %}<span class="badge tag">{{ platform }}</span>{% endif %}
+      {% if duration_label %}<span class="badge tag">时长 {{ duration_label }}</span>{% endif %}
+      {% if item.download_label %}<span class="badge tag">{{ item.download_label }}</span>{% endif %}
+      {% if subtitle.status == 'done' %}<span class="badge on">已有文稿</span>{% endif %}
+    </div>
+    {% if item.author %}<p class="meta">作者 {{ item.author }}</p>{% endif %}
+    {% if item.summary %}<p class="summary">{{ item.summary }}</p>{% endif %}
+    <div class="actions" style="margin-top:0.75rem;flex-wrap:wrap;">
+      <a class="btn primary" href="{{ item.url }}" target="_blank" rel="noopener">打开原页</a>
+      {% if item.local_play_url %}
+      <a class="btn" href="{{ u(item.local_play_url) }}" target="_blank" rel="noopener">本地播放</a>
+      {% else %}
+      <button type="button" class="btn" id="btnDownload">下载音视频</button>
+      {% endif %}
+      <button type="button" class="btn" id="btnSubs">提取文稿</button>
+      <button type="button" class="btn primary" id="btnDownloadAndText">下载并解析文稿</button>
+      <form method="post" action="{{ u('/items/' ~ item.id ~ '/action') }}">
+        <input type="hidden" name="next" value="{{ u('/av/items/' ~ item.id) }}" />
+        <input type="hidden" name="action" value="{% if item.is_favorite %}unfavorite{% else %}favorite{% endif %}" />
+        <button type="submit">{% if item.is_favorite %}取消收藏{% else %}收藏{% endif %}</button>
+      </form>
+    </div>
+    <p class="hint" style="margin-top:0.65rem;">
+      <strong>文稿提取顺序</strong>：平台 CC → 本地容器字幕轨 → <strong>本地音轨 ASR</strong>
+      {% if platform in ['douyin', 'dy'] %}
+      。抖音图中白字多为<strong>烧录字幕</strong>（像素），yt-dlp 抽不出独立字幕轨；需先下载视频，再靠 ASR 识别口播。
+      Cookie：Edge 打开 douyin.com 后设 <code>AV_COOKIES_FROM_BROWSER=edge</code>，关闭浏览器再下载。
+      {% else %}
+      。下载需 Cookie 时配置 <code>AV_COOKIES_FROM_BROWSER</code>。
+      {% endif %}
+      ASR：优先<strong>openspeech（豆包语音）</strong>（系统设置 → 配置 → 音视频ASR），失败再 Whisper / faster-whisper。
+    </p>
+    <div class="progress-wrap" style="margin-top:0.5rem;">
+      <div class="bar"><span id="taskBar"></span></div>
+      <div class="meta" id="taskMeta">等待操作</div>
+      <div class="hint warn" id="taskErr" style="display:none;margin-top:0.4rem;"></div>
+      <pre id="taskLog" class="hint" style="display:none;margin-top:0.45rem;max-height:180px;overflow:auto;white-space:pre-wrap;font-size:0.78rem;line-height:1.4;background:var(--panel-2, transparent);padding:0.5rem;border:1px solid var(--line);border-radius:6px;"></pre>
+    </div>
+  </div>
+</div>
+
+{% if subtitle.status == 'done' and subtitle_body %}
+<details class="panel" open>
+  <summary style="cursor:pointer;font-weight:600;">
+    文稿
+    {% if subtitle.source and subtitle.source != 'subtitle' %}
+    <span class="meta">（来源：{{ subtitle.source }}{% if subtitle.note %} · {{ subtitle.note }}{% endif %}）</span>
+    {% endif %}
+  </summary>
+  <pre style="white-space:pre-wrap;font-size:0.88rem;line-height:1.55;max-height:420px;overflow:auto;margin-top:0.65rem;">{{ subtitle_body }}</pre>
+</details>
+{% elif subtitle.text_preview %}
+<details class="panel">
+  <summary style="cursor:pointer;font-weight:600;">文稿预览</summary>
+  <pre style="white-space:pre-wrap;font-size:0.88rem;line-height:1.55;max-height:320px;overflow:auto;margin-top:0.65rem;">{{ subtitle.text_preview }}</pre>
+</details>
+{% endif %}
+
+{% if download.status != 'done' and download.error %}
+<p class="hint warn">下载：{{ download.error }}</p>
+{% endif %}
+{% if subtitle.status != 'done' and subtitle.error %}
+<p class="hint warn">文稿：{{ subtitle.error }}</p>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const itemId = {{ item.id | tojson }};
+  const bar = document.getElementById('taskBar');
+  const meta = document.getElementById('taskMeta');
+  const errEl = document.getElementById('taskErr');
+  const logEl = document.getElementById('taskLog');
+
+  function setProgress(pct, msg) {
+    bar.style.width = (pct || 0) + '%';
+    meta.textContent = msg || '';
+  }
+
+  function setError(text) {
+    if (!text) {
+      errEl.style.display = 'none';
+      errEl.textContent = '';
+      return;
+    }
+    errEl.style.display = 'block';
+    errEl.textContent = text;
+  }
+
+  function setLog(lines) {
+    if (!lines || !lines.length) {
+      logEl.style.display = 'none';
+      logEl.textContent = '';
+      return;
+    }
+    logEl.style.display = 'block';
+    logEl.textContent = lines.slice(-30).join('\n');
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function poll(taskId, onDone) {
+    const t = setInterval(async () => {
+      try {
+        const s = await (await fetch(bagelUrl('/api/tasks/' + taskId))).json();
+        setProgress(s.percent, s.message || s.status);
+        setLog(s.log || []);
+        if (s.error) setError(s.error);
+        if (s.status === 'success' || s.status === 'failed') {
+          clearInterval(t);
+          if (s.status === 'failed') {
+            setError(s.error || s.message || '失败');
+            setProgress(s.percent || 0, s.message || '失败');
+            return;
+          }
+          if (onDone) onDone(s);
+          else location.reload();
+        }
+      } catch (e) { /* ignore */ }
+    }, 800);
+  }
+
+  document.getElementById('btnDownload')?.addEventListener('click', async () => {
+    setError('');
+    setLog([]);
+    setProgress(5, '排队下载…');
+    const r = await fetch(bagelUrl('/api/av/download/' + itemId), { method: 'POST' });
+    const task = await r.json();
+    poll(task.id);
+  });
+
+  document.getElementById('btnSubs')?.addEventListener('click', async () => {
+    setError('');
+    setLog([]);
+    setProgress(5, '提取文稿（字幕→描述→简介）…');
+    const r = await fetch(bagelUrl('/api/av/subtitles/' + itemId), { method: 'POST' });
+    const task = await r.json();
+    poll(task.id);
+  });
+
+  document.getElementById('btnDownloadAndText')?.addEventListener('click', async () => {
+    setError('');
+    setLog([]);
+    setProgress(5, '① 下载音视频…');
+    try {
+      const r1 = await fetch(bagelUrl('/api/av/download/' + itemId), { method: 'POST' });
+      const t1 = await r1.json();
+      poll(t1.id, async () => {
+        setProgress(55, '② 提取字幕文稿…');
+        const r2 = await fetch(bagelUrl('/api/av/subtitles/' + itemId), { method: 'POST' });
+        const t2 = await r2.json();
+        poll(t2.id);
+      });
+    } catch (e) {
+      setError('启动失败');
+    }
+  });
+})();
+</script>
+{% endblock %}

@@ -72,7 +72,7 @@ def test_seed_idempotent(db: Session) -> None:
     assert a["sources"] >= 20
     assert b["sources"] == 0
     assert a["keywords"] > 0
-    assert a["github_queries"] >= 8
+    assert a["github_queries"] == 1
 
 
 def test_exclude_and_include_filter(db: Session) -> None:

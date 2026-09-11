@@ -1,4 +1,4 @@
-# Data Model
+﻿# Data Model
 
 Transactional DB (SQLite default / Postgres optional) is the only business
 source of truth. Optional Markdown wiki export is a side channel only.

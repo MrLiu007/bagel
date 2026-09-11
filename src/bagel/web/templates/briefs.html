@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block head %}
 <style>
   article.brief-body {
@@ -64,11 +64,92 @@
     display: inline-block; max-width: 100%;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .share-guide {
-    border: 1px solid var(--line); border-radius: var(--radius); padding: 0.85rem 1rem;
-    margin: 0 0 1rem; background: var(--soft-bg); color: var(--muted); font-size: 0.88rem; line-height: 1.55;
+  .brief-hero {
+    display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between;
+    gap: 0.85rem; margin: 0.35rem 0 1rem;
   }
-  .share-guide strong { color: var(--accent-2); }
+  .brief-hero h1 { margin: 0; font-size: 1.55rem; letter-spacing: -0.02em; }
+  .brief-hero .sub {
+    margin: 0.25rem 0 0; color: var(--muted); font-size: 0.9rem;
+  }
+  .brief-actions {
+    display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: center;
+  }
+  .brief-period {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    padding: 0.2rem 0.55rem; border: 1px solid var(--line); border-radius: 999px;
+    background: var(--soft-bg);
+  }
+  .brief-period label { color: var(--muted); font-size: 0.8rem; margin: 0; }
+  .brief-period select {
+    border: none; background: transparent; color: var(--fg); font-size: 0.88rem;
+    padding: 0.15rem 0; min-width: 9rem;
+  }
+  .brief-fold {
+    border: 1px solid var(--line); border-radius: var(--radius);
+    background: var(--panel); margin: 0 0 0.85rem; overflow: hidden;
+  }
+  .brief-fold > summary {
+    cursor: pointer; list-style: none; padding: 0.7rem 0.95rem;
+    display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+    font-size: 0.92rem; font-weight: 600; color: var(--fg);
+    user-select: none;
+  }
+  .brief-fold > summary::-webkit-details-marker { display: none; }
+  .brief-fold > summary::after {
+    content: "展开"; font-size: 0.78rem; font-weight: 500; color: var(--accent-2);
+    font-family: var(--font-mono);
+  }
+  .brief-fold[open] > summary::after { content: "收起"; }
+  .brief-fold .fold-body {
+    padding: 0 0.95rem 0.95rem; border-top: 1px solid var(--line);
+    color: var(--muted); font-size: 0.88rem; line-height: 1.55;
+  }
+  .brief-fold .fold-body p { margin: 0.65rem 0 0; }
+  .brief-fold textarea {
+    width: 100%; margin-top: 0.65rem; min-height: 5.5rem;
+    font-family: inherit; font-size: 0.9rem;
+  }
+  .brief-fold .fold-actions {
+    display: flex; flex-wrap: wrap; gap: 0.55rem; align-items: center; margin-top: 0.65rem;
+  }
+  .brief-meta-bar {
+    display: flex; flex-wrap: wrap; gap: 0.5rem 0.85rem; align-items: center;
+    margin: 0 0 0.85rem; color: var(--muted); font-size: 0.85rem;
+  }
+  .brief-wait {
+    display: none;
+    margin: 0 0 0.85rem;
+    padding: 0.85rem 1rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--panel);
+  }
+  .brief-wait.is-on { display: block; }
+  .brief-wait .wait-title {
+    margin: 0 0 0.45rem;
+    font-size: 0.92rem;
+    font-weight: 650;
+    color: var(--fg);
+  }
+  .brief-wait .wait-meta {
+    margin: 0.45rem 0 0;
+    color: var(--muted);
+    font-size: 0.84rem;
+    font-family: var(--font-mono);
+  }
+  .brief-wait .bar > span.indeterminate {
+    width: 38% !important;
+    animation: brief-bar-slide 1.35s ease-in-out infinite;
+  }
+  @keyframes brief-bar-slide {
+    0% { transform: translateX(-120%); }
+    100% { transform: translateX(320%); }
+  }
+  button.is-busy {
+    opacity: 0.72;
+    cursor: wait;
+  }
 </style>
 <script type="module">
   import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
@@ -77,87 +158,212 @@
 </script>
 {% endblock %}
 {% block content %}
-<h1>汇总</h1>
 {% include "briefs_tabs.html" %}
 
 {% if kind == 'STOCK' %}
 {% include "_stock_disclaimer.html" %}
 {% endif %}
 
-<p class="hint">
-  {% if kind == 'STOCK' %}
-  股票总结为<strong>投屏讲解终稿</strong>（事实 → 标的/主题 → 情绪与分歧 → 情报启示）。
-  {% else %}
-  四类总结均为<strong>投屏讲解终稿</strong>（新闻 / 项目 / 论文 / 自媒体结构不同）。
-  {% endif %}
-  支持<strong>月总结</strong>与<strong>周总结</strong>；按<strong>原文发布时间</strong>纳入。
-  支持导出 Markdown / <strong>HTML 投屏稿</strong>；可打开<strong>投屏视图</strong>全屏讲解。当前为<strong>{{ cadence_label }}</strong>。
-</p>
+<section class="brief-hero">
+  <div>
+    <h1>{{ kind_title | default(title) | default('汇总') }}</h1>
+    <p class="sub">{{ cadence_label }} · 按原文发布时间 · 可投屏讲解</p>
+  </div>
+  <div class="brief-actions">
+    <form class="brief-period" method="get" action="{{ u(list_url) }}">
+      <input type="hidden" name="period" value="{{ period }}" />
+      <label for="month">{% if period == 'week' %}周次{% else %}月份{% endif %}</label>
+      <select id="month" name="month" onchange="this.form.submit()">
+        {% if period_options %}
+          {% for opt in period_options %}
+          <option value="{{ opt.value }}" {% if opt.value == current_month %}selected{% endif %}>{{ opt.label }}</option>
+          {% endfor %}
+        {% else %}
+          <option value="{{ current_month }}">{{ current_month }}</option>
+        {% endif %}
+      </select>
+    </form>
+    <form id="brief-template-form" method="post" action="{{ u('/briefs/generate') }}">
+      <input type="hidden" name="kind" value="{{ kind }}" />
+      <input type="hidden" name="year_month" value="{{ current_month }}" />
+      <input type="hidden" name="period" value="{{ period }}" />
+      <button id="brief-template-btn" class="primary" type="submit">生成{{ scope_label }}</button>
+    </form>
+    {% if brief %}
+    <a class="btn" href="{{ u(present_url) }}" target="_blank" rel="noopener">投屏</a>
+    <a class="btn" href="{{ u(present_ppt_url) }}" target="_blank" rel="noopener">PPT</a>
+    <a class="btn" href="{{ u(export_html_url) }}">HTML</a>
+    {% endif %}
+    <a class="btn" href="{{ u(export_url) }}">Markdown</a>
+  </div>
+</section>
 
-<div class="toolbar">
-  <form method="get" action="{{ u(list_url) }}" style="display:flex;gap:0.5rem;align-items:center;">
-    <input type="hidden" name="period" value="{{ period }}" />
-    <label for="month" style="color:var(--muted);font-size:0.85rem;">{% if period == 'week' %}周次{% else %}月份{% endif %}</label>
-    <select id="month" name="month" onchange="this.form.submit()">
-      {% if period_options %}
-        {% for opt in period_options %}
-        <option value="{{ opt.value }}" {% if opt.value == current_month %}selected{% endif %}>{{ opt.label }}</option>
-        {% endfor %}
-      {% else %}
-        <option value="{{ current_month }}">{{ current_month }}</option>
-      {% endif %}
-    </select>
-  </form>
-  <form method="post" action="{{ u('/briefs/generate') }}">
-    <input type="hidden" name="kind" value="{{ kind }}" />
-    <input type="hidden" name="year_month" value="{{ current_month }}" />
-    <input type="hidden" name="period" value="{{ period }}" />
-    <button type="submit">生成 / 刷新{{ scope_label }}</button>
-  </form>
-  {% if brief %}
-  <a class="btn primary" href="{{ u(present_url) }}" target="_blank" rel="noopener">投屏视图</a>
-  <a class="btn" href="{{ u(export_html_url) }}">导出 HTML</a>
-  {% endif %}
-  <a class="btn" href="{{ u(export_url) }}">导出 Markdown</a>
-</div>
+<details class="brief-fold">
+  <summary>讲解结构说明</summary>
+  <div class="fold-body">
+    {% if period == 'week' %}
+    <p>周总结按 ISO 周纳入，适合周会投屏；与月总结独立。</p>
+    {% else %}
+    <p>月总结按自然月纳入，适合月末复盘；与周总结独立。</p>
+    {% endif %}
+    {% if kind == 'NEWS' %}
+    <p><strong>新闻</strong>约 6～8 分钟：事实 → 增量对比 → 例子 → 教育启发。</p>
+    {% elif kind == 'GITHUB' %}
+    <p><strong>项目</strong>约 8～10 分钟：是什么 → 对比 → 上手路径 → 可迁移点。</p>
+    {% elif kind == 'SCIENCE' %}
+    <p><strong>论文</strong>约 8～10 分钟：问题 → 做法 → 例子 → 启发。源见<a href="{{ u('/settings?tab=papers') }}">论文数据源</a>。</p>
+    {% elif kind == 'EDUCATION' %}
+    <p><strong>教育</strong>约 8～10 分钟：资源是什么 → 适合谁 → 路径对比 → 启发。源见<a href="{{ u('/settings?tab=education') }}">教育数据源</a>。</p>
+    {% elif kind == 'MODEL' %}
+    <p><strong>模型</strong>约 8～10 分钟：是什么 → 增量 → 许可/部署 → 选型。源见<a href="{{ u('/settings?tab=models') }}">模型数据源</a>。</p>
+    {% elif kind == 'STOCK' %}
+    <p><strong>股票</strong>约 6～8 分钟：事实 → 标的/主题 → 情绪 → 启示（非投资建议）。</p>
+    {% elif kind == 'AV' %}
+    <p><strong>音视频</strong>约 6～8 分钟：讲什么 → 关键片段 → 可迁移点。视频文稿依赖 yt-dlp 提取字幕。</p>
+    {% else %}
+    <p><strong>自媒体</strong>约 6 分钟：观点 → 可信度 → 例子 → 启发。视频可先「提取文稿」。</p>
+    {% endif %}
+  </div>
+</details>
 
-<div class="panel" style="margin-bottom:1rem;">
-  <h2 style="font-size:1rem;margin:0 0 0.55rem;">自定义提示词（周 / 月总结通用）</h2>
-  <p class="hint" style="margin:0 0 0.55rem;">
-    可选：填写后将优先用于本次生成（条目排序与开篇聚焦），并写入生成记录。留空则使用系统默认提示词。
-  </p>
-  <form method="post" action="{{ u('/briefs/generate') }}">
-    <input type="hidden" name="kind" value="{{ kind }}" />
-    <input type="hidden" name="year_month" value="{{ current_month }}" />
-    <input type="hidden" name="period" value="{{ period }}" />
-    <textarea name="custom_prompt" rows="4" style="width:100%;margin-bottom:0.5rem;font-family:inherit;"
-              placeholder="例如：重点讲 LLM 推理成本与教育场景落地，避免营销口吻…">{{ default_prompt }}</textarea>
-    <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.88rem;margin-right:0.75rem;">
-      <input type="checkbox" name="save_prompt_default" value="1" />
-      保存为本类型默认提示词
-    </label>
-    <button type="submit">按自定义提示词生成</button>
-  </form>
+<details class="brief-fold" id="brief-custom-fold">
+  <summary>高级：自定义提示词</summary>
+  <div class="fold-body">
+    <p>可选。填写后将<strong>调用 LLM</strong>按提示词重写本周/月终稿（自动注入条目素材池；可用 <code>{{新闻池}}</code> / <code>{{条目池}}</code> 占位）。留空点上方「生成」仍用固定结构模板。LLM 生成通常需要数十秒，请勿关闭页面。</p>
+    <form id="brief-custom-form" method="post" action="{{ u('/briefs/generate') }}">
+      <input type="hidden" name="kind" value="{{ kind }}" />
+      <input type="hidden" name="year_month" value="{{ current_month }}" />
+      <input type="hidden" name="period" value="{{ period }}" />
+      <textarea id="brief-custom-prompt" name="custom_prompt" rows="6"
+                placeholder="可选。例如：汇报对象、重点主题、时长；可用 {{新闻池}} 注入素材。留空则不会带入任何默认句。">{{ default_prompt }}</textarea>
+      <div class="fold-actions">
+        <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.88rem;">
+          <input type="checkbox" name="save_prompt_default" value="1" />
+          保存为本类型默认
+        </label>
+        <button id="brief-custom-btn" type="submit" class="primary">按自定义提示词生成</button>
+      </div>
+    </form>
+  </div>
+</details>
+
+<div id="brief-wait" class="brief-wait" aria-live="polite" hidden>
+  <p class="wait-title" id="brief-wait-title">正在生成…</p>
+  <div class="progress-wrap" style="margin-top:0.35rem;">
+    <div class="bar"><span id="brief-wait-bar" class="indeterminate"></span></div>
+    <p class="wait-meta" id="brief-wait-meta">请稍候</p>
+  </div>
 </div>
 
 {% if brief %}
-  <p class="meta">
-    {{ brief.title }} · 纳入 {{ brief.item_count }} 条 · 生成于 {{ brief.generated_at }}
-  </p>
+  <div class="brief-meta-bar">
+    <span>{{ brief.title }}</span>
+    <span>·</span>
+    <span>{{ brief.item_count }} 条</span>
+    <span>·</span>
+    <span>{{ brief.generated_at }}</span>
+    {% if generation_mode %}
+    <span>·</span>
+    <span>{% if generation_mode == 'llm' %}LLM 生成{% elif generation_mode == 'template_fallback' %}模板回退{% else %}模板生成{% endif %}</span>
+    {% endif %}
+  </div>
   {% if prompt_used %}
-  <details class="panel" style="margin-bottom:1rem;">
-    <summary style="cursor:pointer;font-family:var(--font-mono);color:var(--accent-2);">查看本次生成使用的提示词</summary>
-    <pre style="white-space:pre-wrap;font-size:0.82rem;margin:0.65rem 0 0;color:var(--summary);">{{ prompt_used }}</pre>
+  <details class="brief-fold">
+    <summary>本次使用的提示词</summary>
+    <div class="fold-body">
+      <pre style="white-space:pre-wrap;font-size:0.82rem;margin:0.65rem 0 0;color:var(--summary);">{{ prompt_used }}</pre>
+    </div>
   </details>
   {% endif %}
-  <p class="toolbar" style="margin:0 0 0.75rem;">
-    <a class="btn primary" href="{{ u(present_url) }}" target="_blank" rel="noopener">投屏视图</a>
-    <a class="btn" href="{{ export_html_url }}">导出 HTML</a>
-  </p>
   <article class="brief-body">{{ article_html | safe }}</article>
 {% else %}
   <p class="empty">
-    尚无 {{ current_month }} 的{{ cadence_label }}。请确认该{% if period == 'week' %}周{% else %}月{% endif %}已有采集数据，然后点击「生成 / 刷新{{ scope_label }}」。
+    尚无 {{ current_month }} 的{{ cadence_label }}。确认该{% if period == 'week' %}周{% else %}月{% endif %}已有采集后，点「生成{{ scope_label }}」。
   </p>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const waitBox = document.getElementById("brief-wait");
+  const waitTitle = document.getElementById("brief-wait-title");
+  const waitMeta = document.getElementById("brief-wait-meta");
+  const templateBtn = document.getElementById("brief-template-btn");
+  const customBtn = document.getElementById("brief-custom-btn");
+  const customFold = document.getElementById("brief-custom-fold");
+  const templateForm = document.getElementById("brief-template-form");
+  const customForm = document.getElementById("brief-custom-form");
+  let startedAt = 0;
+  let tickTimer = null;
+  let submitting = false;
+
+  function setButtonsBusy(busy) {
+    [templateBtn, customBtn].forEach((btn) => {
+      if (!btn) return;
+      btn.disabled = busy;
+      btn.classList.toggle("is-busy", busy);
+    });
+  }
+
+  function startWait(mode) {
+    if (!waitBox || !waitTitle || !waitMeta) return;
+    startedAt = Date.now();
+    waitBox.hidden = false;
+    waitBox.classList.add("is-on");
+    if (mode === "llm") {
+      waitTitle.textContent = "正在按自定义提示词调用 LLM 生成…";
+      waitMeta.textContent = "通常需要 30～120 秒，请勿关闭或刷新页面";
+      if (customFold) customFold.open = true;
+      if (customBtn) customBtn.textContent = "生成中…";
+    } else {
+      waitTitle.textContent = "正在生成结构模板汇总…";
+      waitMeta.textContent = "通常较快，请稍候";
+      if (templateBtn) templateBtn.textContent = "生成中…";
+    }
+    setButtonsBusy(true);
+    if (tickTimer) clearInterval(tickTimer);
+    tickTimer = setInterval(() => {
+      const sec = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
+      if (mode === "llm") {
+        waitMeta.textContent = `已等待 ${sec}s · LLM 仍在生成，请继续等待`;
+      } else {
+        waitMeta.textContent = `已等待 ${sec}s · 正在写入汇总`;
+      }
+    }, 1000);
+    try {
+      waitBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    } catch (_) {}
+  }
+
+  function onSubmit(ev, mode, form) {
+    if (submitting) {
+      ev.preventDefault();
+      return;
+    }
+    if (mode === "llm") {
+      const ta = document.getElementById("brief-custom-prompt");
+      if (ta && !String(ta.value || "").trim()) {
+        ev.preventDefault();
+        alert("请先填写自定义提示词，或使用上方「生成」走模板。");
+        return;
+      }
+    }
+    ev.preventDefault();
+    submitting = true;
+    startWait(mode);
+    // Yield so the busy UI can paint before the long LLM/template POST blocks the tab.
+    window.setTimeout(() => {
+      HTMLFormElement.prototype.submit.call(form);
+    }, 40);
+  }
+
+  if (templateForm) {
+    templateForm.addEventListener("submit", (ev) => onSubmit(ev, "template", templateForm));
+  }
+  if (customForm) {
+    customForm.addEventListener("submit", (ev) => onSubmit(ev, "llm", customForm));
+  }
+})();
+</script>
 {% endblock %}

@@ -1,4 +1,4 @@
-"""GBrain — unified knowledge graph for all user resources.
+﻿"""GBrain — unified knowledge graph for all user resources.
 
 Projection sources (priority):
 1. Taxonomy topics + prerequisite edges (structured)
@@ -34,6 +34,7 @@ _TYPE_LABELS: dict[str, str] = {
     ItemType.MODEL: "模型",
     ItemType.STOCK_NEWS: "股票",
     ItemType.EDUCATION: "教育",
+    ItemType.AV: "音视频",
     ItemType.MEDIA_POST: "自媒体",
     ItemType.WECHAT_MSG: "微信",
 }
@@ -46,19 +47,21 @@ _LIST_PATHS: dict[str, str] = {
     ItemType.MODEL: "/models",
     ItemType.STOCK_NEWS: "/stocks",
     ItemType.EDUCATION: "/education",
+    ItemType.AV: "/av",
     ItemType.MEDIA_POST: "/media",
     ItemType.WECHAT_MSG: "/wechat",
 }
 
 _KIND_COLORS: dict[str, str] = {
-    "type": "#3b82f6",
-    "category": "#8b5cf6",
-    "topic": "#0d9488",
-    "cluster": "#7c3aed",
-    "source": "#f59e0b",
-    "item": "#ef4444",
-    "institution": "#22c55e",
-    "tag": "#94a3b8",
+    # Soft pastels — lit Phong spheres looked plastic; JS uses MeshBasicMaterial.
+    "type": "#9eb0d8",
+    "category": "#b5a8d8",
+    "topic": "#8ec5e8",
+    "cluster": "#e0b8d0",
+    "source": "#d2c09a",
+    "item": "#c9d6ef",
+    "institution": "#95cbb8",
+    "tag": "#9aa6b8",
 }
 
 _KIND_LABELS_ZH: dict[str, str] = {
@@ -151,7 +154,13 @@ def adapt_intel_item(item: IntelItem, *, source_name: str = "") -> WikiItem:
     itype = item.item_type or ItemType.NEWS
     type_label = _TYPE_LABELS.get(itype, itype)
     title = strip_html(item.llm_title_zh or item.title) or item.title or ""
-    body = strip_html(item.summary or item.content or item.llm_summary or "")
+    # Prefer parsed / long body for taxonomy matching (papers after MinerU/Kimi).
+    content = strip_html(item.content or "")
+    summary = strip_html(item.llm_summary or item.summary or "")
+    if len(content) >= 800:
+        body = f"{summary}\n{content[:6000]}".strip()
+    else:
+        body = summary or content
     tags = [str(t) for t in (item.tags or []) if t][:8]
     meta = item.metadata_ or {}
     list_path = _LIST_PATHS.get(itype, "/news")
@@ -614,14 +623,14 @@ def _wiki_key_to_nid(key: str, tax) -> tuple[str, str] | None:
 
 # Fixed resource channels for SUBJECTS toggle (never taxonomy subjects like AI).
 _RESOURCE_CHANNELS: tuple[tuple[str, str, str], ...] = (
-    ("新闻", "新闻", "#ef4444"),
-    ("GitHub", "GitHub项目", "#f59e0b"),
-    ("教育", "教育", "#22c55e"),
-    ("论文", "论文", "#8b5cf6"),
-    ("模型", "模型", "#06b6d4"),
-    ("股票", "股票", "#eab308"),
-    ("自媒体", "自媒体", "#f97316"),
-    ("微信", "微信", "#84cc16"),
+    ("新闻", "新闻", "#d4848c"),
+    ("GitHub", "GitHub项目", "#d2a86a"),
+    ("教育", "教育", "#7ab89a"),
+    ("论文", "论文", "#a894d4"),
+    ("模型", "模型", "#6ab0c4"),
+    ("股票", "股票", "#d4b86a"),
+    ("自媒体", "自媒体", "#d49a78"),
+    ("微信", "微信", "#8cb87a"),
 )
 
 

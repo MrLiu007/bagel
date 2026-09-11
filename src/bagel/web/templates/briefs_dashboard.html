@@ -1,7 +1,9 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block head %}
 {% if space_view == 'graph' %}
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/3d-force-graph@1.73.3/dist/3d-force-graph.min.js"></script>
+<script src="{{ u('/static/js/gbrain-tornado.js') }}"></script>
 {% endif %}
 <style>
   .dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
@@ -34,7 +36,7 @@
     margin: 0 -0.75rem;
     border: none;
     border-radius: 0;
-    background: transparent;
+    background: radial-gradient(ellipse 70% 55% at 52% 42%, #0a1c3a 0%, #050b18 48%, #010208 100%);
     overflow: hidden;
   }
   #gbrain-chart { width: 100%; height: 100%; background: transparent; }
@@ -210,7 +212,7 @@
       <button type="button" id="gbrain-card-review" class="primary">标记复习</button>
     </div>
   </aside>
-  <div class="gbrain-hint">Drag to spin · Scroll to zoom · Tap a resource for summary + URL</div>
+  <div class="gbrain-hint">细线暗点 · 点击高亮邻域 · Drag to spin · Scroll to zoom</div>
 </div>
 
 <div class="gbrain-review" id="gbrain-review">
@@ -228,125 +230,26 @@
   var data = {{ stats.echarts | tojson }};
   if (!data || !data.nodes || !data.nodes.length) return;
   var el = document.getElementById('gbrain-chart');
-  if (!el || typeof ForceGraph3D === 'undefined') return;
+  if (!el || typeof ForceGraph3D === 'undefined' || !window.BagelGbrainTornado) return;
 
-  var allNodes = (data.nodes || []).map(function (n, i) {
-    var h = (typeof n.fy === 'number') ? n.fy : (n.height || 0);
-    var ang = (i * 2.399963) % (Math.PI * 2);
-    var r0 = 4 + Math.random() * 8;
-    return Object.assign({}, n, {
-      __rawH: h,
-      __targetFy: h,
-      fy: 0,
-      x: Math.cos(ang) * r0, z: Math.sin(ang) * r0,
-      val: n.val || Math.max(2, Math.min(12, 3 + (n.value || 1))),
-      __visible: true
-    });
-  });
-  var allLinks = (data.links || []).map(function (l) {
-    return { source: l.source, target: l.target, relation: l.relation || 'about', value: l.value || 1 };
-  });
-  var maxH = Math.max.apply(null, allNodes.map(function (n) { return n.__rawH || 1; })) || 1;
-  // Shift cone so geometric mid-height sits at world origin (centered in viewport).
-  var midY = maxH * 0.5;
-  allNodes.forEach(function (n) {
-    n.__targetFy = (n.__rawH || 0) - midY;
-    n.fy = -midY;
-  });
   var enabledFilters = {};
   (data.stats && data.stats.subjects || []).forEach(function (s) { enabledFilters[s.key] = true; });
   var focusKeys = null;
   var cardHistory = [];
   var currentKey = null;
 
-  var pageBg = (window.getComputedStyle(document.body).backgroundColor || '').trim() || '#0b1220';
-  var Graph = ForceGraph3D()(el)
-    .graphData({ nodes: allNodes.slice(), links: allLinks.slice() })
-    .backgroundColor(pageBg)
-    .showNavInfo(false)
-    .nodeId('id')
-    .nodeLabel(function (n) {
-      return [n.name || '', (n.kind_label || n.kind || '') + (n.type_label ? (' · ' + n.type_label) : '')].join('\n');
-    })
-    .nodeVal('val')
-    .nodeColor(function (n) {
-      if (focusKeys && focusKeys[n.id]) return '#38bdf8';
-      return n.color || '#64748b';
-    })
-    .nodeOpacity(0.95)
-    .linkColor(function (l) {
-      var sid = (l.source && l.source.id) || l.source;
-      var tid = (l.target && l.target.id) || l.target;
-      if (focusKeys && focusKeys[sid] && focusKeys[tid]) return '#7dd3fc';
-      return l.relation === 'prerequisite' ? '#64748b' : '#1e293b';
-    })
-    .linkWidth(function (l) {
-      var sid = (l.source && l.source.id) || l.source;
-      var tid = (l.target && l.target.id) || l.target;
-      if (focusKeys && focusKeys[sid] && focusKeys[tid]) return 2.4;
-      return Math.min(1.8, 0.4 + (l.value || 1) * 0.2);
-    })
-    .linkOpacity(0.5)
-    .linkDirectionalParticles(function (l) { return l.relation === 'prerequisite' ? 1 : 0; })
-    .linkDirectionalParticleWidth(1.1)
-    .linkDirectionalParticleSpeed(0.005)
-    .onNodeClick(function (n) { if (n) openCard(n.id, true); })
-    .onNodeDragEnd(function (node) { node.fy = node.__targetFy != null ? node.__targetFy : node.fy; });
-
-  Graph.d3Force('charge').strength(-88);
-  var linkForce = Graph.d3Force('link');
-  if (linkForce) linkForce.distance(40);
-  Graph.d3Force('y', null);
-  Graph.onEngineTick(function () {
-    allNodes.forEach(function (n) {
-      if (!n.__visible) return;
-      var t = Math.max(0, Math.min(1, (n.__rawH || 0) / maxH));
-      var targetR = 12 + t * 155;
-      var r = Math.hypot(n.x || 0, n.z || 0) || 0.001;
-      var k = 0.045;
-      n.vx = (n.vx || 0) + ((n.x || 0) * (targetR / r) - (n.x || 0)) * k;
-      n.vz = (n.vz || 0) + ((n.z || 0) * (targetR / r) - (n.z || 0)) * k;
-    });
+  var mount = window.BagelGbrainTornado.mountTornadoGraph(el, data, {
+    backgroundColor: '#040a18',
+    onNodeClick: function (n) { if (n) openCard(n.id, true); }
   });
-  var controls = Graph.controls();
-  if (controls) {
-    controls.autoRotate = true;
-    controls.autoRotateSpeed = 0.38;
-    controls.enableDamping = true;
-  }
+  if (!mount) return;
+  var Graph = mount.graph;
+  var allNodes = mount.allNodes;
+  var allLinks = mount.allLinks;
 
-  function frameCone(ms) {
-    try {
-      Graph.zoomToFit(ms || 0, 48);
-    } catch (e) {
-      var look = { x: 0, y: 0, z: 0 };
-      var cam = { x: 0, y: maxH * 0.05, z: Math.max(300, maxH * 1.45) };
-      Graph.cameraPosition(cam, look, 0);
-    }
-  }
-  frameCone(0);
-
-  var t0 = performance.now();
-  (function grow() {
-    var t = Math.min(1, (performance.now() - t0) / 3600);
-    var eased = 1 - Math.pow(1 - t, 3);
-    allNodes.forEach(function (n) {
-      n.fy = -midY + ((n.__rawH || 0) * eased);
-    });
-    if (t < 1) requestAnimationFrame(grow);
-    else {
-      allNodes.forEach(function (n) { n.fy = n.__targetFy; });
-      frameCone(700);
-    }
-  })();
-
-  function fit() {
-    Graph.width(el.clientWidth || 900).height(el.clientHeight || 720);
-  }
-  fit();
   window.addEventListener('resize', function () {
-    fit();
-    frameCone(0);
+    mount.fitSize();
+    mount.frameCone(0);
   });
 
   var listEl = document.getElementById('gbrain-subject-list');
@@ -370,8 +273,7 @@
   renderSubjects();
 
   function nodePassesFilter(n) {
-    if (focusKeys) return !!focusKeys[n.id];
-    // SUBJECTS only gates resource channels (item / type hubs).
+    // SUBJECTS only gates resource channels. Focus uses highlight, not hide.
     if (n.kind === 'item') {
       var fk = n.filter_key || n.category || n.type_label || '';
       return enabledFilters[fk] !== false;
@@ -379,7 +281,6 @@
     if (n.kind === 'type') {
       return enabledFilters[n.label || n.filter_key] !== false;
     }
-    // Topics / clusters / sources stay as hubs.
     return true;
   }
 
@@ -393,7 +294,8 @@
       var t = typeof l.target === 'object' ? l.target.id : l.target;
       return idset[s] && idset[t];
     });
-    Graph.graphData({ nodes: nodes, links: links });
+    mount.setGraphData(nodes, links);
+    mount.setHighlight(focusKeys);
   }
 
   function esc(s) {
@@ -418,6 +320,7 @@
         focusKeys = {};
         (card.focus_keys || [card.key]).forEach(function (k) { focusKeys[k] = true; });
         applyVisibility();
+        mount.setHighlight(focusKeys);
         fetch(bagelUrl('/api/gbrain/learn'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -494,6 +397,7 @@
     document.getElementById('gbrain-card').hidden = true;
     focusKeys = null;
     applyVisibility();
+    mount.setHighlight(null);
   });
   document.getElementById('gbrain-card-back').addEventListener('click', function () {
     if (cardHistory.length > 1) {

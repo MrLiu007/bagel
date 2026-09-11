@@ -1,4 +1,4 @@
-"""Model hub collectors + /models UI wiring."""
+﻿"""Model hub collectors + /models UI wiring."""
 
 from __future__ import annotations
 

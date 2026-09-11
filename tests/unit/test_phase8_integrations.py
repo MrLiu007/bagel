@@ -1,4 +1,4 @@
-"""Phase 8: FreshRSS / RSSHub clients + compose contract."""
+﻿"""Phase 8: FreshRSS / RSSHub clients + compose contract."""
 
 from __future__ import annotations
 

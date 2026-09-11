@@ -1,4 +1,4 @@
-# GitHub 项目页文案（About / Topics）
+﻿# GitHub 项目页文案（About / Topics）
 
 维护仓库「About」与 Topics 时复制下列文案。写法参考 OpenClaw（一句价值主张 + 场景）与 Hermes Agent（自我改进叙事 + 可运行性），并贴合 Bagel 产品：本地优先、多渠道情报、一张 Web、飞书触达。
 
@@ -40,9 +40,11 @@ sqlite
 llm
 opensource
 mit-license
+ytdlp
+asr
 ```
 
-按需增减：`arxiv` `github-api` `rsshub` `obsidian` `taxonomy`。
+按需增减：`arxiv` `github-api` `rsshub` `obsidian` `taxonomy` `openspeech` `bilibili`。
 
 ## Social preview
 

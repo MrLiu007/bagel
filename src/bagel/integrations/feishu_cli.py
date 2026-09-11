@@ -1,4 +1,4 @@
-"""Feishu / Lark CLI adapter — first external CLI provider.
+﻿"""Feishu / Lark CLI adapter — first external CLI provider.
 
 Primary: optional `lark-cli` (or custom bin) via CliRuntime.
 Fallback: Feishu custom bot webhook (httpx), so messaging works without installing CLI.

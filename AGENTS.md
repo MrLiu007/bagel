@@ -1,4 +1,4 @@
-# Bagel（贝果）Development Rules
+﻿# Bagel（贝果）Development Rules
 
 1. Python version must be >= 3.14.
 2. Use uv only for dependency management.

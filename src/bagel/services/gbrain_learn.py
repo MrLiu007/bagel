@@ -1,4 +1,4 @@
-"""GBrain flashcard learning — resource-first cards, focus paths, learn events.
+﻿"""GBrain flashcard learning — resource-first cards, focus paths, learn events.
 
 Bagel is an intel hub (URLs + summaries), not a pure curriculum KB like Marble.
 Cards prioritize: title → summary → open URL → related resources (with snippet+url).
@@ -29,6 +29,7 @@ _TYPE_LABELS: dict[str, str] = {
     ItemType.STOCK_NEWS: "股票",
     ItemType.EDUCATION: "教育",
     ItemType.MEDIA_POST: "自媒体",
+    ItemType.AV: "音视频",
     ItemType.WECHAT_MSG: "微信",
 }
 

@@ -1,4 +1,4 @@
-"""Stock news enrichment — tickers, themes, sentiment (deterministic)."""
+﻿"""Stock news enrichment — tickers, themes, sentiment (deterministic)."""
 
 from __future__ import annotations
 

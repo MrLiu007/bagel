@@ -1,4 +1,4 @@
-"""Manual / scheduled collect task UI + progress API."""
+﻿"""Manual / scheduled collect task UI + progress API."""
 
 from __future__ import annotations
 
@@ -63,6 +63,36 @@ def test_task_manager_progress_and_success() -> None:
         assert done.to_dict()["duration_ms"] == 20
 
 
+def test_on_progress_accepts_percent_only() -> None:
+    """download_av / extract_av_subtitles call on_progress without current/total."""
+    mgr = TaskManager()
+
+    def fake_download(session, *, item_id, on_progress=None, settings=None):
+        if on_progress:
+            on_progress(message="下载中…", percent=10.0)
+            on_progress(message="下载完成", percent=100.0)
+        return {"status": "SUCCESS", "items_updated": 1, "download": {"status": "done"}}
+
+    with patch("bagel.jobs.av.run_download_av", side_effect=fake_download), patch(
+        "bagel.services.tasks.get_engine"
+    ), patch("bagel.services.tasks.get_session_factory") as factory:
+        session = factory.return_value.return_value
+        session.commit = lambda: None
+        session.rollback = lambda: None
+        session.close = lambda: None
+        state = mgr.start("download_av", options={"item_id": "00000000-0000-0000-0000-000000000001"})
+        for _ in range(50):
+            cur = mgr.get(state.id)
+            assert cur is not None
+            if cur.status in {"success", "failed"}:
+                break
+            time.sleep(0.05)
+        done = mgr.get(state.id)
+        assert done is not None
+        assert done.status == "success"
+        assert done.error is None
+
+
 def test_record_completed_scheduled() -> None:
     mgr = TaskManager()
     state = mgr.record_completed(
@@ -93,6 +123,17 @@ def test_record_completed_scheduled() -> None:
     recent = mgr.list_recent(5, trigger="scheduled")
     assert any(t.id == state.id for t in recent)
     assert not any(t.id == state.id for t in mgr.list_recent(5, trigger="manual"))
+
+
+def test_record_completed_compile_wiki_is_success() -> None:
+    mgr = TaskManager()
+    state = mgr.record_completed(
+        "compile_wiki",
+        trigger="scheduled",
+        result={"status": "SUCCESS", "items_written": 12, "items_skipped": 3},
+    )
+    assert state.status == "success"
+    assert state.error is None
 
 
 def test_collect_routes_registered() -> None:
@@ -137,6 +178,7 @@ def test_collect_page_tabs_and_detail(monkeypatch: pytest.MonkeyPatch) -> None:
         assert "手动采集" in resp.text
         assert "定时采集" in resp.text
         assert "采集新闻" in resp.text
+        assert "编译 Wiki" not in resp.text
         assert "生成日报" not in resp.text
         assert "股票 enrichment" not in resp.text
         assert "/collect/tasks/" in resp.text
@@ -161,3 +203,17 @@ def test_source_stat_helper() -> None:
     assert row["name"] == "x"
     assert row["status"] == "failed"
     assert row["error"] == "boom"
+
+    ok = source_stat(
+        "跟李沐学 AI",
+        status="success",
+        items_found=8,
+        items_created=3,
+        items_updated=2,
+        duration_ms=1200,
+        source_id="abc",
+    )
+    assert ok["items_found"] == 8
+    assert ok["items_created"] == 3
+    assert ok["items_updated"] == 2
+    assert ok["source_id"] == "abc"

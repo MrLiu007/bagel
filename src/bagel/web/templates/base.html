@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN" data-theme="dark">
 <head>
   <meta charset="utf-8" />
@@ -108,16 +108,46 @@
     }
 
     function loadForceGraph3D() {
-      if (typeof ForceGraph3D !== "undefined") return Promise.resolve();
+      function loadScript(src) {
+        return new Promise(function (resolve, reject) {
+          var existing = document.querySelector('script[src="' + src + '"]');
+          if (existing) {
+            if (src.indexOf("three") >= 0 && typeof THREE !== "undefined") return resolve();
+            if (src.indexOf("3d-force-graph") >= 0 && typeof ForceGraph3D !== "undefined") return resolve();
+            if (src.indexOf("gbrain-tornado") >= 0 && window.BagelGbrainTornado) return resolve();
+            existing.addEventListener("load", function () { resolve(); });
+            existing.addEventListener("error", function () { reject(new Error("脚本加载失败: " + src)); });
+            return;
+          }
+          var s = document.createElement("script");
+          s.src = src;
+          s.async = true;
+          s.onload = function () { resolve(); };
+          s.onerror = function () { reject(new Error("脚本加载失败: " + src)); };
+          document.head.appendChild(s);
+        });
+      }
+      if (typeof ForceGraph3D !== "undefined" && window.BagelGbrainTornado && typeof THREE !== "undefined") {
+        return Promise.resolve();
+      }
       if (force3dLoading) return force3dLoading;
-      force3dLoading = new Promise(function (resolve, reject) {
-        var s = document.createElement("script");
-        s.src = "https://cdn.jsdelivr.net/npm/3d-force-graph@1.73.3/dist/3d-force-graph.min.js";
-        s.async = true;
-        s.onload = function () { resolve(); };
-        s.onerror = function () { reject(new Error("3D Force Graph 加载失败")); };
-        document.head.appendChild(s);
-      });
+      force3dLoading = Promise.resolve()
+        .then(function () {
+          if (typeof THREE !== "undefined") return;
+          return loadScript("https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js");
+        })
+        .then(function () {
+          if (typeof ForceGraph3D !== "undefined") return;
+          return loadScript("https://cdn.jsdelivr.net/npm/3d-force-graph@1.73.3/dist/3d-force-graph.min.js");
+        })
+        .then(function () {
+          if (window.BagelGbrainTornado) return;
+          return loadScript(bagelUrl("/static/js/gbrain-tornado.js"));
+        })
+        .catch(function (err) {
+          force3dLoading = null;
+          throw err instanceof Error ? err : new Error("3D Force Graph 加载失败");
+        });
       return force3dLoading;
     }
 
@@ -200,8 +230,8 @@
         '<p class="related-graph-meta">资源节点 ' + resourceN +
         ' · 主题 ' + (stats.topics || 0) +
         ' · 可点击 ' + (stats.clickable || 0) +
-        ' · 高度=资源/概念层 · 拖拽旋转 / 滚轮缩放</p>' +
-        '<div id="related-echarts" style="width:100%;height:560px;background:#0b1220;border-radius:8px;overflow:hidden;"></div>';
+        ' · 细线暗点 · 点击高亮邻域 · 拖拽旋转 / 滚轮缩放</p>' +
+        '<div id="related-echarts" style="width:100%;height:560px;border-radius:8px;overflow:hidden;"></div>';
       try {
         await loadForceGraph3D();
       } catch (err) {
@@ -218,45 +248,25 @@
         try { chartInst._destructor(); } catch (e) {}
         chartInst = null;
       }
-      var nodes = (data.nodes || []).map(function (n) {
-        return Object.assign({}, n, {
-          fy: (typeof n.fy === "number") ? n.fy : (n.height || 0),
-          val: n.val || Math.max(2, Math.min(10, 3 + (n.value || 1)))
-        });
-      });
-      var links = (data.links || []).map(function (l) {
-        return { source: l.source, target: l.target, relation: l.relation || "about", value: l.value || 1 };
-      });
-      var Graph = ForceGraph3D()(el)
-        .graphData({ nodes: nodes, links: links })
-        .backgroundColor("#0b1220")
-        .showNavInfo(false)
-        .nodeId("id")
-        .nodeLabel(function (n) {
-          return [n.name || "", (n.kind_label || n.kind || "")].join("\n");
-        })
-        .nodeVal("val")
-        .nodeColor(function (n) { return n.color || "#64748b"; })
-        .linkColor(function (l) { return l.relation === "prerequisite" ? "#94a3b8" : "#334155"; })
-        .linkWidth(1)
-        .linkOpacity(0.5)
-        .onNodeClick(function (n) {
+      if (!window.BagelGbrainTornado) {
+        body.innerHTML = '<p class="empty">龙卷风图谱脚本未加载</p>';
+        return;
+      }
+      var mount = window.BagelGbrainTornado.mountTornadoGraph(el, data, {
+        backgroundColor: "#040a18",
+        height: 560,
+        fitPadding: 56,
+        autoRotateSpeed: 0.48,
+        onNodeClick: function (n) {
           if (n && n.url) window.open(n.url, "_blank", "noopener");
-        })
-        .onNodeDragEnd(function (node) {
-          node.fy = node.height != null ? node.height : node.fy;
-        });
-      Graph.d3Force("charge").strength(-90);
-      Graph.d3Force("y", null);
-      var controls = Graph.controls();
-      if (controls) { controls.autoRotate = true; controls.autoRotateSpeed = 0.45; }
-      Graph.cameraPosition({ x: 0, y: 140, z: 320 });
-      Graph.width(el.clientWidth || 360).height(560);
-      chartInst = Graph;
-      chartInst._destructor = function () {
-        try { Graph.pauseAnimation(); } catch (e) {}
-        try { if (el) el.innerHTML = ""; } catch (e2) {}
-      };
+        }
+      });
+      if (!mount) {
+        body.innerHTML = '<p class="empty">图谱初始化失败</p>';
+        return;
+      }
+      chartInst = mount.graph;
+      chartInst._destructor = mount.destroy;
     }
     function showTab(tab) {
       activeTab = tab;
@@ -283,6 +293,79 @@
       }
     }
     document.addEventListener("click", function (ev) {
+      var probeBtn = ev.target.closest(".paper-probe-btn");
+      if (probeBtn) {
+        ev.preventDefault();
+        var rid = probeBtn.getAttribute("data-item-id");
+        probeBtn.disabled = true;
+        probeBtn.textContent = "探测中…";
+        fetch(bagelUrl("/api/papers/resolve-pdf/" + rid), { method: "POST" })
+          .then(function (r) { return r.json(); })
+          .then(function (task) {
+            var tid = task.id;
+            var timer = setInterval(function () {
+              fetch(bagelUrl("/api/tasks/" + tid))
+                .then(function (r) { return r.json(); })
+                .then(function (s) {
+                  probeBtn.textContent = (s.message || s.status || "探测中…").slice(0, 24);
+                  if (s.status === "success" || s.status === "failed") {
+                    clearInterval(timer);
+                    if (s.status === "success") {
+                      location.reload();
+                    } else {
+                      probeBtn.disabled = false;
+                      probeBtn.textContent = "探测开放 PDF";
+                      alert(s.error || s.message || "未找到开放 PDF");
+                    }
+                  }
+                })
+                .catch(function () {});
+            }, 1000);
+          })
+          .catch(function (err) {
+            probeBtn.disabled = false;
+            probeBtn.textContent = "探测开放 PDF";
+            alert(err.message || "启动失败");
+          });
+        return;
+      }
+      var parseBtn = ev.target.closest(".paper-parse-btn");
+      if (parseBtn) {
+        ev.preventDefault();
+        var pid = parseBtn.getAttribute("data-item-id");
+        parseBtn.disabled = true;
+        parseBtn.textContent = "解析中…";
+        fetch(bagelUrl("/api/papers/parse/" + pid), { method: "POST" })
+          .then(function (r) { return r.json(); })
+          .then(function (task) {
+            var tid = task.id;
+            var timer = setInterval(function () {
+              fetch(bagelUrl("/api/tasks/" + tid))
+                .then(function (r) { return r.json(); })
+                .then(function (s) {
+                  parseBtn.textContent = (s.message || s.status || "解析中…").slice(0, 24);
+                  if (s.status === "success" || s.status === "failed") {
+                    clearInterval(timer);
+                    if (s.status === "success") {
+                      parseBtn.textContent = "已解析正文";
+                      parseBtn.classList.add("on");
+                    } else {
+                      parseBtn.disabled = false;
+                      parseBtn.textContent = "下载PDF并识别";
+                      alert(s.error || s.message || "解析失败");
+                    }
+                  }
+                })
+                .catch(function () {});
+            }, 1200);
+          })
+          .catch(function (err) {
+            parseBtn.disabled = false;
+            parseBtn.textContent = "下载PDF并识别";
+            alert(err.message || "启动失败");
+          });
+        return;
+      }
       var btn = ev.target.closest(".related-open");
       if (btn) {
         ev.preventDefault();

@@ -1,4 +1,4 @@
-"""Wiki compile — MD bodies on disk, transactional index in DB.
+﻿"""Wiki compile — MD bodies on disk, transactional index in DB.
 
 llm-wiki shaped operations (deterministic MVP, no LLM required):
   Ingest  — item MD + topic pages + edges
@@ -82,6 +82,7 @@ def _item_bucket(item_type: str) -> str:
         "GITHUB_REPO": "github",
         "GITHUB_RELEASE": "github",
         "MEDIA_POST": "media",
+        "AV": "av",
         "WECHAT_MSG": "wechat",
         "PAPER": "papers",
         "EDUCATION": "education",

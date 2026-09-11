@@ -1,4 +1,4 @@
-"""User authentication and password hashing (stdlib PBKDF2)."""
+﻿"""User authentication and password hashing (stdlib PBKDF2)."""
 
 from __future__ import annotations
 

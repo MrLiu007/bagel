@@ -38,6 +38,9 @@ dev = [
     "pytest-asyncio>=0.25.0",
     "httpx>=0.28.0",
 ]
+asr = [
+    "faster-whisper>=1.1.0",
+]
 
 [project.scripts]
 bagel = "bagel.cli.main:app"

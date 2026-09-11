@@ -1,4 +1,4 @@
-"""Lightweight in-process scheduler (no Celery).
+﻿"""Lightweight in-process scheduler (no Celery).
 
 Interval = N minutes + random jitter [0, jitter_seconds], via APScheduler IntervalTrigger.jitter.
 """
@@ -186,6 +186,17 @@ def _register_jobs(sched: BackgroundScheduler, settings: Settings, cfg) -> None:
             lambda: _run_job("collect_models", run_collect_models),
             IntervalTrigger(minutes=minutes, jitter=jitter),
             id="collect_models",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+    if cfg.schedule_collect_av:
+        from bagel.jobs.av import run_collect_av
+
+        sched.add_job(
+            lambda: _run_job("collect_av", run_collect_av),
+            IntervalTrigger(minutes=minutes, jitter=jitter),
+            id="collect_av",
             replace_existing=True,
             max_instances=1,
             coalesce=True,

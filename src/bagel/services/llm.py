@@ -1,4 +1,4 @@
-"""LLM client — OpenAI-compatible chat completions."""
+﻿"""LLM client — OpenAI-compatible chat completions."""
 
 from __future__ import annotations
 
@@ -110,6 +110,90 @@ class LlmClient:
             title_zh=str(parsed.get("title_zh") or item.title)[:200],
             raw_response=data,
         )
+
+    def complete_text(
+        self,
+        *,
+        system: str,
+        user: str,
+        temperature: float = 0.3,
+    ) -> tuple[str | None, str | None]:
+        """Plain-text / Markdown chat completion. Returns (content, error)."""
+        if not self.available:
+            return None, "LLM is not configured or disabled"
+        payload = {
+            "model": self.settings.llm_model,
+            "temperature": temperature,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+        }
+        headers = {"Content-Type": "application/json"}
+        if self.settings.llm_api_key:
+            headers["Authorization"] = f"Bearer {self.settings.llm_api_key}"
+        url = self.settings.llm_base_url.rstrip("/") + "/chat/completions"
+        timeout = float(getattr(self.settings, "llm_timeout_seconds", 180) or 180)
+        try:
+            with build_http_client(self.settings, timeout=max(timeout, 300)) as client:
+                resp = client.post(url, headers=headers, json=payload)
+                resp.raise_for_status()
+                data = resp.json()
+        except (httpx.HTTPError, OSError, ValueError) as exc:
+            return None, str(exc)[:500]
+        content = (
+            ((data.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
+        ).strip()
+        if not content:
+            return None, "LLM returned empty content"
+        # Drop accidental markdown fences around the whole document.
+        if content.startswith("```"):
+            lines = content.splitlines()
+            if lines and lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            content = "\n".join(lines).strip()
+        return content or None, None
+
+    def complete_json(
+        self,
+        *,
+        system: str,
+        user: str,
+        temperature: float = 0.2,
+    ) -> tuple[dict[str, Any] | None, str | None]:
+        """Generic JSON chat completion. Returns (parsed, error)."""
+        if not self.available:
+            return None, "LLM is not configured or disabled"
+        payload = {
+            "model": self.settings.llm_model,
+            "temperature": temperature,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "response_format": {"type": "json_object"},
+        }
+        headers = {"Content-Type": "application/json"}
+        if self.settings.llm_api_key:
+            headers["Authorization"] = f"Bearer {self.settings.llm_api_key}"
+        url = self.settings.llm_base_url.rstrip("/") + "/chat/completions"
+        timeout = float(getattr(self.settings, "llm_timeout_seconds", 180) or 180)
+        try:
+            with build_http_client(self.settings, timeout=max(timeout, 300)) as client:
+                resp = client.post(url, headers=headers, json=payload)
+                resp.raise_for_status()
+                data = resp.json()
+        except (httpx.HTTPError, OSError, ValueError) as exc:
+            return None, str(exc)[:500]
+        content = (
+            ((data.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
+        )
+        parsed = _parse_json_object(content)
+        if parsed is None:
+            return None, "LLM response was not valid JSON"
+        return parsed, None
 
 
 def _parse_json_object(text: str) -> dict[str, Any] | None:

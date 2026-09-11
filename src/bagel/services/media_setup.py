@@ -55,20 +55,119 @@ def install_entry_shim(target: Path) -> Path:
     src = patch_entry_src()
     if not src.is_file():
         raise FileNotFoundError(f"missing patch: {src}")
-    src_text = src.read_text(encoding="utf-8")
+    # utf-8-sig strips a leading BOM so we never re-poison the MediaCrawler tree.
+    src_text = src.read_text(encoding="utf-8-sig").lstrip("\ufeff")
     dest = target / "bagel_entry.py"
     if dest.is_file():
         try:
-            if dest.read_text(encoding="utf-8") == src_text:
-                # Already identical — do not touch mtime
+            if dest.read_text(encoding="utf-8-sig").lstrip("\ufeff") == src_text:
+                sanitize_mediacrawler_utf8_bom(target)
                 return dest
         except OSError:
             pass
-    dest.write_text(src_text, encoding="utf-8", newline="\n")
+    _write_text_no_bom(dest, src_text)
     legacy = target / "intel_center_entry.py"
     if not legacy.is_file():
-        legacy.write_text(src_text, encoding="utf-8", newline="\n")
+        _write_text_no_bom(legacy, src_text)
+    sanitize_mediacrawler_utf8_bom(target)
     return dest
+
+
+_UTF8_BOM = b"\xef\xbb\xbf"
+
+
+def _write_text_no_bom(path: Path, text: str) -> None:
+    """Write UTF-8 without BOM (Windows tools sometimes reintroduce U+FEFF)."""
+    data = text.lstrip("\ufeff").encode("utf-8")
+    path.write_bytes(data)
+
+
+def _strip_utf8_bom_file(path: Path) -> bool:
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return False
+    if not raw.startswith(_UTF8_BOM):
+        return False
+    try:
+        path.write_bytes(raw[len(_UTF8_BOM) :])
+    except OSError:
+        return False
+    return True
+
+
+def _site_packages_dirs(venv: Path) -> list[Path]:
+    out: list[Path] = []
+    win = venv / "Lib" / "site-packages"
+    if win.is_dir():
+        out.append(win)
+    lib = venv / "lib"
+    if lib.is_dir():
+        for py in lib.glob("python*"):
+            sp = py / "site-packages"
+            if sp.is_dir():
+                out.append(sp)
+    return out
+
+
+def sanitize_mediacrawler_utf8_bom(target: Path | None = None) -> int:
+    """Strip UTF-8 BOM from MediaCrawler project + venv site-packages ``*.py``.
+
+    Some Windows environments rewrite text files with a leading U+FEFF. That breaks:
+    - OpenCV ``compile(config.py)``
+    - PyExecJS and other packages declaring ``coding: ascii``
+      (``SyntaxError: encoding problem: ascii with BOM``)
+    """
+    root = target or default_target()
+    if not root.is_dir():
+        return 0
+    fixed = 0
+    venv = root / ".venv"
+    marker = venv / ".bagel_bom_clean" if venv.is_dir() else None
+    probes: list[Path] = []
+    if venv.is_dir():
+        for sp in _site_packages_dirs(venv):
+            probes.extend([sp / "execjs" / "__init__.py", sp / "cv2" / "config.py"])
+    probes_dirty = False
+    for probe in probes:
+        if not probe.is_file():
+            continue
+        try:
+            if probe.read_bytes().startswith(_UTF8_BOM):
+                probes_dirty = True
+                break
+        except OSError:
+            probes_dirty = True
+            break
+
+    need_full_venv = probes_dirty or not (marker and marker.is_file())
+    if need_full_venv and venv.is_dir():
+        for sp in _site_packages_dirs(venv):
+            for path in sp.rglob("*.py"):
+                if "__pycache__" in path.parts:
+                    continue
+                if _strip_utf8_bom_file(path):
+                    fixed += 1
+        try:
+            if marker is not None:
+                _write_text_no_bom(marker, f"fixed={fixed}\n")
+        except OSError:
+            pass
+
+    for path in root.rglob("*.py"):
+        if ".venv" in path.parts or "__pycache__" in path.parts:
+            continue
+        if _strip_utf8_bom_file(path):
+            fixed += 1
+
+    if fixed:
+        logger.info("mediacrawler.bom_stripped files=%s path=%s", fixed, root)
+    return fixed
+
+
+# Back-compat alias used by older call sites / tests.
+def sanitize_opencv_utf8_bom(target: Path | None = None) -> int:
+    return sanitize_mediacrawler_utf8_bom(target)
 
 
 def setup_mediacrawler(

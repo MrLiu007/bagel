@@ -1,4 +1,4 @@
-"""Category classifier + text helpers."""
+﻿"""Category classifier + text helpers."""
 
 from __future__ import annotations
 

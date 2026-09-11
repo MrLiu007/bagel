@@ -1,4 +1,4 @@
-"""External CLI runner — subprocess counterpart to httpx + feedparser.
+﻿"""External CLI runner — subprocess counterpart to httpx + feedparser.
 
 In-process app CLI stays on Typer+Rich (`bagel …`).
 Third-party binaries (Feishu/lark-cli, gh, …) go through this runner.
