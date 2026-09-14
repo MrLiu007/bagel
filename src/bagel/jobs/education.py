@@ -9,11 +9,17 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from bagel.collectors.education import fetch_from_source
-from bagel.domain.enums import ItemStatus, ItemType, KeywordScope, SourceType
+from bagel.domain.enums import ItemStatus, ItemType, KeywordRuleType, KeywordScope, SourceType
 from bagel.domain.models import IntelSource
 from bagel.jobs.metrics import elapsed_ms, source_stat
 from bagel.jobs.source_guard import MAX_SOURCE_ATTEMPTS, safe_source_fetch
 from bagel.pipeline.category import classify_title
+from bagel.pipeline.education_tracks import (
+    TRACK_LABELS,
+    EduTrack,
+    facet_for_source,
+    track_for_source,
+)
 from bagel.pipeline.filter import apply_keyword_rules
 from bagel.pipeline.keyword_scopes import rules_for_scope
 from bagel.services import wiki as wiki_svc
@@ -21,6 +27,21 @@ from bagel.settings import get_settings
 from bagel.storage.repositories import ItemRepository, KeywordRuleRepository
 
 ProgressCallback = Callable[..., None]
+
+_WHY_BY_TRACK = {
+    EduTrack.OPEN_COURSE: (
+        "教育启发：该开放课程/资源能否转化为教学内容或自学路径？"
+        "适合哪类学习者与前置知识？"
+    ),
+    EduTrack.K12: (
+        "K12 启发：这条政策/改革信息对本地入学、课改或学校管理有何影响？"
+        "需要跟进哪些落地细则？"
+    ),
+    EduTrack.KAOYAN: (
+        "考研启发：是否影响择校、科目、参考书或报名时间？"
+        "请核对目标院校官网原文。"
+    ),
+}
 
 
 def run_collect_education(
@@ -103,13 +124,26 @@ def run_collect_education(
             continue
 
         assert records is not None
+        from bagel.pipeline.education_noise import filter_education_records, is_education_noise
+
+        # Drop site chrome (联系我们 / 网站地图 / 网站声明 …) before ingest.
+        records = filter_education_records(records)
         found += len(records)
+        edu_track = track_for_source(name=src.name, url=src.url or "")
+        edu_facet = facet_for_source(name=src.name, url=src.url or "")
+        # K12 / 考研 are intentional subscriptions — do not gate on AI INCLUDE tags.
+        apply_rules = rules
+        if edu_track in {EduTrack.K12, EduTrack.KAOYAN}:
+            apply_rules = [r for r in rules if r.rule_type != KeywordRuleType.INCLUDE]
         for rec in records:
-            filt = apply_keyword_rules(rec.title, rec.summary, rules)
+            if is_education_noise(rec.title, rec.url):
+                continue
+            filt = apply_keyword_rules(rec.title, rec.summary, apply_rules)
             status = filt.status if filt.accepted else ItemStatus.REJECTED
             tags = list(
                 {
                     rec.institution,
+                    TRACK_LABELS[edu_track],
                     *(rec.tags or []),
                     *filt.matched_include,
                     *filt.matched_boost,
@@ -130,6 +164,8 @@ def run_collect_education(
                     "external_id": rec.external_id,
                     "institution": rec.institution,
                     "education": True,
+                    "edu_track": edu_track.value,
+                    "edu_facet": edu_facet,
                     "filter": {
                         "include": filt.matched_include,
                         "exclude": filt.matched_exclude,
@@ -139,13 +175,21 @@ def run_collect_education(
                 status=status,
                 score=1.05 + filt.score,
             )
+            # Re-open previously INCLUDE-rejected K12/考研 rows on refresh.
+            if (
+                not was_created
+                and edu_track in {EduTrack.K12, EduTrack.KAOYAN}
+                and filt.accepted
+                and item.status == ItemStatus.REJECTED
+                and not (item.metadata_ or {}).get("filter", {}).get("exclude")
+            ):
+                item.status = ItemStatus.CANDIDATE
             if was_created:
                 created += 1
                 src_created += 1
                 if not item.llm_why:
-                    item.llm_why = (
-                        "教育启发：该开放课程/资源能否转化为教学内容或自学路径？"
-                        "适合哪类学习者与前置知识？"
+                    item.llm_why = _WHY_BY_TRACK.get(
+                        edu_track, _WHY_BY_TRACK[EduTrack.OPEN_COURSE]
                     )
                 wiki_svc.export_item(item, settings)
         src.last_error_code = None

@@ -201,6 +201,17 @@ def _register_jobs(sched: BackgroundScheduler, settings: Settings, cfg) -> None:
             max_instances=1,
             coalesce=True,
         )
+    if cfg.schedule_collect_wechat_mp:
+        from bagel.jobs.wechat_mp import run_collect_wechat_mp
+
+        sched.add_job(
+            lambda: _run_job("collect_wechat_mp", run_collect_wechat_mp),
+            IntervalTrigger(minutes=minutes, jitter=jitter),
+            id="collect_wechat_mp",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
     sched.add_job(
         lambda: _run_job("summarize_selected", run_summarize_selected),
         IntervalTrigger(minutes=max(30, minutes), jitter=jitter),

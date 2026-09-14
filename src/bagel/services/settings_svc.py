@@ -458,17 +458,26 @@ def list_education_sources(session: Session) -> list[IntelSource]:
 
 
 def default_education_catalog() -> list[dict]:
+    from bagel.pipeline.education_tracks import TRACK_LABELS, build_education_url, normalize_track
     from bagel.storage.seed import DEFAULT_EDUCATION_SOURCES
 
     rows: list[dict] = []
     for row in DEFAULT_EDUCATION_SOURCES:
+        track = normalize_track(str(row.get("track") or "open_course"))
+        facet = row.get("facet")
         rows.append(
             {
                 "name": row["name"],
-                "url": row["url"],
+                "url": build_education_url(
+                    str(row["url"]).strip(), track=track, facet=facet
+                ),
+                "fetch_url": str(row["url"]).strip(),
                 "region": str(row.get("region", Region.GLOBAL)),
                 "source_type": str(row.get("source_type", SourceType.EDUCATION)),
                 "enabled": bool(row.get("enabled", True)),
+                "track": track.value,
+                "track_label": TRACK_LABELS[track],
+                "facet": facet or "",
             }
         )
     return rows
@@ -480,7 +489,11 @@ def add_education_source(
     name: str,
     url: str,
     region: str = "GLOBAL",
+    track: str = "open_course",
+    facet: str | None = None,
 ) -> IntelSource:
+    from bagel.pipeline.education_tracks import build_education_url, normalize_track, parse_education_url
+
     cleaned_name = (name or "").strip()
     cleaned_url = (url or "").strip()
     if not cleaned_name or not cleaned_url:
@@ -488,11 +501,26 @@ def add_education_source(
     region_v = region.strip().upper() if region else "GLOBAL"
     if region_v not in {Region.CN, Region.GLOBAL}:
         raise SettingsError("region 仅支持 CN / GLOBAL")
+    track_v = normalize_track(track)
+    stored = build_education_url(cleaned_url, track=track_v, facet=facet)
+    want_fetch = parse_education_url(stored).fetch_url
+    # Idempotent: same fetch URL → enable / refresh prefix instead of duplicating.
+    for existing in list_education_sources(session):
+        existing_fetch = parse_education_url(existing.url or "").fetch_url
+        if _norm_fetch(existing_fetch) == _norm_fetch(want_fetch):
+            existing.enabled = True
+            existing.url = stored
+            existing.name = cleaned_name or existing.name
+            existing.region = region_v
+            session.add(existing)
+            session.commit()
+            session.refresh(existing)
+            return existing
     repo = SourceRepository(session)
     return repo.add(
         IntelSource(
             name=cleaned_name,
-            url=cleaned_url,
+            url=stored,
             source_type=SourceType.EDUCATION,
             region=region_v,
             network_requirement=(
@@ -504,6 +532,136 @@ def add_education_source(
             enabled=True,
         )
     )
+
+
+def _norm_fetch(url: str) -> str:
+    return (url or "").strip().rstrip("/").lower()
+
+
+def add_education_presets(
+    session: Session,
+    *,
+    query: str,
+    kind: str,
+    custom_url: str = "",
+) -> dict:
+    """Resolve city/school query → add matching presets; unmatched → watch: 订阅."""
+    from bagel.collectors.education_watch import build_watch_url
+    from bagel.pipeline.education_presets import list_presets, resolve_presets, suggest_labels
+    from bagel.pipeline.education_tracks import EduTrack
+
+    kind_v = (kind or "").strip().lower()
+    if kind_v not in {"k12_region", "kaoyan_school", "kaoyan", "region", "school"}:
+        raise SettingsError("kind 仅支持 k12_region / kaoyan_school")
+
+    q = (query or "").strip()
+    custom = (custom_url or "").strip()
+    if not q and not custom:
+        raise SettingsError("请输入省市/学校名称，或填写自定义 RSS / RSSHub 路径")
+
+    is_k12 = kind_v in {"k12_region", "region"}
+    track = EduTrack.K12 if is_k12 else EduTrack.KAOYAN
+    default_facet = "city" if is_k12 else "prospectus"
+    kind_label = "K12 省市" if is_k12 else "考研院校"
+
+    matched: list = []
+    unmatched: list[str] = []
+    if q:
+        # Raw feed pasted into the name field → treat as custom path.
+        if _is_feed_ref(q) and not custom:
+            custom = q
+            q = ""
+        else:
+            matched, unmatched = resolve_presets(q, kind=kind_v)
+
+    added_names: list[str] = []
+    for preset in matched:
+        add_education_source(
+            session,
+            name=preset.label,
+            url=preset.fetch_url,
+            region="CN",
+            track=preset.track.value,
+            facet=preset.facet,
+        )
+        added_names.append(preset.label)
+
+    if custom:
+        if not _is_feed_ref(custom):
+            raise SettingsError(
+                "自定义路径需为 RSS URL（https://…）、RSSHub 相对路径（以 / 开头）"
+                f"或关注源（watch:…），当前为：{custom[:80]}"
+            )
+        display = (unmatched[0] if len(unmatched) == 1 else None) or (q if q and not matched else None)
+        if not display:
+            display = f"自定义·{kind_label}"
+        else:
+            display = f"{display}（自定义）"
+        add_education_source(
+            session,
+            name=display[:120],
+            url=custom,
+            region="CN",
+            track=track.value,
+            facet=default_facet,
+        )
+        added_names.append(display)
+        unmatched = []
+
+    # Any remaining city/school → watch subscription (portal scrape + keyword).
+    from bagel.collectors.education_portals import resolve_portal
+
+    for token in list(unmatched):
+        watch_kind = "k12" if is_k12 else "kaoyan"
+        watch_url = build_watch_url(kind=watch_kind, query=token)
+        portal = resolve_portal(token, kind=watch_kind)
+        if portal:
+            display = portal.label
+        else:
+            display = f"{token} · {'K12 关注' if is_k12 else '考研关注'}"
+        add_education_source(
+            session,
+            name=display[:120],
+            url=watch_url,
+            region="CN",
+            track=track.value,
+            facet=portal.facet if portal else default_facet,
+        )
+        added_names.append(display)
+    unmatched = []
+
+    if not added_names:
+        hints = "、".join(suggest_labels(kind_v)[:10])
+        raise SettingsError(
+            f"未能添加{kind_label}数据源。请输入省市/学校名称；"
+            f"也可填写自定义 RSS / RSSHub / watch: 路径。已支持快捷：{hints}"
+        )
+
+    return {
+        "added": len(added_names),
+        "names": added_names,
+        "unmatched": unmatched,
+        "available": len(list_presets(kind_v)),
+    }
+
+
+def _is_feed_ref(raw: str) -> bool:
+    text = (raw or "").strip()
+    low = text.lower()
+    return (
+        low.startswith("http://")
+        or low.startswith("https://")
+        or text.startswith("/")
+        or low.startswith("watch:")
+    )
+
+def education_preset_catalog() -> dict[str, list[dict]]:
+    from bagel.pipeline.education_presets import preset_catalog_for_ui, suggest_labels
+
+    catalog = preset_catalog_for_ui()
+    catalog["k12_suggest"] = suggest_labels("k12_region")
+    catalog["kaoyan_suggest"] = suggest_labels("kaoyan_school")
+    return catalog
 
 
 def toggle_education_source(session: Session, source_id: UUID, *, enabled: bool) -> IntelSource:
@@ -574,4 +732,79 @@ def toggle_av_source(session: Session, source_id: UUID, *, enabled: bool) -> Int
 
 
 def delete_av_source(session: Session, source_id: UUID) -> None:
+    delete_news_source(session, source_id)
+
+
+def list_wechat_mp_sources(session: Session) -> list[IntelSource]:
+    return [
+        s
+        for s in SourceRepository(session).list_all()
+        if s.source_type == SourceType.WECHAT and (s.url or "").startswith("wechat:mp:")
+    ]
+
+
+def add_wechat_mp_source(
+    session: Session,
+    *,
+    name: str,
+    wxid: str = "",
+    biz: str = "",
+    feed_url: str = "",
+) -> IntelSource:
+    from bagel.integrations.wechat_mp_discover import build_source_url
+
+    cleaned_name = (name or "").strip()
+    cleaned_wxid = (wxid or "").strip()
+    cleaned_biz = (biz or "").strip()
+    cleaned_feed = (feed_url or "").strip()
+    if not cleaned_name and not cleaned_wxid and not cleaned_feed:
+        raise SettingsError("请填写公众号名称，或 RSS 源地址（推荐 WeWe-RSS）")
+    try:
+        url = build_source_url(
+            name=cleaned_name or cleaned_wxid,
+            wxid=cleaned_wxid,
+            biz=cleaned_biz,
+            feed_url=cleaned_feed,
+        )
+    except ValueError as exc:
+        raise SettingsError(str(exc)) from exc
+    display = cleaned_name or cleaned_wxid or cleaned_feed
+    repo = SourceRepository(session)
+    for existing in list_wechat_mp_sources(session):
+        if existing.name == display or existing.url == url:
+            existing.enabled = True
+            # Merge richer identity into existing row
+            from bagel.integrations.wechat_mp_discover import parse_source_url
+
+            cur = parse_source_url(existing.url or "")
+            existing.url = build_source_url(
+                name=cleaned_name or cur.name or existing.name,
+                wxid=cleaned_wxid or cur.wxid,
+                biz=cleaned_biz or cur.biz,
+                feed_url=cleaned_feed or cur.feed_url,
+            )
+            if cleaned_name:
+                existing.name = cleaned_name
+            session.add(existing)
+            session.commit()
+            session.refresh(existing)
+            return existing
+    return repo.add(
+        IntelSource(
+            name=display[:200],
+            url=url,
+            source_type=SourceType.WECHAT,
+            region=Region.CN,
+            network_requirement=NetworkRequirement.DIRECT,
+            priority=400,
+            enabled=True,
+        )
+    )
+
+
+def toggle_wechat_mp_source(session: Session, source_id: UUID, *, enabled: bool) -> IntelSource:
+    return toggle_news_source(session, source_id, enabled=enabled)
+
+
+def delete_wechat_mp_source(session: Session, source_id: UUID) -> None:
     delete_news_source(session, source_id)

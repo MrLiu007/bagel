@@ -247,10 +247,11 @@ DEFAULT_MODEL_SOURCES: list[dict] = [
 ]
 
 DEFAULT_EDUCATION_SOURCES: list[dict] = [
-    # Global courses / AI education news only (no campus PR, no fragile RSSHub).
+    # --- 公开课 (open_course): global OCW / teaching blogs ---
     {
         "name": "MIT OCW · New Courses",
         "url": "https://old.ocw.mit.edu/rss/new/mit-newcourses.xml",
+        "track": "open_course",
         "source_type": SourceType.EDUCATION,
         "region": Region.GLOBAL,
         "network": NetworkRequirement.PROXY_PREFERRED,
@@ -259,6 +260,7 @@ DEFAULT_EDUCATION_SOURCES: list[dict] = [
     {
         "name": "MIT News · AI",
         "url": "https://news.mit.edu/topic/mitartificial-intelligence2-rss.xml",
+        "track": "open_course",
         "source_type": SourceType.EDUCATION,
         "region": Region.GLOBAL,
         "network": NetworkRequirement.PROXY_PREFERRED,
@@ -267,6 +269,7 @@ DEFAULT_EDUCATION_SOURCES: list[dict] = [
     {
         "name": "Stanford AI Lab Blog",
         "url": "https://ai.stanford.edu/blog/feed.xml",
+        "track": "open_course",
         "source_type": SourceType.EDUCATION,
         "region": Region.GLOBAL,
         "network": NetworkRequirement.PROXY_PREFERRED,
@@ -275,6 +278,7 @@ DEFAULT_EDUCATION_SOURCES: list[dict] = [
     {
         "name": "Yale Open Courses",
         "url": "https://oyc.yale.edu/rss.xml",
+        "track": "open_course",
         "source_type": SourceType.EDUCATION,
         "region": Region.GLOBAL,
         "network": NetworkRequirement.PROXY_PREFERRED,
@@ -283,6 +287,7 @@ DEFAULT_EDUCATION_SOURCES: list[dict] = [
     {
         "name": "Coursera Blog",
         "url": "https://blog.coursera.org/feed/",
+        "track": "open_course",
         "source_type": SourceType.EDUCATION,
         "region": Region.GLOBAL,
         "network": NetworkRequirement.PROXY_PREFERRED,
@@ -291,6 +296,7 @@ DEFAULT_EDUCATION_SOURCES: list[dict] = [
     {
         "name": "Khan Academy Blog",
         "url": "https://blog.khanacademy.org/feed/",
+        "track": "open_course",
         "source_type": SourceType.EDUCATION,
         "region": Region.GLOBAL,
         "network": NetworkRequirement.PROXY_PREFERRED,
@@ -299,6 +305,7 @@ DEFAULT_EDUCATION_SOURCES: list[dict] = [
     {
         "name": "CMU Open Learning Initiative",
         "url": "https://oli.cmu.edu/feed/",
+        "track": "open_course",
         "source_type": SourceType.EDUCATION,
         "region": Region.GLOBAL,
         "network": NetworkRequirement.PROXY_PREFERRED,
@@ -307,6 +314,7 @@ DEFAULT_EDUCATION_SOURCES: list[dict] = [
     {
         "name": "fast.ai",
         "url": "https://www.fast.ai/index.xml",
+        "track": "open_course",
         "source_type": SourceType.EDUCATION,
         "region": Region.GLOBAL,
         "network": NetworkRequirement.PROXY_PREFERRED,
@@ -315,6 +323,7 @@ DEFAULT_EDUCATION_SOURCES: list[dict] = [
     {
         "name": "Distill",
         "url": "https://distill.pub/rss.xml",
+        "track": "open_course",
         "source_type": SourceType.EDUCATION,
         "region": Region.GLOBAL,
         "network": NetworkRequirement.PROXY_PREFERRED,
@@ -323,10 +332,104 @@ DEFAULT_EDUCATION_SOURCES: list[dict] = [
     {
         "name": "Lil'Log（教学向 ML 笔记）",
         "url": "https://lilianweng.github.io/index.xml",
+        "track": "open_course",
         "source_type": SourceType.EDUCATION,
         "region": Region.GLOBAL,
         "network": NetworkRequirement.PROXY_PREFERRED,
         "priority": 70,
+    },
+    # --- K12: 国家政策 / 改革新闻（RSSHub 教育部）；城市政策默认关闭 ---
+    {
+        "name": "教育部 · 最新文件",
+        "url": "/gov/moe/newest_file",
+        "track": "k12",
+        "facet": "national",
+        "source_type": SourceType.EDUCATION,
+        "region": Region.CN,
+        "network": NetworkRequirement.DIRECT,
+        "priority": 110,
+    },
+    {
+        "name": "教育部 · 公告公示",
+        "url": "/gov/moe/notice",
+        "track": "k12",
+        "facet": "national",
+        "source_type": SourceType.EDUCATION,
+        "region": Region.CN,
+        "network": NetworkRequirement.DIRECT,
+        "priority": 115,
+    },
+    {
+        "name": "教育部 · 教育要闻",
+        "url": "/gov/moe/edu_ministry_news",
+        "track": "k12",
+        "facet": "national",
+        "source_type": SourceType.EDUCATION,
+        "region": Region.CN,
+        "network": NetworkRequirement.DIRECT,
+        "priority": 120,
+    },
+    {
+        "name": "教育部 · 政策解读",
+        "url": "/gov/moe/policy_anal",
+        "track": "k12",
+        "facet": "reform",
+        "source_type": SourceType.EDUCATION,
+        "region": Region.CN,
+        "network": NetworkRequirement.DIRECT,
+        "priority": 125,
+    },
+    {
+        "name": "教育部 · 教育聚焦",
+        "url": "/gov/moe/edu_focus_news",
+        "track": "k12",
+        "facet": "reform",
+        "source_type": SourceType.EDUCATION,
+        "region": Region.CN,
+        "network": NetworkRequirement.DIRECT,
+        "priority": 130,
+    },
+    {
+        "name": "北京教委工会 · 通知（城市参考）",
+        "url": "/gov/beijing/bjedu/gh",
+        "track": "k12",
+        "facet": "city",
+        "source_type": SourceType.EDUCATION,
+        "region": Region.CN,
+        "network": NetworkRequirement.DIRECT,
+        "priority": 140,
+        "enabled": False,
+    },
+    # --- 考研: 研招网直连（不依赖 RSSHub）；院校用「快捷添加」生成 watch 订阅 ---
+    {
+        "name": "研招网 · 政策导航",
+        "url": "https://yz.chsi.com.cn/kyzx/zcdh/",
+        "track": "kaoyan",
+        "facet": "national",
+        "source_type": SourceType.EDUCATION,
+        "region": Region.CN,
+        "network": NetworkRequirement.DIRECT,
+        "priority": 210,
+    },
+    {
+        "name": "研招网 · 考研动态",
+        "url": "https://yz.chsi.com.cn/kyzx/kydt/",
+        "track": "kaoyan",
+        "facet": "national",
+        "source_type": SourceType.EDUCATION,
+        "region": Region.CN,
+        "network": NetworkRequirement.DIRECT,
+        "priority": 215,
+    },
+    {
+        "name": "研招网 · 复试调剂",
+        "url": "https://yz.chsi.com.cn/kyzx/fstj/",
+        "track": "kaoyan",
+        "facet": "score",
+        "source_type": SourceType.EDUCATION,
+        "region": Region.CN,
+        "network": NetworkRequirement.DIRECT,
+        "priority": 230,
     },
 ]
 
@@ -343,11 +446,37 @@ _EDUCATION_URL_MIGRATIONS: dict[str, str] = {
     "https://news.stanford.edu/feed/": "https://ai.stanford.edu/blog/feed.xml",
     "https://blog.edx.org/feed": "",  # often returns HTML shell with 0 entries
     "https://www.harvardonline.harvard.edu/blog/rss.xml": "",  # was mapped to Gazette; both pruned
+    # 考研：RSSHub /chsi → 研招网直连；脆弱校端 RSSHub → 研招网关键词订阅
+    "/chsi/kyzx/zcdh": "https://yz.chsi.com.cn/kyzx/zcdh/",
+    "/chsi/kyzx/kydt": "https://yz.chsi.com.cn/kyzx/kydt/",
+    "/chsi/kyzx/fstj": "https://yz.chsi.com.cn/kyzx/fstj/",
+    "/chsi/kydt": "https://yz.chsi.com.cn/kyzx/kydt/",
+    "/chsi/hotnews": "https://yz.chsi.com.cn/kyzx/kydt/",
+    "/pku/admission/sszs": "watch:kaoyan:北京大学",
+    "/sjtu/yzb/zkxx/sszs": "watch:kaoyan:上海交通大学",
+    "/zju/grs/1": "watch:kaoyan:浙江大学",
+    "/nju/admission": "watch:kaoyan:南京大学",
+    "/ustc/gs/tzgg": "watch:kaoyan:中国科学技术大学",
+    "/hit/hitgs": "watch:kaoyan:哈尔滨工业大学",
+    "/xjtu/gs/tzgg": "watch:kaoyan:西安交通大学",
+    "/seu/yzb/1": "watch:kaoyan:东南大学",
+    "/tju/yzb/notice": "watch:kaoyan:天津大学",
+    "/hust/yjs": "watch:kaoyan:华中科技大学",
+    "/tongji/yjs": "watch:kaoyan:同济大学",
+    "/bit/yjs": "watch:kaoyan:北京理工大学",
+    "/uestc/gr": "watch:kaoyan:电子科技大学",
+    "/bjtu/gs/zsjz_zszt": "watch:kaoyan:北京交通大学",
+    "/cuc/yz": "watch:kaoyan:中国传媒大学",
 }
 
 _EDUCATION_NAME_FIXES: dict[str, str] = {
     "https://old.ocw.mit.edu/rss/new/mit-newcourses.xml": "MIT OCW · New Courses",
     "https://ai.stanford.edu/blog/feed.xml": "Stanford AI Lab Blog",
+    "https://yz.chsi.com.cn/kyzx/zcdh/": "研招网 · 政策导航",
+    "https://yz.chsi.com.cn/kyzx/kydt/": "研招网 · 考研动态",
+    "https://yz.chsi.com.cn/kyzx/fstj/": "研招网 · 复试调剂",
+    "watch:kaoyan:北京大学": "北大 · 考研关注",
+    "watch:kaoyan:上海交通大学": "上交 · 考研关注",
 }
 
 # Delete from existing DBs: campus PR, 403 feeds, fragile CN RSSHub adapters.
@@ -973,18 +1102,35 @@ def ensure_model_sources(session: Session) -> int:
     return added
 
 
+def _education_stored_url(row: dict) -> str:
+    from bagel.pipeline.education_tracks import build_education_url
+
+    return build_education_url(
+        str(row["url"]).strip(),
+        track=str(row.get("track") or "open_course"),
+        facet=row.get("facet"),
+    )
+
+
 def ensure_education_sources(session: Session) -> int:
-    """Idempotently add default university / OCW education sources."""
+    """Idempotently add default education sources (公开课 / K12 / 考研)."""
     existing_urls = {
         _norm_source_url(u)
         for u in session.scalars(
             select(IntelSource.url).where(IntelSource.source_type == SourceType.EDUCATION)
         ).all()
     }
+    # Also match by fetch URL so plain OCW rows are not re-added as prefixed dupes.
+    existing_fetch = set()
+    for u in list(existing_urls):
+        from bagel.pipeline.education_tracks import parse_education_url
+
+        existing_fetch.add(_norm_source_url(parse_education_url(u).fetch_url))
     added = 0
     for row in DEFAULT_EDUCATION_SOURCES:
-        url = str(row["url"]).strip()
-        if _norm_source_url(url) in existing_urls:
+        url = _education_stored_url(row)
+        fetch = str(row["url"]).strip()
+        if _norm_source_url(url) in existing_urls or _norm_source_url(fetch) in existing_fetch:
             continue
         session.add(
             IntelSource(
@@ -998,6 +1144,7 @@ def ensure_education_sources(session: Session) -> int:
             )
         )
         existing_urls.add(_norm_source_url(url))
+        existing_fetch.add(_norm_source_url(fetch))
         added += 1
     return added
 
@@ -1126,8 +1273,15 @@ def repair_av_sources(session: Session) -> int:
     return changed
 
 def repair_education_sources(session: Session) -> int:
-    """Migrate broken education feeds; delete campus PR / 403 / CN RSSHub rows."""
+    """Migrate broken education feeds; fix missing edu:track prefixes; prune bad rows."""
     from bagel.domain.models import IntelItem
+    from bagel.pipeline.education_tracks import (
+        EduTrack,
+        build_education_url,
+        canonical_education_url,
+        parse_education_url,
+        track_for_source,
+    )
 
     changed = 0
     rows = list(
@@ -1138,33 +1292,93 @@ def repair_education_sources(session: Session) -> int:
     occupied = {_norm_source_url(r.url) for r in rows}
     to_delete: list[IntelSource] = []
 
+    # Catalog fetch URL → preferred stored URL / name / enabled.
+    catalog_by_fetch: dict[str, dict] = {}
+    for row in DEFAULT_EDUCATION_SOURCES:
+        fetch = _norm_source_url(str(row["url"]).strip())
+        catalog_by_fetch[fetch] = {
+            "stored": _education_stored_url(row),
+            "name": row["name"],
+            "enabled": bool(row.get("enabled", True)),
+            "track": str(row.get("track") or "open_course"),
+            "facet": row.get("facet"),
+        }
+
     for src in rows:
         raw = (src.url or "").strip()
-        if raw in _EDUCATION_DELETE_URLS or _norm_source_url(raw) in {
+        parsed = parse_education_url(raw)
+        fetch_norm = _norm_source_url(parsed.fetch_url or raw)
+
+        if raw in _EDUCATION_DELETE_URLS or fetch_norm in {
             _norm_source_url(u) for u in _EDUCATION_DELETE_URLS
         }:
             to_delete.append(src)
             continue
-        if raw not in _EDUCATION_URL_MIGRATIONS:
+
+        # Legacy URL migrations (plain fetch URLs only).
+        migrate_key = parsed.fetch_url or raw
+        if migrate_key in _EDUCATION_URL_MIGRATIONS:
+            new_fetch = _EDUCATION_URL_MIGRATIONS[migrate_key]
+            if not new_fetch:
+                to_delete.append(src)
+                continue
+            track = track_for_source(name=src.name, url=raw)
+            facet = None
+            cat = catalog_by_fetch.get(_norm_source_url(new_fetch))
+            if cat:
+                new_url = cat["stored"]
+            else:
+                from bagel.pipeline.education_tracks import facet_for_source
+
+                facet = facet_for_source(name=src.name, url=raw)
+                new_url = build_education_url(new_fetch, track=track, facet=facet)
+            norm_new = _norm_source_url(new_url)
+            if norm_new != _norm_source_url(raw):
+                if norm_new in occupied and norm_new != _norm_source_url(raw):
+                    to_delete.append(src)
+                    continue
+                occupied.discard(_norm_source_url(raw))
+                occupied.add(norm_new)
+                src.url = new_url
+                src.last_error_code = None
+                if new_fetch in _EDUCATION_NAME_FIXES:
+                    src.name = _EDUCATION_NAME_FIXES[new_fetch]
+                src.enabled = True
+                changed += 1
+                raw = new_url
+                parsed = parse_education_url(raw)
+                fetch_norm = _norm_source_url(parsed.fetch_url or raw)
+
+        # Re-prefix K12 / 考研 rows that landed as plain open_course URLs.
+        preferred = catalog_by_fetch.get(fetch_norm)
+        if preferred:
+            want = preferred["stored"]
+            if _norm_source_url(src.url) != _norm_source_url(want):
+                if _norm_source_url(want) in occupied and _norm_source_url(want) != _norm_source_url(
+                    src.url
+                ):
+                    to_delete.append(src)
+                    continue
+                occupied.discard(_norm_source_url(src.url))
+                occupied.add(_norm_source_url(want))
+                src.url = want
+                if src.name != preferred["name"] and (
+                    "请填" in (src.name or "") or "请改用" in (src.name or "") or not src.name
+                ):
+                    src.name = preferred["name"]
+                changed += 1
             continue
-        new_url = _EDUCATION_URL_MIGRATIONS[raw]
-        if not new_url:
-            to_delete.append(src)
-            continue
-        norm_new = _norm_source_url(new_url)
-        if norm_new == _norm_source_url(raw):
-            continue
-        if norm_new in occupied:
-            to_delete.append(src)
-            continue
-        occupied.discard(_norm_source_url(raw))
-        occupied.add(norm_new)
-        src.url = new_url
-        src.last_error_code = None
-        if new_url in _EDUCATION_NAME_FIXES:
-            src.name = _EDUCATION_NAME_FIXES[new_url]
-        src.enabled = True
-        changed += 1
+
+        track = track_for_source(name=src.name, url=src.url or "")
+        if track != EduTrack.OPEN_COURSE:
+            want = canonical_education_url(name=src.name, url=src.url or "")
+            if _norm_source_url(want) != _norm_source_url(src.url or ""):
+                if _norm_source_url(want) in occupied:
+                    continue
+                occupied.discard(_norm_source_url(src.url or ""))
+                occupied.add(_norm_source_url(want))
+                src.url = want
+                changed += 1
 
     for src in to_delete:
         session.execute(
@@ -1172,6 +1386,38 @@ def repair_education_sources(session: Session) -> int:
         )
         session.delete(src)
         changed += 1
+
+    # Reject chrome pages already ingested; re-open INCLUDE-only rejects otherwise.
+    from bagel.domain.enums import ItemStatus, ItemType
+    from bagel.pipeline.education_noise import is_education_noise
+
+    for item in session.scalars(
+        select(IntelItem).where(IntelItem.item_type == ItemType.EDUCATION)
+    ).all():
+        if is_education_noise(item.title, item.url):
+            if item.status != ItemStatus.REJECTED:
+                item.status = ItemStatus.REJECTED
+                meta = dict(item.metadata_ or {})
+                meta["noise"] = True
+                item.metadata_ = meta
+                changed += 1
+            continue
+        if item.status != ItemStatus.REJECTED:
+            continue
+        meta = item.metadata_ or {}
+        if meta.get("noise"):
+            continue
+        if str(meta.get("edu_track") or "") not in {
+            EduTrack.K12.value,
+            EduTrack.KAOYAN.value,
+        }:
+            continue
+        filt = meta.get("filter") or {}
+        if filt.get("exclude") or filt.get("include"):
+            continue
+        item.status = ItemStatus.CANDIDATE
+        changed += 1
+
     if changed:
         session.flush()
     return changed

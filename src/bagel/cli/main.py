@@ -125,16 +125,72 @@ def setup_archify_cmd(
     console.print("[dim]日常开发无需本命令：`bagel dev` 启动时会自动 ensure Archify。[/dim]")
 
 
+@app.command("setup-wewe")
+def setup_wewe_cmd(
+    ref: str = typer.Option("main", "--ref", help="Upstream git branch or tag"),
+    force: bool = typer.Option(False, "--force", help="Remove broken non-git dir and re-clone"),
+    repo: str = typer.Option(
+        "https://github.com/cooderl/wewe-rss.git",
+        "--repo",
+        help="Upstream git URL",
+    ),
+    build: bool = typer.Option(
+        False,
+        "--build/--no-build",
+        help="Clone 后执行 pnpm install+build（本地 sidecar；可能数分钟）",
+    ),
+    start: bool = typer.Option(True, "--start/--no-start", help="Clone 后尝试启动 sidecar"),
+) -> None:
+    """Clone WeWe-RSS into third_party/ (gitignored) and optionally start Docker/local sidecar."""
+    from bagel.services.wewe_runtime import build_local_checkout, ensure_wewe_rss_running
+    from bagel.services.wewe_setup import setup_wewe_rss
+
+    try:
+        info = setup_wewe_rss(repo=repo, ref=ref, force=force)
+    except FileExistsError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    except Exception as exc:  # noqa: BLE001
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    console.print(f"[green]WeWe-RSS {info['action']}[/green] → {info['path']}")
+    if build:
+        built = build_local_checkout()
+        if built.get("action") in {"built", "exists"}:
+            console.print(f"[green]local build {built['action']}[/green]")
+        else:
+            console.print(f"[yellow]local build failed[/yellow]: {built.get('error')}")
+    if start:
+        run = ensure_wewe_rss_running(start=True)
+        if run.get("ready"):
+            console.print(
+                f"[green]sidecar {run.get('action')}[/green] "
+                f"mode={run.get('mode')} → {run.get('base_url')}"
+            )
+        else:
+            console.print(
+                f"[yellow]sidecar {run.get('action')}[/yellow]: "
+                f"{run.get('error') or run.get('hint') or 'not ready'}"
+            )
+    console.print(
+        "[dim]日常开发：`bagel dev` 只做短时探测，不会跑 pnpm install。"
+        "公众号需在 WeWe Web（:4000）用样例文章链接添加一次。[/dim]"
+    )
+
+
 def _ensure_dev_third_party(settings) -> None:
-    """Clone MediaCrawler / yt-dlp / Archify when missing — same as app lifespan."""
+    """Clone MediaCrawler / yt-dlp / Archify / WeWe when missing — same as app lifespan."""
     from bagel.services.archify_setup import ensure_archify_on_startup
     from bagel.services.media_setup import ensure_mediacrawler_on_startup
+    from bagel.services.wewe_setup import ensure_wewe_rss_on_startup
     from bagel.services.ytdlp_setup import ensure_ytdlp_on_startup
 
     for label, fn in (
         ("MediaCrawler", ensure_mediacrawler_on_startup),
         ("yt-dlp", ensure_ytdlp_on_startup),
         ("Archify", ensure_archify_on_startup),
+        ("WeWe-RSS", ensure_wewe_rss_on_startup),
     ):
         try:
             info = fn(settings=settings)
@@ -149,6 +205,30 @@ def _ensure_dev_third_party(settings) -> None:
                 console.print(f"[dim]{label} {action}[/dim]" + (f" → {path}" if path else ""))
         except Exception as exc:  # noqa: BLE001
             console.print(f"[yellow]{label} auto-setup failed[/yellow]: {exc}")
+
+
+def _ensure_dev_wewe_sidecar(settings) -> None:
+    """Start WeWe-RSS once before uvicorn (survives --reload child restarts)."""
+    from bagel.services.wewe_runtime import ensure_wewe_rss_running
+
+    try:
+        info = ensure_wewe_rss_running(settings=settings, start=True)
+    except Exception as exc:  # noqa: BLE001
+        console.print(f"[yellow]WeWe-RSS 启动异常（主站仍继续）[/yellow]: {exc}")
+        return
+    if not info or info.get("action") == "skipped":
+        return
+    if info.get("ready"):
+        console.print(
+            f"[dim]WeWe-RSS {info.get('action')}[/dim] "
+            f"mode={info.get('mode')} → {info.get('base_url')}"
+        )
+        return
+    err = info.get("error") or "not ready"
+    console.print(f"[yellow]WeWe-RSS 暂未就绪（不影响主站）[/yellow]: {err}")
+    hint = info.get("hint")
+    if hint:
+        console.print(f"[dim]{hint}[/dim]")
 
 
 @app.command()
@@ -219,8 +299,10 @@ def dev(
     else:
         console.print("[dim]Auth off (AUTH_REQUIRED=false).[/dim]")
 
-    console.print("[dim]Ensuring third_party tools (MediaCrawler / yt-dlp / Archify)…[/dim]")
+    console.print("[dim]Ensuring third_party tools (MediaCrawler / yt-dlp / Archify / WeWe-RSS)…[/dim]")
     _ensure_dev_third_party(settings)
+    console.print("[dim]Starting WeWe-RSS sidecar (Docker preferred)…[/dim]")
+    _ensure_dev_wewe_sidecar(settings)
 
     # Probe noise is filtered in create_app() so --reload child processes also quiet it.
     reload_excludes = [
@@ -230,6 +312,8 @@ def dev(
         "third_party\\yt-dlp\\*",
         "third_party/archify/*",
         "third_party\\archify\\*",
+        "third_party/wewe-rss/*",
+        "third_party\\wewe-rss\\*",
         "data/*",
         "data\\*",
         ".venv/*",

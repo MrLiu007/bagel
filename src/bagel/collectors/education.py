@@ -1,4 +1,4 @@
-﻿"""Education / OCW collectors — university open learning RSS feeds."""
+﻿"""Education / OCW collectors — university open learning RSS feeds + gov fallbacks."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from urllib.parse import urljoin
 import feedparser
 import httpx
 
+from bagel.integrations.http import build_http_client
 from bagel.settings import get_settings
 
 # Many .edu / CDN hosts block custom bot UAs (403). Prefer a browser-like UA.
@@ -36,20 +37,6 @@ class EducationRecord:
     raw: dict[str, Any] | None = None
 
 
-def _client(timeout: float = 40.0) -> httpx.Client:
-    settings = get_settings()
-    return httpx.Client(
-        timeout=timeout,
-        proxy=settings.proxy_url or None,
-        follow_redirects=True,
-        headers={
-            "User-Agent": USER_AGENT,
-            "Accept": _ACCEPT,
-            "Accept-Language": "en-US,en;q=0.9,zh-CN;q=0.8",
-        },
-    )
-
-
 def _parse_date(value: str | None) -> datetime | None:
     if not value:
         return None
@@ -68,9 +55,25 @@ def _parse_date(value: str | None) -> datetime | None:
         return None
 
 
-def fetch_rss(name: str, url: str, *, max_results: int = 30) -> list[EducationRecord]:
+def fetch_rss(
+    name: str,
+    url: str,
+    *,
+    max_results: int = 30,
+    force_proxy: bool | None = None,
+) -> list[EducationRecord]:
     """Fetch a university / OCW RSS or Atom feed."""
-    with _client() as client:
+    settings = get_settings()
+    with build_http_client(
+        settings,
+        timeout=40.0,
+        force_proxy=force_proxy,
+        headers={
+            "User-Agent": USER_AGENT,
+            "Accept": _ACCEPT,
+            "Accept-Language": "en-US,en;q=0.9,zh-CN;q=0.8",
+        },
+    ) as client:
         resp = client.get(url)
         resp.raise_for_status()
         body = resp.text
@@ -123,20 +126,97 @@ def fetch_rss(name: str, url: str, *, max_results: int = 30) -> list[EducationRe
             )
         )
     if not out:
-        # 200 HTML landing pages often parse as empty feeds — surface as soft failure.
         raise ValueError(f"源无有效条目（可能已停更或返回非 RSS）：{url}")
     return out
 
 
 def fetch_from_source(name: str, url: str) -> list[EducationRecord]:
-    """Dispatch education source URLs (RSS / RSSHub relative)."""
-    raw = (url or "").strip()
+    """Dispatch education source URLs (RSS / RSSHub / MOE / CHSI / watch)."""
+    from bagel.pipeline.education_noise import filter_education_records
+
+    return filter_education_records(_dispatch_education_source(name, url))
+
+
+def _dispatch_education_source(name: str, url: str) -> list[EducationRecord]:
+    from bagel.collectors.education_chsi import chsi_key_from_path, fetch_chsi_list
+    from bagel.collectors.education_moe import fetch_moe_list, moe_type_from_path
+    from bagel.collectors.education_watch import fetch_watch, parse_watch_ref
+    from bagel.pipeline.education_tracks import parse_education_url
+
+    parsed = parse_education_url(url)
+    raw = parsed.fetch_url.strip()
     if not raw:
         return []
+
+    # Arbitrary city/school watch subscriptions
+    if parse_watch_ref(raw):
+        return fetch_watch(name, raw)
+
     settings = get_settings()
+
+    # Direct CHSI list pages (https://yz.chsi.com.cn/kyzx/…)
+    chsi_key = chsi_key_from_path(raw)
+    if chsi_key and ("yz.chsi.com.cn" in raw or raw.startswith("/chsi/") or raw.startswith("/kyzx/")):
+        if raw.startswith("http") and "yz.chsi.com.cn" in raw:
+            return fetch_chsi_list(name, chsi_key)
+        # RSSHub /chsi/… — try hub then direct
+        if raw.startswith("/"):
+            base = (settings.rsshub_base_url or "").rstrip("/")
+            if base:
+                try:
+                    return fetch_rss(name, f"{base}{raw}", force_proxy=False)
+                except (httpx.HTTPError, ValueError):
+                    return fetch_chsi_list(name, chsi_key)
+            return fetch_chsi_list(name, chsi_key)
+
     if raw.startswith("/"):
+        moe_type = moe_type_from_path(raw)
         base = (settings.rsshub_base_url or "").rstrip("/")
         if not base:
+            if moe_type:
+                return fetch_moe_list(name, moe_type)
+            if chsi_key:
+                return fetch_chsi_list(name, chsi_key)
             raise ValueError("RSSHub 相对路径需要配置 RSSHUB_BASE_URL")
-        raw = f"{base}{raw}"
+        fetch_url = f"{base}{raw}"
+        try:
+            return fetch_rss(name, fetch_url, force_proxy=False)
+        except (httpx.HTTPError, ValueError) as hub_exc:
+            if moe_type:
+                try:
+                    return fetch_moe_list(name, moe_type)
+                except Exception as moe_exc:  # noqa: BLE001
+                    raise ValueError(
+                        f"RSSHub 失败（{hub_exc}）；教育部官网直连亦失败（{moe_exc}）"
+                    ) from moe_exc
+            if chsi_key:
+                try:
+                    return fetch_chsi_list(name, chsi_key)
+                except Exception as chsi_exc:  # noqa: BLE001
+                    raise ValueError(
+                        f"RSSHub 失败（{hub_exc}）；研招网直连亦失败（{chsi_exc}）"
+                    ) from chsi_exc
+            raise ValueError(
+                f"RSSHub 拉取失败（{type(hub_exc).__name__}: {hub_exc}）。"
+                "请检查 rsshub 容器；或改用自定义直连 RSS / 关注源。"
+            ) from hub_exc
+
+    if not raw.startswith("http"):
+        raise ValueError(f"教育源需要 RSS/Atom URL、RSSHub 路径或 watch: 关注源，当前为：{raw[:80]}")
+
+    # Absolute URL pointing at our RSSHub moe/chsi route
+    base = (settings.rsshub_base_url or "").rstrip("/")
+    if base and raw.startswith(base):
+        path = raw[len(base) :] or "/"
+        moe_type = moe_type_from_path(path)
+        chsi_key2 = chsi_key_from_path(path)
+        try:
+            return fetch_rss(name, raw, force_proxy=False)
+        except (httpx.HTTPError, ValueError) as hub_exc:
+            if moe_type:
+                return fetch_moe_list(name, moe_type)
+            if chsi_key2:
+                return fetch_chsi_list(name, chsi_key2)
+            raise
+
     return fetch_rss(name, raw)

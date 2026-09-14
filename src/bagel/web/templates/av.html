@@ -1,15 +1,6 @@
 ﻿{% extends "base.html" %}
 {% block content %}
 <h1>{{ title }} <span class="mono">/ av</span></h1>
-<p class="hint">
-  <strong>采集 = 仅元数据</strong>（标题、链接、时长、封面），不下载大文件。
-  进入条目<strong>详情</strong>后可按需「下载音视频」「提取字幕文字」或「下载并解析文稿」。
-  兴趣标签见 <a href="{{ u('/settings?tab=av') }}">系统设置 → 音视频数据源</a>。
-  抖音 / B 站 / 快手<strong>关键词发现</strong>请用 <a href="{{ u('/media') }}">自媒体</a>；列表里可「加入音视频学习」或「提取文稿」。
-  抖音「下载/解析文稿」需 Cookie：Edge 打开 douyin.com → <code>AV_COOKIES_FROM_BROWSER=edge</code> → 关闭浏览器再操作。
-  默认下载<strong>视频</strong>（非仅音频）；若只要音频设 <code>AV_DEFAULT_AUDIO_ONLY=true</code>。
-  B 站源请先在 <strong>Edge</strong> 登录，并配置同上。详见 <code>docs/media-vs-av.md</code>。
-</p>
 
 <div class="panel">
   <div class="viz-strip" style="margin-bottom:0.75rem;">
@@ -36,7 +27,7 @@
   </div>
 
   {% if not status.enabled %}
-  <p class="hint warn">请在 .env 设置 ENABLE_YTDLP=true</p>
+  <p class="hint warn">请在 <a href="{{ u('/settings?tab=config&family=%E9%87%87%E9%9B%86&group=%E9%9F%B3%E8%A7%86%E9%A2%91') }}">系统设置 → 配置 → 音视频</a> 开启 ENABLE_YTDLP</p>
   {% elif not status.checkout_ready %}
   <p class="hint warn">yt-dlp 未克隆：运行 <code>uv run bagel setup-ytdlp</code></p>
   {% elif not status.venv_ready %}

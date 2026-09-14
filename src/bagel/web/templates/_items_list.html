@@ -5,6 +5,12 @@
   {% if category %}<input type="hidden" name="category" value="{{ category }}" />{% endif %}
   {% if source_id %}<input type="hidden" name="source_id" value="{{ source_id }}" />{% endif %}
   {% if school %}<input type="hidden" name="school" value="{{ school }}" />{% endif %}
+  {% if author_filter %}<input type="hidden" name="account" value="{{ author_filter }}" />{% endif %}
+  {% if list_extra %}
+    {% for k, v in list_extra.items() %}
+    <input type="hidden" name="{{ k }}" value="{{ v }}" />
+    {% endfor %}
+  {% endif %}
   <input type="hidden" name="page_size" value="{{ page_size | default(20) }}" />
   <label class="sr-only" for="list-title-q">标题关键词</label>
   <input id="list-title-q" type="search" name="q" value="{{ q | default('') }}"
@@ -112,7 +118,9 @@
         {% for t in item.tags %}<span class="badge tag">{{ t }}</span>{% endfor %}
       {% endif %}
     </div>
-    {% if item.summary %}<p class="summary">{{ item.summary }}</p>{% endif %}
+    {% if item.summary_html %}
+    <div class="summary rich-body">{{ item.summary_html | safe }}</div>
+    {% elif item.summary %}<p class="summary">{{ item.summary }}</p>{% endif %}
     <div class="actions">
       <form method="post" action="{{ u('/items/' ~ item.id ~ '/action') }}">
         <input type="hidden" name="next" value="{{ return_url }}" />

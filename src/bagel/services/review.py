@@ -105,6 +105,7 @@ def list_candidates(
     source_ids: list[UUID] | None = None,
     owner_id=None,
     q: str | None = None,
+    author: str | None = None,
     page: int = 1,
     page_size: int = DEFAULT_PAGE_SIZE,
 ) -> PageResult:
@@ -121,6 +122,7 @@ def list_candidates(
             source_ids=source_ids,
             owner_id=owner_id,
             q=title_q,
+            author=author or None,
             limit=page_size,
             offset=offset,
         )
@@ -135,6 +137,7 @@ def list_candidates(
         source_ids=source_ids,
         owner_id=owner_id,
         q=title_q,
+        author=author or None,
     )
     categories = list(
         repo.list_categories(
@@ -145,6 +148,7 @@ def list_candidates(
             source_ids=source_ids,
             owner_id=owner_id,
             q=title_q,
+            author=author or None,
         )
     )
     return PageResult(

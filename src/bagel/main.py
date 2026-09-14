@@ -75,7 +75,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     from bagel.jobs.scheduler import start_scheduler, stop_scheduler
     from bagel.services.media_setup import ensure_mediacrawler_on_startup
     from bagel.services.ytdlp_setup import ensure_ytdlp_on_startup
-    from bagel.storage.database import init_db
+    from bagel.storage.database import init_db_resilient
 
     log = logging.getLogger(__name__)
     # Surface yt-dlp streaming lines in the process console (uvicorn inherits root handlers).
@@ -87,7 +87,17 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         ytdlp_log.addHandler(handler)
         ytdlp_log.propagate = False
     try:
-        init_db(seed=True)
+        # Short Postgres connect_timeout + optional SQLite fallback so / stays reachable.
+        db_info = init_db_resilient(seed=True, fallback_sqlite=True)
+        if db_info.get("fallback") == "1":
+            log.warning(
+                "init_db: Postgres unreachable — using SQLite (%s). Fix DATABASE_URL / "
+                "STORAGE_BACKEND or start Postgres. err=%s",
+                db_info.get("url"),
+                db_info.get("error", ""),
+            )
+        else:
+            log.info("init_db ok backend=%s", db_info.get("backend"))
     except Exception as exc:  # noqa: BLE001 — boot even if DB temporarily down
         log.warning("init_db failed: %s", exc)
     try:
@@ -105,6 +115,12 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         ensure_archify_on_startup()
     except Exception as exc:  # noqa: BLE001
         log.warning("archify ensure failed: %s", exc)
+    try:
+        from bagel.services.wewe_setup import ensure_wewe_rss_on_startup
+
+        ensure_wewe_rss_on_startup()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("wewe ensure failed: %s", exc)
     try:
         start_scheduler()
     except Exception as exc:  # noqa: BLE001

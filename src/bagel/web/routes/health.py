@@ -65,8 +65,44 @@ async def settings_page(
     default_catalog = settings_svc.default_source_catalog() if active_tab == "sources" else []
     paper_sources = settings_svc.list_paper_sources(db) if active_tab == "papers" else []
     paper_catalog = settings_svc.default_paper_catalog() if active_tab == "papers" else []
-    education_sources = settings_svc.list_education_sources(db) if active_tab == "education" else []
-    education_catalog = settings_svc.default_education_catalog() if active_tab == "education" else []
+    education_sources = []
+    education_catalog = []
+    education_track_tabs = []
+    education_presets = {
+        "k12_regions": [],
+        "kaoyan_national": [],
+        "kaoyan_schools": [],
+        "k12_suggest": [],
+        "kaoyan_suggest": [],
+    }
+    if active_tab == "education":
+        from bagel.pipeline.education_tracks import (
+            TRACK_LABELS,
+            TRACK_TABS,
+            facet_for_source,
+            parse_education_url,
+            track_for_source,
+        )
+
+        education_track_tabs = [(t.value, label) for t, label in TRACK_TABS]
+        education_catalog = settings_svc.default_education_catalog()
+        education_presets = settings_svc.education_preset_catalog()
+        for s in settings_svc.list_education_sources(db):
+            parsed = parse_education_url(s.url or "")
+            track = track_for_source(name=s.name, url=s.url or "")
+            education_sources.append(
+                {
+                    "id": s.id,
+                    "name": s.name,
+                    "url": s.url,
+                    "fetch_url": parsed.fetch_url or s.url,
+                    "region": s.region,
+                    "enabled": s.enabled,
+                    "track": track.value,
+                    "track_label": TRACK_LABELS[track],
+                    "facet": facet_for_source(name=s.name, url=s.url or "") or "",
+                }
+            )
     av_sources = settings_svc.list_av_sources(db) if active_tab == "av" else []
     av_catalog = settings_svc.default_av_catalog() if active_tab == "av" else []
     model_sources = settings_svc.list_model_sources(db) if active_tab == "models" else []
@@ -106,6 +142,13 @@ async def settings_page(
     env_groups = None
     env_path = None
     config_message = None
+    config_nav = {
+        "families": [],
+        "active_family": "",
+        "subgroups": [],
+        "active_group": "",
+        "active_fields": [],
+    }
     if active_tab == "schedule":
         from bagel.jobs.scheduler import scheduler_status
         from bagel.services.runtime_config import (
@@ -132,8 +175,17 @@ async def settings_page(
         env_groups = user_cfg.catalog_for_ui(uid, is_admin=is_admin)
         env_path = display_path(env_cfg.resolve_env_path())
         config_message = request.query_params.get("msg")
-
+        config_nav = env_cfg.resolve_config_nav(
+            env_groups,
+            family=request.query_params.get("family"),
+            group=request.query_params.get("group"),
+        )
     settings_message = "已保存，列表已更新。" if saved else None
+    msg = request.query_params.get("msg")
+    settings_message_ok = True
+    if msg:
+        settings_message = msg
+        settings_message_ok = request.query_params.get("err") not in {"1", "true", "yes"}
 
     response = templates.TemplateResponse(
         request,
@@ -144,6 +196,7 @@ async def settings_page(
             "nav": NAV_ITEMS,
             "tab": active_tab,
             "settings_message": settings_message,
+            "settings_message_ok": settings_message_ok,
             "include_tags": include_tags,
             "include_scope": include_scope,
             "include_scope_label": SCOPE_LABELS.get(include_scope or "", ""),
@@ -158,6 +211,8 @@ async def settings_page(
             "paper_catalog": paper_catalog,
             "education_sources": education_sources,
             "education_catalog": education_catalog,
+            "education_track_tabs": education_track_tabs,
+            "education_presets": education_presets,
             "av_sources": av_sources,
             "av_catalog": av_catalog,
             "model_sources": model_sources,
@@ -177,6 +232,11 @@ async def settings_page(
             "env_groups": env_groups,
             "env_path": env_path,
             "config_message": config_message,
+            "config_families": config_nav.get("families") or [],
+            "config_family": config_nav.get("active_family") or "",
+            "config_subgroups": config_nav.get("subgroups") or [],
+            "config_group": config_nav.get("active_group") or "",
+            "config_fields": config_nav.get("active_fields") or [],
         },
     )
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
@@ -404,11 +464,51 @@ async def add_education_source(
     region: str = Form("GLOBAL"),
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
+    # Manual form is open-course only; K12 / 考研 use /settings/education/preset.
     try:
-        settings_svc.add_education_source(db, name=name, url=url, region=region)
+        settings_svc.add_education_source(
+            db,
+            name=name,
+            url=url,
+            region=region,
+            track="open_course",
+            facet=None,
+        )
     except settings_svc.SettingsError as exc:
         raise HTTPException(status_code=400, detail=exc.message) from exc
     return RedirectResponse(url="/settings?tab=education", status_code=303)
+
+
+@router.post("/settings/education/preset")
+async def add_education_preset(
+    query: str = Form(""),
+    kind: str = Form(...),
+    custom_url: str = Form(""),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    try:
+        result = settings_svc.add_education_presets(
+            db, query=query, kind=kind, custom_url=custom_url
+        )
+    except settings_svc.SettingsError as exc:
+        # Stay on settings UI — never dump raw JSON for form posts.
+        return RedirectResponse(
+            url=f"/settings?tab=education&err=1&msg={quote(exc.message, safe='')}",
+            status_code=303,
+        )
+    db.commit()
+    names = "、".join(result["names"][:6])
+    extra = f"等 {result['added']} 个" if result["added"] > 6 else f"{result['added']} 个"
+    msg = f"已生成并添加{extra}：{names}"
+    if result["unmatched"]:
+        msg += (
+            f"；未能自动生成：{'、'.join(result['unmatched'][:5])} "
+            "（可补填自定义路径后重试）"
+        )
+    return RedirectResponse(
+        url=f"/settings?tab=education&msg={quote(msg, safe='')}",
+        status_code=303,
+    )
 
 
 @router.post("/settings/education/{source_id}/toggle")
@@ -563,6 +663,7 @@ async def save_schedule(
     schedule_collect_stocks: str | None = Form(None),
     schedule_collect_models: str | None = Form(None),
     schedule_collect_av: str | None = Form(None),
+    schedule_collect_wechat_mp: str | None = Form(None),
     enable_keyword_growth: str | None = Form(None),
     enable_wiki_compile: str | None = Form(None),
 ) -> RedirectResponse:
@@ -585,6 +686,7 @@ async def save_schedule(
         schedule_collect_stocks=schedule_collect_stocks in {"1", "true", "on"},
         schedule_collect_models=schedule_collect_models in {"1", "true", "on"},
         schedule_collect_av=schedule_collect_av in {"1", "true", "on"},
+        schedule_collect_wechat_mp=schedule_collect_wechat_mp in {"1", "true", "on"},
         enable_keyword_growth=enable_keyword_growth in {"1", "true", "on"},
         enable_wiki_compile=enable_wiki_compile in {"1", "true", "on"},
     )
@@ -661,9 +763,16 @@ async def save_env_config(request: Request) -> RedirectResponse:
     form = await request.form()
     uid = request.session.get("user_id")
     is_admin = bool(request.session.get("is_admin"))
+    active_family = str(form.get("config_family") or "").strip()
+    active_group = str(form.get("config_group") or "").strip()
+    group_keys = {
+        f.key for f in env_cfg.ENV_CATALOG if not active_group or f.group == active_group
+    }
     updates: dict[str, str] = {}
     system_updates: dict[str, str] = {}
     for field in env_cfg.ENV_CATALOG:
+        if field.key not in group_keys:
+            continue
         if field.key in user_cfg.SYSTEM_ENV_KEYS:
             if not is_admin:
                 continue
@@ -687,11 +796,16 @@ async def save_env_config(request: Request) -> RedirectResponse:
     except env_cfg.EnvConfigError as exc:
         raise HTTPException(status_code=400, detail=exc.message) from exc
     msg = quote(
-        f"已保存个人配置（{path.name}）；未改动的项仍使用系统默认。"
-        + (" 系统项已写入 .env，部分需重启。" if system_updates and is_admin else ""),
+        f"已保存（{path.name}）。"
+        + ("系统项已写入 .env，部分需重启。" if system_updates and is_admin else ""),
         safe="",
     )
-    return RedirectResponse(url=f"/settings?tab=config&msg={msg}", status_code=303)
+    q = f"tab=config&msg={msg}"
+    if active_family:
+        q += f"&family={quote(active_family)}"
+    if active_group:
+        q += f"&group={quote(active_group)}"
+    return RedirectResponse(url=f"/settings?{q}", status_code=303)
 
 
 @router.post("/settings/users")

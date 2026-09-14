@@ -32,14 +32,8 @@
       </form>
     </div>
     <p class="hint" style="margin-top:0.65rem;">
-      <strong>文稿提取顺序</strong>：平台 CC → 本地容器字幕轨 → <strong>本地音轨 ASR</strong>
-      {% if platform in ['douyin', 'dy'] %}
-      。抖音图中白字多为<strong>烧录字幕</strong>（像素），yt-dlp 抽不出独立字幕轨；需先下载视频，再靠 ASR 识别口播。
-      Cookie：Edge 打开 douyin.com 后设 <code>AV_COOKIES_FROM_BROWSER=edge</code>，关闭浏览器再下载。
-      {% else %}
-      。下载需 Cookie 时配置 <code>AV_COOKIES_FROM_BROWSER</code>。
-      {% endif %}
-      ASR：优先<strong>openspeech（豆包语音）</strong>（系统设置 → 配置 → 音视频ASR），失败再 Whisper / faster-whisper。
+      文稿：平台字幕 → 本地字幕轨 → ASR。Cookie / ASR 见
+      <a href="{{ u('/settings?tab=config&family=%E9%87%87%E9%9B%86&group=%E9%9F%B3%E8%A7%86%E9%A2%91') }}">系统设置 → 音视频</a>。
     </p>
     <div class="progress-wrap" style="margin-top:0.5rem;">
       <div class="bar"><span id="taskBar"></span></div>

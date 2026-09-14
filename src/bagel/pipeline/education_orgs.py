@@ -41,3 +41,28 @@ def institution_for_source(*, name: str, url: str = "") -> EducationInstitution:
     raw = (name or "其他").split("·")[0].split("—")[0].strip() or "其他"
     key = "".join(ch if ch.isalnum() else "-" for ch in raw.lower()).strip("-")[:32] or "other"
     return EducationInstitution(key=key, label=raw[:24])
+
+
+# Policy / exam orgs must never appear as 公开课「学校」tabs.
+_OPEN_COURSE_BLOCKLIST = (
+    "教育部",
+    "教委",
+    "教育局",
+    "考研",
+    "研招",
+    "研招网",
+    "moe.gov",
+    "/gov/moe",
+    "yz.chsi",
+    "chsi.com.cn",
+)
+
+
+def is_open_course_institution(*, name: str, url: str = "") -> bool:
+    """True when this source may appear under 公开课 school tabs."""
+    from bagel.pipeline.education_tracks import EduTrack, track_for_source
+
+    if track_for_source(name=name, url=url) != EduTrack.OPEN_COURSE:
+        return False
+    blob = f"{name} {url}".lower()
+    return not any(b.lower() in blob for b in _OPEN_COURSE_BLOCKLIST)

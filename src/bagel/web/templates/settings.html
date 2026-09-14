@@ -18,15 +18,12 @@
 </div>
 
 {% if settings_message %}
-<p class="meta ok">{{ settings_message }}</p>
+<p class="{% if settings_message_ok | default(true) %}meta ok{% else %}hint warn{% endif %}">{{ settings_message }}</p>
 {% endif %}
 
 {% if tab == 'sources' %}
 <div class="panel">
-  <p class="hint">
-    下方为当前库内新闻数据源（首次启动由默认种子写入）。聚焦<strong>科技 / AI / 大模型 / 机器人</strong>：海外以 OpenAI、Google AI、TechCrunch AI、Wired AI、IEEE Spectrum 等为主；国内保留 InfoQ / Solidot / 爱范儿 / OSCHINA，已默认关闭消费数码与空壳源。
-    兴趣标签务必含 <code>GPT</code>（标题写 GPT-6 时不含 LLM）。海外源需 <code>ENABLE_OVERSEAS_SOURCES=true</code> 且代理可用。清单见 <span class="mono">docs/default-news-sources.md</span>。
-  </p>
+  <p class="hint">管理新闻 RSS / RSSHub 源。海外源需开启海外采集并配置网络代理。</p>
   <form class="inline" method="post" action="{{ u('/settings/sources') }}">
     <input type="text" name="name" placeholder="名称" required />
     <input type="url" name="url" placeholder="https://…/rss" required style="flex:2;min-width:220px;" />
@@ -88,10 +85,7 @@
 
 {% if tab == 'github' %}
 <div class="panel">
-  <p class="hint">
-    GitHub 只有一个数据源：<code>api.github.com</code> Search。下方保留<strong>一条</strong>宽检索 Query；
-    主题筛选请用本页「兴趣标签 INCLUDE」（与多条 topic Query 等价，后者会重复限流且结果不稳定）。
-  </p>
+  <p class="hint">GitHub Search 查询（建议保留一条宽检索；主题用兴趣标签过滤）。</p>
 </div>
 <div class="panel">
   {% if github_queries %}
@@ -121,10 +115,7 @@
 {% if tab == 'excludes' %}
 <div class="panel">
   <h2 style="font-size:1rem;margin:0 0 0.55rem;font-family:var(--font-mono);">系统排除词（EXCLUDE）</h2>
-  <p class="hint">
-    命中则拒绝入库。可多选适用类目：新闻 / GitHub / 股票 / 论文 / 模型 / 自媒体 / 微信。
-    与各页「兴趣标签」及自媒体/微信拉取关键词独立。详见 <span class="mono">docs/filter-tags.md</span>。
-  </p>
+  <p class="hint">命中则拒绝入库。可多选适用类目；与各页兴趣标签独立。</p>
   <form method="post" action="{{ u('/settings/excludes') }}" style="display:flex;flex-direction:column;gap:0.65rem;">
     <div class="inline">
       <input type="text" name="keyword" placeholder="例如：付费课程" required style="flex:1;min-width:180px;" />
@@ -181,12 +172,7 @@
 
 {% if tab == 'papers' %}
 <div class="panel">
-  <p class="hint">
-    论文 Tab 使用的数据源。默认包含 arXiv（cs.AI / LG / CL / CV / RO）与 OpenAlex；Semantic Scholar 默认关闭（无 API Key 时易 429）。
-    已移除 Hugging Face Papers：Daily Papers 实质是 arXiv 策展，入库后按 arXiv id 去重，过滤 Tab 无法形成独立目录。
-    URL 约定：<code>arxiv:cs.AI</code>、<code>openalex:C154945302</code>、<code>s2:large language model</code>。
-    如需启用 Semantic Scholar，请在 <code>.env</code> 配置 <code>SEMANTIC_SCHOLAR_API_KEY</code> 后于本页打开该源。
-  </p>
+  <p class="hint">论文源 URL 约定：<code>arxiv:cs.AI</code>、<code>openalex:…</code>、<code>s2:…</code>。</p>
   <form class="inline" method="post" action="{{ u('/settings/papers') }}">
     <input type="text" name="name" placeholder="名称，如 arXiv cs.AI" required />
     <input type="text" name="url" placeholder="arxiv:cs.AI" required style="flex:2;min-width:220px;" />
@@ -236,11 +222,50 @@
 
 {% if tab == 'education' %}
 <div class="panel">
-  <p class="hint">
-    教育 Tab：全球开放课程与 AI 教学资讯（MIT OCW、Yale OYC、Coursera、Khan、CMU OLI、fast.ai、Distill、Lil'Log 等）。
-    已移除校园综合新闻、Class Central（403）、国内 RSSHub 适配。支持完整 RSS URL。
-  </p>
+  <h3 style="margin:0 0 0.5rem;font-size:1rem;">快捷添加 · K12 省市</h3>
+  <p class="hint">输入任意省市即可添加：优先直连省教育厅/教委门户；已收录的也可走教委 RSSHub。可选填自定义路径。</p>
+  <form method="post" action="{{ u('/settings/education/preset') }}">
+    <input type="hidden" name="kind" value="k12_region" />
+    <div class="inline" style="margin-bottom:0.5rem;">
+      <input list="edu-k12-suggest" type="text" name="query" placeholder="如：北京、广东、成都" style="flex:2;min-width:220px;" />
+      <datalist id="edu-k12-suggest">
+        {% for s in education_presets.k12_suggest %}
+        <option value="{{ s }}"></option>
+        {% endfor %}
+      </datalist>
+      <button type="submit">生成并添加</button>
+    </div>
+    <div class="inline">
+      <input type="text" name="custom_url" placeholder="可选：自定义 RSS/RSSHub，如 /gov/… 或 https://…/rss" style="flex:2;min-width:260px;" />
+    </div>
+  </form>
+</div>
+
+<div class="panel">
+  <h3 style="margin:0 0 0.5rem;font-size:1rem;">快捷添加 · 考研院校 / 研招网</h3>
+  <p class="hint">输入学校简称或全称即可添加：优先直连该校研招网公告；「研招网」为国家政策源。可选填自定义路径。</p>
+  <form method="post" action="{{ u('/settings/education/preset') }}">
+    <input type="hidden" name="kind" value="kaoyan_school" />
+    <div class="inline" style="margin-bottom:0.5rem;">
+      <input list="edu-kaoyan-suggest" type="text" name="query" placeholder="如：北大、浙大、四川大学、研招网" style="flex:2;min-width:220px;" />
+      <datalist id="edu-kaoyan-suggest">
+        {% for s in education_presets.kaoyan_suggest %}
+        <option value="{{ s }}"></option>
+        {% endfor %}
+      </datalist>
+      <button type="submit">生成并添加</button>
+    </div>
+    <div class="inline">
+      <input type="text" name="custom_url" placeholder="可选：自定义 RSS/RSSHub，如 /scu/jwc/notice 或 https://…/rss" style="flex:2;min-width:260px;" />
+    </div>
+  </form>
+</div>
+
+<div class="panel">
+  <h3 style="margin:0 0 0.5rem;font-size:1rem;">公开课</h3>
+  <p class="hint">添加名校 OCW / 平台教学资讯 RSS（完整 URL 或 RSSHub 相对路径）。</p>
   <form class="inline" method="post" action="{{ u('/settings/education') }}">
+    <input type="hidden" name="track" value="open_course" />
     <input type="text" name="name" placeholder="名称，如 MIT OCW" required />
     <input type="text" name="url" placeholder="https://…/rss 或 /rsshub/path" required style="flex:2;min-width:220px;" />
     <select name="region">
@@ -250,15 +275,20 @@
     <button type="submit">添加</button>
   </form>
 </div>
+{% for code, label in education_track_tabs %}
+{% set track_key = code %}
 <div class="panel">
-  {% if education_sources %}
-    {% for s in education_sources %}
+  <h3 style="margin:0 0 0.6rem;font-size:1rem;">{{ label }}</h3>
+  {% set track_rows = education_sources | selectattr('track', 'equalto', track_key) | list %}
+  {% if track_rows %}
+    {% for s in track_rows %}
     <div class="row {% if not s.enabled %}is-off{% endif %}">
       <div>
         <div class="kw">{{ s.name }}
           <span class="badge {% if s.enabled %}on{% else %}off{% endif %}">{% if s.enabled %}ON{% else %}OFF{% endif %}</span>
+          {% if s.facet %}<span class="badge cat">{{ s.facet }}</span>{% endif %}
         </div>
-        <div class="meta" style="word-break:break-all;">{{ s.region }} · {{ s.url }}</div>
+        <div class="meta" style="word-break:break-all;">{{ s.region }} · {{ s.fetch_url }}</div>
       </div>
       <div class="actions">
         <form method="post" action="{{ u('/settings/education/' ~ s.id ~ '/toggle') }}">
@@ -272,17 +302,20 @@
     </div>
     {% endfor %}
   {% else %}
-    <p class="empty">暂无教育源。可手动添加，或重启应用以写入默认种子。</p>
+    <p class="empty">暂无{{ label }}源。</p>
   {% endif %}
 </div>
+{% endfor %}
 {% if education_catalog %}
 <details class="panel">
   <summary style="cursor:pointer;font-family:var(--font-mono);color:var(--accent-2);">查看内置默认教育源清单</summary>
   {% for d in education_catalog %}
   <div class="row">
     <div>
-      <div class="kw">{{ d.name }}</div>
-      <div class="meta">{{ d.region }} · 默认{% if d.enabled %}启用{% else %}关闭{% endif %} · {{ d.url }}</div>
+      <div class="kw">{{ d.name }}
+        <span class="badge cat">{{ d.track_label }}{% if d.facet %} · {{ d.facet }}{% endif %}</span>
+      </div>
+      <div class="meta">{{ d.region }} · 默认{% if d.enabled %}启用{% else %}关闭{% endif %} · {{ d.fetch_url }}</div>
     </div>
   </div>
   {% endfor %}
@@ -293,13 +326,7 @@
 
 {% if tab == 'av' %}
 <div class="panel">
-  <p class="hint">
-    内置仅 4 个已核对 B 站 UP + 验通样片；其它频道请手动添加（<code>https://</code> 或 <code>av:</code> 前缀）。
-    自定义源不会被自动清理。抖音关键词请走 <a href="{{ u('/media') }}">自媒体</a>。
-    <strong>采集仅元数据</strong>；B 站需登录，建议
-    <code>AV_COOKIES_FROM_BROWSER=edge</code>。清单见
-    <span class="mono">docs/default-av-sources.md</span>。
-  </p>
+  <p class="hint">音视频频道源（<code>https://</code> 或 <code>av:</code>）。Cookie 等在「配置 → 音视频」。</p>
   <form class="inline" method="post" action="{{ u('/settings/av') }}">
     <input type="text" name="name" placeholder="名称，如 3Blue1Brown" required />
     <input type="text" name="url" placeholder="av:youtube:channel:@handle 或 https://…" required style="flex:2;min-width:260px;" />
@@ -353,11 +380,7 @@
 
 {% if tab == 'models' %}
 <div class="panel">
-  <p class="hint">
-    模型 Tab 使用的社区数据源。默认仅保留 Hugging Face 与 ModelScope 魔搭各一条，避免重叠拉取。
-    URL 约定：<code>hf:models</code>、<code>hf:models:downloads</code>、<code>hf:models:pipeline:text-generation</code>、
-    <code>hf:models:search:qwen</code>、<code>ms:models</code>、<code>ms:models:downloads</code>、<code>ms:models:search:Qwen</code>。
-  </p>
+  <p class="hint">模型社区源，如 <code>hf:models</code>、<code>ms:models</code>。</p>
   <form class="inline" method="post" action="{{ u('/settings/models') }}">
     <input type="text" name="name" placeholder="名称，如 Hugging Face" required />
     <input type="text" name="url" placeholder="hf:models 或 ms:models" required style="flex:2;min-width:220px;" />
@@ -411,10 +434,7 @@
 
 {% if tab == 'stocks' %}
 <div class="panel">
-  <p class="hint">
-    股票 Tab 使用的资讯源（与新闻数据源隔离）。默认仅保留海外直连 RSS：Yahoo / MarketWatch / CNBC / BBC Business / Investing.com。
-    已删除国内 RSSHub 适配（财联社 / 东方财富 / 华尔街见闻），常见 <code>HTTP_ERROR</code> 且依赖自建 RSSHub。
-  </p>
+  <p class="hint">股票资讯源（与新闻源隔离）。</p>
   <form class="inline" method="post" action="{{ u('/settings/stocks') }}">
     <input type="text" name="name" placeholder="名称，如 CNBC" required />
     <input type="text" name="url" placeholder="https://…/rss 或 /rsshub/path" required style="flex:2;min-width:220px;" />
@@ -470,10 +490,7 @@
 
 {% if tab == 'schedule' and schedule_cfg %}
 <div class="panel">
-  <p class="hint">
-    进程内 APScheduler 定时拉取。实际间隔 = <strong>固定分钟</strong> + <strong>随机 0～N 秒</strong>（默认 N=120），降低整点机器人特征。
-    配置写入 <code>data/runtime_config.json</code>，保存后立即重载。建议单 worker 运行。
-  </p>
+  <p class="hint">进程内定时拉取。间隔 = 固定分钟 + 随机抖动，保存后立即重载。</p>
   {% if schedule_status %}
   <p class="meta">
     状态：{% if schedule_status.running %}<span class="ok">运行中</span>{% else %}<span class="warn">未运行</span>{% endif %}
@@ -522,6 +539,10 @@
       定时采集音视频
     </label>
     <label class="check" style="display:flex;align-items:center;gap:0.4rem;margin:0.35rem 0;color:var(--muted);">
+      <input type="checkbox" name="schedule_collect_wechat_mp" value="1" {% if schedule_cfg.schedule_collect_wechat_mp %}checked{% endif %} />
+      定时采集微信公众号（按订阅名称发现文章）
+    </label>
+    <label class="check" style="display:flex;align-items:center;gap:0.4rem;margin:0.35rem 0;color:var(--muted);">
       <input type="checkbox" name="enable_keyword_growth" value="1" {% if schedule_cfg.enable_keyword_growth %}checked{% endif %} />
       定时扩展兴趣标签 / 系统排除词（基于搜索与 REJECTED 条目，每日 03:15）
     </label>
@@ -562,12 +583,7 @@
     </div>
     <button class="primary" type="submit">保存 CLI 配置</button>
   </form>
-  <p class="hint" style="margin-top:0.75rem;">
-    <strong>场景1 · 飞书指令</strong>：在飞书开放平台创建企业自建应用，订阅 <code>im.message.receive_v1</code>，
-    请求地址填 <code>/api/feishu/events</code>（需公网可达）。在 .env 配置
-    <code>FEISHU_APP_ID</code> / <code>FEISHU_APP_SECRET</code> / <code>FEISHU_VERIFICATION_TOKEN</code>。
-    也可调试：<code>POST /api/feishu/command</code>，body <code>{"text":"把8月20号到8月21号的体操方向新闻发我","push":true}</code>。
-  </p>
+  <p class="hint">飞书指令与 Webhook 密钥请在「配置 → 飞书」填写；请求地址 <code>/api/feishu/events</code>。</p>
 </div>
 <div class="panel">
   <p class="hint">发送测试消息（需已启用并配置 Webhook 或安装 lark-cli）。命令行：<code>bagel cli feishu-send "你好"</code></p>
@@ -577,10 +593,7 @@
   </form>
 </div>
 <div class="panel">
-  <p class="hint">
-    推送本库情报到飞书：昨日各类型列表（新闻 / 项目 / 论文 / 股票 / 自媒体 / 微信），或周汇总快照（本周+上周已生成的总结）。
-    CLI：<code>bagel cli feishu-digest yesterday</code> · <code>bagel cli feishu-digest week</code>
-  </p>
+  <p class="hint">推送昨日各类型列表，或周汇总快照。</p>
   <div class="actions">
     <form method="post" action="{{ u('/settings/cli/feishu-digest') }}">
       <input type="hidden" name="kind" value="yesterday" />
@@ -603,54 +616,69 @@
 {% endif %}
 
 {% if tab == 'config' and env_groups is not none %}
-<div class="panel">
-  <p class="hint">
-    配置按<strong>当前登录用户</strong>隔离：未改动的项使用系统默认（.env）。
-    个人覆盖保存在 <code>data/user_config/&lt;user_id&gt;.json</code>。
-    管理员可改「应用 / 存储」等系统项（写入 <code>{{ env_path }}</code>）。
-    密钥类字段默认掩码；留空或保持掩码则不改动。
-  </p>
-  {% if config_message %}<p class="msg ok">{{ config_message }}</p>{% endif %}
-  <form method="post" action="{{ u('/settings/config') }}">
-    {% for group in env_groups %}
-    <h2 style="font-size:1rem;margin:1.1rem 0 0.55rem;font-family:var(--font-mono);color:var(--accent-2);">{{ group.group }}</h2>
-    {% for f in group.fields %}
-    <div class="row" style="align-items:flex-start;">
-      <div style="min-width:38%;">
-        <div class="kw">{{ f.label }} <span class="badge">{{ f.key }}</span>
-          {% if f.source == 'user' %}<span class="badge on">个人</span>{% else %}<span class="badge">默认</span>{% endif %}
-          {% if f.is_system %}<span class="badge tag">系统</span>{% endif %}
-          {% if f.restart_hint %}<span class="badge tag">需重启</span>{% endif %}
+<div class="config-layout">
+  <aside class="config-nav-primary" aria-label="配置分类">
+    <div class="config-nav-label">分类</div>
+    {% for fam in config_families %}
+    <a href="{{ u('/settings?tab=config&family=' ~ (fam|urlencode)) }}"
+       class="{% if fam == config_family %}on{% endif %}">{{ fam }}</a>
+    {% endfor %}
+  </aside>
+  <aside class="config-nav-secondary" aria-label="配置分组">
+    <div class="config-nav-label">分组 · {{ config_family }}</div>
+    {% for g in config_subgroups %}
+    <a href="{{ u('/settings?tab=config&family=' ~ (config_family|urlencode) ~ '&group=' ~ (g|urlencode)) }}"
+       class="{% if g == config_group %}on{% endif %}">{{ g }}</a>
+    {% endfor %}
+  </aside>
+  <div class="config-main panel">
+    <div class="config-main-head">
+      <h2>{{ config_group }}</h2>
+      <p class="meta">共 {{ config_fields|length }} 项 · 未改动用系统默认；个人覆盖按登录用户隔离；系统项由管理员写入 <code>.env</code>。{% if config_group == '网络' %}未填代理则走本机 IP；云厂商 IP 被限制时再填代理（全站复用，含公众号）。{% endif %}</p>
+    </div>
+    {% if config_message %}<p class="msg ok">{{ config_message }}</p>{% endif %}
+    <form method="post" action="{{ u('/settings/config') }}">
+      <input type="hidden" name="config_family" value="{{ config_family }}" />
+      <input type="hidden" name="config_group" value="{{ config_group }}" />
+      {% for f in config_fields %}
+      <div class="row config-field" style="align-items:flex-start;">
+        <div style="min-width:38%;">
+          <div class="kw">{{ f.label }} <span class="badge">{{ f.key }}</span>
+            {% if f.source == 'user' %}<span class="badge on">个人</span>{% else %}<span class="badge">默认</span>{% endif %}
+            {% if f.is_system %}<span class="badge tag">系统</span>{% endif %}
+            {% if f.restart_hint %}<span class="badge tag">需重启</span>{% endif %}
+          </div>
+          {% if f.help %}<div class="meta">{{ f.help }}</div>{% endif %}
         </div>
-        {% if f.help %}<div class="meta">{{ f.help }}</div>{% endif %}
+        <div style="flex:1;">
+          {% if f.readonly %}
+          <div class="meta">{{ f.display or f.value or '—' }}（只读，需管理员修改系统配置）</div>
+          {% elif f.type == 'bool' %}
+          <label class="check" style="display:flex;align-items:center;gap:0.4rem;color:var(--muted);">
+            <input type="checkbox" name="{{ f.key }}" value="1" {% if f.value in ['true','1','True','yes','on'] %}checked{% endif %} />
+            启用
+          </label>
+          {% elif f.type == 'select' %}
+          <select name="{{ f.key }}" style="min-width:180px;">
+            {% for opt in f.options %}
+            <option value="{{ opt }}" {% if f.value == opt %}selected{% endif %}>{{ opt }}</option>
+            {% endfor %}
+          </select>
+          {% elif f.type == 'secret' %}
+          <input type="password" name="{{ f.key }}" value="{{ f.display }}" placeholder="留空/掩码=不修改" style="width:100%;min-width:200px;" autocomplete="new-password" />
+          {% else %}
+          <input type="text" name="{{ f.key }}" value="{{ f.value }}" style="width:100%;min-width:200px;" />
+          {% endif %}
+        </div>
       </div>
-      <div style="flex:1;">
-        {% if f.readonly %}
-        <div class="meta">{{ f.display or f.value or '—' }}（只读，需管理员修改系统配置）</div>
-        {% elif f.type == 'bool' %}
-        <label class="check" style="display:flex;align-items:center;gap:0.4rem;color:var(--muted);">
-          <input type="checkbox" name="{{ f.key }}" value="1" {% if f.value in ['true','1','True','yes','on'] %}checked{% endif %} />
-          启用
-        </label>
-        {% elif f.type == 'select' %}
-        <select name="{{ f.key }}" style="min-width:180px;">
-          {% for opt in f.options %}
-          <option value="{{ opt }}" {% if f.value == opt %}selected{% endif %}>{{ opt }}</option>
-          {% endfor %}
-        </select>
-        {% elif f.type == 'secret' %}
-        <input type="password" name="{{ f.key }}" value="{{ f.display }}" placeholder="留空/掩码=不修改" style="width:100%;min-width:200px;" autocomplete="new-password" />
-        {% else %}
-        <input type="text" name="{{ f.key }}" value="{{ f.value }}" style="width:100%;min-width:200px;" />
-        {% endif %}
+      {% else %}
+      <p class="empty">本组暂无配置项。</p>
+      {% endfor %}
+      <div style="margin-top:1rem;">
+        <button class="primary" type="submit">保存本组</button>
       </div>
-    </div>
-    {% endfor %}
-    {% endfor %}
-    <div style="margin-top:1rem;">
-      <button class="primary" type="submit">保存个人配置</button>
-    </div>
-  </form>
+    </form>
+  </div>
 </div>
 {% endif %}
 

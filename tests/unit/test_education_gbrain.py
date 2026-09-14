@@ -145,6 +145,8 @@ def test_default_education_sources() -> None:
     assert "https://news.harvard.edu/gazette/feed/" not in urls
     assert any("Coursera" in r["name"] for r in DEFAULT_EDUCATION_SOURCES)
     assert any("Yale" in r["name"] for r in DEFAULT_EDUCATION_SOURCES)
+    assert any(r.get("track") == "k12" for r in DEFAULT_EDUCATION_SOURCES)
+    assert any(r.get("track") == "kaoyan" for r in DEFAULT_EDUCATION_SOURCES)
 
 
 def test_repair_education_sources(tmp_path) -> None:
@@ -241,6 +243,7 @@ def test_education_and_space_routes(monkeypatch: pytest.MonkeyPatch) -> None:
         edu = client.get("/education")
         assert edu.status_code == 200
         assert "教育" in edu.text
+        assert "公开课" in edu.text
 
         space = client.get("/briefs/space")
         assert space.status_code == 200
@@ -250,6 +253,8 @@ def test_education_and_space_routes(monkeypatch: pytest.MonkeyPatch) -> None:
         settings = client.get("/settings?tab=education")
         assert settings.status_code == 200
         assert "教育数据源" in settings.text
+        assert "K12" in settings.text
+        assert "考研" in settings.text
 
         briefs = client.get("/briefs/education")
         assert briefs.status_code == 200

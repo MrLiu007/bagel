@@ -29,7 +29,7 @@ _TYPE_SPECS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("股票", "stocks", (ItemType.STOCK_NEWS,)),
     ("自媒体", "media", (ItemType.MEDIA_POST,)),
     ("音视频", "av", (ItemType.AV,)),
-    ("微信", "wechat", (ItemType.WECHAT_MSG,)),
+    ("微信", "wechat", (ItemType.WECHAT_MSG, ItemType.WECHAT_ARTICLE)),
 )
 
 _BRIEF_KINDS: tuple[tuple[str, str], ...] = (

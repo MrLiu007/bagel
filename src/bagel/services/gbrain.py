@@ -36,7 +36,8 @@ _TYPE_LABELS: dict[str, str] = {
     ItemType.EDUCATION: "教育",
     ItemType.AV: "音视频",
     ItemType.MEDIA_POST: "自媒体",
-    ItemType.WECHAT_MSG: "微信",
+    ItemType.WECHAT_MSG: "微信消息",
+    ItemType.WECHAT_ARTICLE: "微信公众号",
 }
 
 _LIST_PATHS: dict[str, str] = {
@@ -49,7 +50,8 @@ _LIST_PATHS: dict[str, str] = {
     ItemType.EDUCATION: "/education",
     ItemType.AV: "/av",
     ItemType.MEDIA_POST: "/media",
-    ItemType.WECHAT_MSG: "/wechat",
+    ItemType.WECHAT_MSG: "/wechat?tab=messages",
+    ItemType.WECHAT_ARTICLE: "/wechat?tab=accounts",
 }
 
 _KIND_COLORS: dict[str, str] = {

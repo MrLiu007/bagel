@@ -41,7 +41,7 @@ _TYPE_MAP: dict[str, tuple[str, tuple[str, ...]]] = {
     "股票": ("股票", (ItemType.STOCK_NEWS,)),
     "自媒体": ("自媒体", (ItemType.MEDIA_POST,)),
     "音视频": ("音视频", (ItemType.AV,)),
-    "微信": ("微信", (ItemType.WECHAT_MSG,)),
+    "微信": ("微信", (ItemType.WECHAT_MSG, ItemType.WECHAT_ARTICLE)),
 }
 
 _DATE_RANGE_RE = re.compile(
