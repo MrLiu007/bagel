@@ -192,12 +192,39 @@ def check_llm(settings: Settings) -> CheckResult:
         )
 
 
+def check_wewe_rss(settings: Settings) -> CheckResult:
+    from bagel.integrations.wewe_rss import WeweRssClient
+
+    client = WeweRssClient(settings)
+    if not client.enabled:
+        return CheckResult(
+            name="WeWe-RSS",
+            ok=False,
+            message="未配置（bagel dev 可自动启动；或设 WEWE_RSS_BASE_URL）",
+            degraded=True,
+        )
+    ping = client.ping()
+    if ping.get("ok"):
+        return CheckResult(
+            name="WeWe-RSS",
+            ok=True,
+            message=f"{ping.get('base') or client.base_url} · feeds={ping.get('feeds', 0)}",
+        )
+    return CheckResult(
+        name="WeWe-RSS",
+        ok=False,
+        message=str(ping.get("error") or "unreachable")[:200],
+        degraded=True,
+    )
+
+
 def run_health_checks(session: Session | None = None, settings: Settings | None = None) -> HealthReport:
     settings = settings or get_settings()
     checks = [
         check_database(session),
         check_rsshub(settings),
         check_freshrss(settings),
+        check_wewe_rss(settings),
         check_china_network(settings),
         check_github(settings),
         check_overseas_rss(settings),

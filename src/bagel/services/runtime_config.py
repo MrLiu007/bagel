@@ -26,6 +26,7 @@ class RuntimeConfig:
     schedule_collect_stocks: bool = False
     schedule_collect_models: bool = False
     schedule_collect_av: bool = False
+    schedule_collect_wechat_mp: bool = False
     enable_keyword_growth: bool = True
     enable_wiki_compile: bool = True
     enable_feishu_cli: bool = False
@@ -48,6 +49,7 @@ class RuntimeConfig:
             schedule_collect_stocks=bool(self.schedule_collect_stocks),
             schedule_collect_models=bool(self.schedule_collect_models),
             schedule_collect_av=bool(self.schedule_collect_av),
+            schedule_collect_wechat_mp=bool(self.schedule_collect_wechat_mp),
             enable_keyword_growth=bool(self.enable_keyword_growth),
             enable_wiki_compile=bool(self.enable_wiki_compile),
             enable_feishu_cli=bool(self.enable_feishu_cli),

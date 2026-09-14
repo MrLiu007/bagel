@@ -1,11 +1,13 @@
 ﻿{% extends "base.html" %}
 {% block content %}
-<h1>{{ title }} <span class="mono">/ gewe</span></h1>
-<p class="hint">
-  个人微信通过三方 <strong>Gewe</strong> HTTP API + Webhook 接入，避免自研协议风控。
-  Token / AppId 仅放 .env。{{ docs_hint }}
-</p>
+<h1>{{ title }}</h1>
+<div class="tabs">
+  {% for t in wechat_tabs %}
+  <a href="{{ u(t.url) }}" class="{% if t.on %}on{% endif %}">{{ t.label }}</a>
+  {% endfor %}
+</div>
 
+{% if wechat_tab == 'messages' %}
 <div class="viz-strip">
   <div class="viz-card">
     <div class="label">Feature</div>
@@ -23,11 +25,11 @@
 
 <div class="panel">
   {% if not status.enabled %}
-  <p class="hint">请在 .env 设置 <code>ENABLE_WECHAT=true</code>、<code>GEWE_TOKEN</code>、<code>GEWE_APP_ID</code> 后重启。</p>
+  <p class="hint warn">未启用：请到 <a href="{{ u('/settings?tab=config&family=AI+%E4%B8%8E%E6%8E%A8%E9%80%81&group=%E5%BE%AE%E4%BF%A1') }}">系统设置 → 配置 → 微信</a> 开启并填写 Gewe。</p>
   {% elif not status.configured %}
-  <p class="hint warn">Token 或 AppId 缺失。</p>
+  <p class="hint warn">Token 或 AppId 缺失，请在系统设置中补全。</p>
   {% else %}
-  <span class="status-pill ok"><span class="dot"></span> Gewe 凭证已配置</span>
+  <span class="status-pill ok"><span class="dot"></span> Gewe 已就绪</span>
   {% endif %}
 
   <div class="row" style="margin-top:0.85rem;">
@@ -45,10 +47,274 @@
   {% if online_error %}
   <p class="hint warn">在线检测：{{ online_error }}</p>
   {% elif online %}
-  <p class="hint ok">checkOnline 响应已收到（详见 API JSON）。</p>
+  <p class="hint ok">checkOnline 响应已收到。</p>
   {% endif %}
 </div>
 
 <h2 style="font-size:1.05rem;margin:1.5rem 0 0.75rem;">命中消息</h2>
 {% include "_items_list.html" %}
+
+{% else %}
+<div class="panel">
+  <form method="post" action="{{ u('/wechat/accounts/subscribe') }}" style="display:flex;flex-direction:column;gap:0.55rem;">
+    <div class="inline" style="flex-wrap:wrap;gap:0.5rem;">
+      <input type="text" name="name" placeholder="公众号名称（如 机器之心）"
+             style="flex:1;min-width:160px;" />
+      <input type="text" name="wxid" placeholder="微信号（可选）"
+             style="flex:0.7;min-width:120px;" />
+    </div>
+    <div class="inline" style="flex-wrap:wrap;gap:0.5rem;">
+      <input type="url" name="sample_url" placeholder="推荐：粘贴该号任意一篇文章链接（自动识别名称并入库）"
+             style="flex:1;min-width:240px;" />
+    </div>
+    <div class="inline" style="flex-wrap:wrap;gap:0.5rem;">
+      <input type="url" name="feed_url" placeholder="RSS 源（推荐 WeWe：http://127.0.0.1:4000/feeds/MP_WXS_….json）"
+             style="flex:1;min-width:240px;" />
+      <button class="primary" type="submit">订阅</button>
+    </div>
+  </form>
+  <div class="meta" style="margin-top:0.55rem;">
+    {% if wewe_ready %}
+    <span class="ok">WeWe-RSS 已就绪</span>（{{ wewe_base }}）· 采集优先读其近期文章
+    · 首次请在 WeWe Web 用样例文章链接添加公众号
+    {% else %}
+    <span class="warn">WeWe-RSS 未就绪</span>：请确认已执行
+    <code>bagel dev</code>（会自动 clone + 启动；推荐安装 Docker Desktop）。
+    也可填下方 RSS 源 / 样例文章链接。
+    {% endif %}
+    {% if sogou_enabled %} · 已启用搜狗兜底（索引少且偏旧）{% endif %}
+    · 定时任务可勾选「定时采集微信公众号」
+  </div>
+</div>
+
+{% if mp_sources %}
+<div class="panel">
+  <div class="row" style="align-items:center;margin-bottom:0.5rem;">
+    <div class="kw" style="margin:0;">已订阅</div>
+    <div class="actions">
+      <button type="button" class="primary" id="collectMpBtn">立即采集</button>
+    </div>
+  </div>
+  <div class="progress-wrap" style="margin:0.5rem 0;display:none;" id="collectProgress">
+    <div class="bar"><span id="collectBar" style="width:10%;"></span></div>
+    <div class="meta" id="collectMeta">准备采集…</div>
+  </div>
+  {% for s in mp_sources %}
+  <div class="row {% if not s.enabled %}is-off{% endif %}">
+    <div>
+      <div class="kw">{{ s.name }}
+        <span class="badge {% if s.enabled %}on{% else %}off{% endif %}">{% if s.enabled %}ON{% else %}OFF{% endif %}</span>
+        {% if s.wxid %}<span class="badge">{{ s.wxid }}</span>{% endif %}
+        {% if s.feed_url %}<span class="badge">RSS</span>{% endif %}
+      </div>
+      <div class="meta">
+        {% if s.feed_url %}<span style="word-break:break-all;">{{ s.feed_url }}</span> · {% endif %}
+        {% if s.last_error_code %}<span class="warn">{{ s.last_error_code }}</span> · {% endif %}
+        {% if s.last_success_at %}上次成功 {{ s.last_success_at }}{% else %}尚未采集{% endif %}
+      </div>
+    </div>
+    <div class="actions">
+      <form method="post" action="{{ u('/wechat/accounts/sources/' ~ s.id ~ '/toggle') }}">
+        <input type="hidden" name="enabled" value="{% if s.enabled %}0{% else %}1{% endif %}" />
+        <button type="submit" class="{% if s.enabled %}btn-state-off{% else %}btn-state-on{% endif %}">{% if s.enabled %}停用{% else %}启用{% endif %}</button>
+      </form>
+      <form method="post" action="{{ u('/wechat/accounts/sources/' ~ s.id ~ '/delete') }}" onsubmit="return confirm('确认取消订阅？');">
+        <button class="danger" type="submit">删除</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="panel">
+  <p class="empty">尚未订阅公众号。推荐：部署 WeWe-RSS 后填地址，或粘贴该号一篇文章 + RSS 源再采集。</p>
+</div>
+{% endif %}
+
+<details class="panel">
+  <summary style="cursor:pointer;font-family:var(--font-mono);color:var(--accent-2);">单篇链接拉取（可选）</summary>
+  <form id="pullForm" class="inline" method="post" action="{{ u('/wechat/accounts/pull') }}" style="flex-wrap:wrap;gap:0.5rem;margin-top:0.65rem;">
+    <input id="pullUrl" type="url" name="url" placeholder="粘贴公众号文章链接 mp.weixin.qq.com/…" required
+           style="flex:1;min-width:240px;" />
+    <button class="primary" id="pullBtn" type="submit">拉取文章</button>
+  </form>
+  <div class="progress-wrap" style="margin-top:0.65rem;display:none;" id="pullProgress">
+    <div class="bar"><span id="pullBar" style="width:12%;"></span></div>
+    <div class="meta" id="pullMeta">准备拉取…</div>
+  </div>
+  <div class="meta" style="margin-top:0.55rem;">
+    出口：{% if network_mode == 'PROXY' and proxy_ready %}强制代理{% elif proxy_ready %}AUTO（优先本机，失败再代理）{% else %}本机 IP（{{ network_mode }}）{% endif %}
+    · 拉取时会把图片/音视频尽量下载到本地，避免微信防盗链
+  </div>
+</details>
+
+<p class="msg ok" id="pullOk" style="margin-top:0.65rem;display:none;"></p>
+<p class="msg warn" id="pullErr" style="margin-top:0.65rem;{% if pull_error %}{% else %}display:none;{% endif %}">{{ pull_error or '' }}</p>
+{% if pull_message %}<p class="msg ok" style="margin-top:0.65rem;">{{ pull_message }}</p>{% endif %}
+
+{% if accounts %}
+<div class="toolbar" style="margin-bottom:0.85rem;">
+  <a href="{{ u('/wechat?tab=accounts') }}" class="{% if not account_filter %}on{% endif %}">全部公众号</a>
+  {% for name in accounts %}
+  <a href="{{ u('/wechat?tab=accounts&account=' ~ (name|urlencode)) }}"
+     class="{% if account_filter == name %}on{% endif %}">{{ name }}</a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% include "_items_list.html" %}
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if wechat_tab == 'accounts' %}
+<script>
+(function () {
+  const form = document.getElementById('pullForm');
+  const btn = document.getElementById('pullBtn');
+  const urlInput = document.getElementById('pullUrl');
+  const progress = document.getElementById('pullProgress');
+  const bar = document.getElementById('pullBar');
+  const meta = document.getElementById('pullMeta');
+  const okEl = document.getElementById('pullOk');
+  const errEl = document.getElementById('pullErr');
+  let tick = null;
+
+  function setBusy(on, msg) {
+    if (!btn) return;
+    btn.disabled = on;
+    btn.textContent = on ? '拉取中…' : '拉取文章';
+    if (progress) progress.style.display = on ? 'block' : 'none';
+    if (meta) meta.textContent = msg || '';
+    if (on) {
+      let w = 12;
+      if (bar) bar.style.width = w + '%';
+      if (tick) clearInterval(tick);
+      tick = setInterval(function () {
+        w = Math.min(90, w + 4);
+        if (bar) bar.style.width = w + '%';
+        if (meta && w > 40 && w < 70) meta.textContent = '下载正文与媒体到本地…';
+        if (meta && w >= 70) meta.textContent = '写入列表…';
+      }, 450);
+    } else if (tick) {
+      clearInterval(tick);
+      tick = null;
+    }
+  }
+
+  form?.addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    const url = (urlInput?.value || '').trim();
+    if (!url) return;
+    if (okEl) { okEl.style.display = 'none'; okEl.textContent = ''; }
+    if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+    setBusy(true, '正在请求公众号页面…');
+    try {
+      const resp = await fetch(bagelUrl('/api/wechat/accounts/pull'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: url }),
+      });
+      const data = await resp.json().catch(function () { return {}; });
+      if (!resp.ok || !data.ok) {
+        setBusy(false);
+        if (bar) bar.style.width = '0%';
+        if (errEl) {
+          errEl.style.display = 'block';
+          errEl.textContent = data.error || ('拉取失败 (' + resp.status + ')');
+        }
+        return;
+      }
+      if (bar) bar.style.width = '100%';
+      if (meta) meta.textContent = '完成' + (data.asset_count ? (' · 本地媒体 ' + data.asset_count) : '');
+      if (okEl) {
+        okEl.style.display = 'block';
+        okEl.textContent = (data.created ? '已新建：' : '已更新：') + (data.title || '');
+      }
+      const next = data.detail_url ? bagelUrl(data.detail_url) : bagelUrl('/wechat?tab=accounts');
+      setTimeout(function () { location.href = next; }, 350);
+    } catch (e) {
+      setBusy(false);
+      if (bar) bar.style.width = '0%';
+      if (errEl) {
+        errEl.style.display = 'block';
+        errEl.textContent = '网络错误，请重试';
+      }
+    }
+  });
+
+  // Subscription collect (reuse collect task API)
+  const collectBtn = document.getElementById('collectMpBtn');
+  const cProgress = document.getElementById('collectProgress');
+  const cBar = document.getElementById('collectBar');
+  const cMeta = document.getElementById('collectMeta');
+  let cTimer = null;
+
+  async function pollCollect(taskId) {
+    try {
+      const resp = await fetch(bagelUrl('/api/tasks/' + taskId));
+      const data = await resp.json().catch(function () { return {}; });
+      const pct = Math.max(5, Math.min(99, Number(data.percent) || 5));
+      if (cBar) cBar.style.width = pct + '%';
+      if (cMeta) cMeta.textContent = data.message || data.status || '采集中…';
+      if (data.status === 'success') {
+        if (cBar) cBar.style.width = '100%';
+        const r = data.result || {};
+        if (cMeta) {
+          cMeta.textContent = (data.message || '采集完成')
+            + (r.items_created != null ? (' · 新建 ' + r.items_created) : '');
+        }
+        if (collectBtn) { collectBtn.disabled = false; collectBtn.textContent = '立即采集'; }
+        if (cTimer) { clearInterval(cTimer); cTimer = null; }
+        setTimeout(function () { location.reload(); }, 600);
+        return;
+      }
+      if (data.status === 'failed') {
+        if (collectBtn) { collectBtn.disabled = false; collectBtn.textContent = '立即采集'; }
+        if (cTimer) { clearInterval(cTimer); cTimer = null; }
+        if (errEl) {
+          errEl.style.display = 'block';
+          errEl.textContent = data.error || data.message || '采集失败';
+        }
+      }
+    } catch (e) { /* ignore poll errors */ }
+  }
+
+  collectBtn?.addEventListener('click', async function () {
+    if (okEl) { okEl.style.display = 'none'; }
+    if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+    collectBtn.disabled = true;
+    collectBtn.textContent = '采集中…';
+    if (cProgress) cProgress.style.display = 'block';
+    if (cBar) cBar.style.width = '8%';
+    if (cMeta) cMeta.textContent = '启动采集任务…';
+    try {
+      const body = new FormData();
+      body.append('kind', 'collect_wechat_mp');
+      const resp = await fetch(bagelUrl('/api/tasks/start'), { method: 'POST', body });
+      const data = await resp.json().catch(function () { return {}; });
+      if (!resp.ok || !data.id) {
+        collectBtn.disabled = false;
+        collectBtn.textContent = '立即采集';
+        if (errEl) {
+          errEl.style.display = 'block';
+          errEl.textContent = data.detail || data.error || '无法启动采集';
+        }
+        return;
+      }
+      if (cTimer) clearInterval(cTimer);
+      cTimer = setInterval(function () { pollCollect(data.id); }, 800);
+      pollCollect(data.id);
+    } catch (e) {
+      collectBtn.disabled = false;
+      collectBtn.textContent = '立即采集';
+      if (errEl) {
+        errEl.style.display = 'block';
+        errEl.textContent = '网络错误，请重试';
+      }
+    }
+  });
+})();
+</script>
+{% endif %}
 {% endblock %}

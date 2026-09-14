@@ -193,3 +193,36 @@ def test_settings_news_interest_tags(client: TestClient, db: Session) -> None:
     github = client.get("/settings?tab=github")
     assert github.status_code == 200
     assert "兴趣标签" in github.text
+
+
+def test_favorites_wechat_message_and_mp_tabs(client: TestClient, db: Session) -> None:
+    msg = _seed_item(
+        db,
+        item_type=ItemType.WECHAT_MSG,
+        title="群聊命中关键词",
+        url="wechat://gewe/1",
+    )
+    art = _seed_item(
+        db,
+        item_type=ItemType.WECHAT_ARTICLE,
+        title="公众号精选长文",
+        url="https://mp.weixin.qq.com/s/abc",
+    )
+    review_svc.favorite(db, msg.id)
+    review_svc.favorite(db, art.id)
+
+    page = client.get("/favorites")
+    assert page.status_code == 200
+    assert "微信消息" in page.text
+    assert "微信公众号" in page.text
+
+    msg_tab = client.get("/favorites?kind=wechat_msg")
+    assert msg_tab.status_code == 200
+    assert "群聊命中关键词" in msg_tab.text
+    assert "公众号精选长文" not in msg_tab.text
+
+    mp_tab = client.get("/favorites?kind=wechat_mp")
+    assert mp_tab.status_code == 200
+    assert "公众号精选长文" in mp_tab.text
+    assert "群聊命中关键词" not in mp_tab.text
+    assert "/wechat/articles/" in mp_tab.text

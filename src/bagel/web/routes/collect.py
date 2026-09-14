@@ -17,6 +17,7 @@ ALLOWED_KINDS = {
     "collect_papers",
     "collect_education",
     "collect_av",
+    "collect_wechat_mp",
     "collect_models",
     "collect_stocks",
     "collect_all",

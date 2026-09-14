@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block head %}
+<link rel="stylesheet" href="{{ u('/static/css/wechat-reader.css') }}" />
+{% endblock %}
+{% block content %}
+<nav class="wa-topbar">
+  <a class="wa-back" href="{{ u('/wechat?tab=accounts') }}">← 公众号列表</a>
+  <div class="wa-top-actions">
+    {% if source_url %}
+    <a class="wa-link" href="{{ source_url }}" target="_blank" rel="noopener">原文</a>
+    {% endif %}
+    <form method="post" action="{{ u('/items/' ~ item.id ~ '/action') }}">
+      <input type="hidden" name="next" value="{{ u('/wechat/articles/' ~ item.id) }}" />
+      <input type="hidden" name="action" value="{% if item.is_favorite %}unfavorite{% else %}favorite{% endif %}" />
+      <button type="submit" class="wa-fav {% if item.is_favorite %}on{% endif %}">
+        {% if item.is_favorite %}已收藏{% else %}收藏{% endif %}
+      </button>
+    </form>
+  </div>
+</nav>
+
+<article class="wa-reader">
+  <header class="wa-header">
+    <h1 class="wa-title">{{ item.title }}</h1>
+    <div class="wa-byline">
+      {% if account %}<span class="wa-account">{{ account }}</span>{% endif %}
+      {% if item.time_label %}<span class="wa-date">{{ item.time_label }}</span>{% endif %}
+    </div>
+  </header>
+
+  {% if body_html %}
+  <div class="wa-content rich-body">{{ body_html | safe }}</div>
+  {% elif item.summary %}
+  <div class="wa-content"><p>{{ item.summary }}</p></div>
+  {% else %}
+  <p class="wa-empty">暂无正文。</p>
+  {% endif %}
+
+  <footer class="wa-footer">
+    <details class="wa-tools">
+      <summary>媒体与维护</summary>
+      <div class="wa-tools-body">
+        <p class="wa-tools-meta">
+          {% if media_localized %}已本地化 {{ asset_count }} 个媒体{% else %}媒体尚未本地化{% endif %}
+        </p>
+        {% if media_skipped %}
+        <p class="wa-tools-warn">部分未下载：{% for s in media_skipped %}{{ s }}{% if not loop.last %}；{% endif %}{% endfor %}</p>
+        {% endif %}
+        <button type="button" class="wa-btn" id="btnRelocalize">重新下载媒体</button>
+        <div class="wa-tools-status" id="mediaMeta"></div>
+      </div>
+    </details>
+  </footer>
+</article>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const btn = document.getElementById('btnRelocalize');
+  const meta = document.getElementById('mediaMeta');
+  btn?.addEventListener('click', async () => {
+    btn.disabled = true;
+    const old = btn.textContent;
+    btn.textContent = '下载中…';
+    if (meta) meta.textContent = '正在按微信 Referer 拉取图片/音视频到本地…';
+    try {
+      const resp = await fetch(bagelUrl('/api/wechat/articles/{{ item.id }}/relocalize'), { method: 'POST' });
+      const data = await resp.json();
+      if (!data.ok) {
+        if (meta) meta.textContent = data.error || '失败';
+        btn.disabled = false;
+        btn.textContent = old;
+        return;
+      }
+      if (meta) meta.textContent = '已本地化 ' + (data.asset_count || 0) + ' 个，刷新中…';
+      location.reload();
+    } catch (e) {
+      if (meta) meta.textContent = '请求失败';
+      btn.disabled = false;
+      btn.textContent = old;
+    }
+  });
+})();
+</script>
+{% endblock %}

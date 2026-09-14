@@ -39,6 +39,8 @@ def _page_url(
     source_id: str | None = None,
     school: str | None = None,
     q: str | None = None,
+    author: str | None = None,
+    extra: dict[str, str] | None = None,
 ) -> str:
     params: dict[str, str | int] = {"page": page, "page_size": page_size}
     if category:
@@ -53,6 +55,13 @@ def _page_url(
         params["school"] = school
     if q:
         params["q"] = q
+    if author:
+        params["account"] = author
+    if extra:
+        for key, value in extra.items():
+            if value is None or value == "":
+                continue
+            params[str(key)] = value
     return f"{path}?{urlencode(params)}"
 
 
@@ -66,6 +75,8 @@ def _list_nav(
     source_id: str | None = None,
     school: str | None = None,
     q: str | None = None,
+    author: str | None = None,
+    extra: dict[str, str] | None = None,
 ) -> dict:
     """Shared pagination / return / category URLs that preserve list filters."""
     total_pages = result.total_pages
@@ -86,6 +97,8 @@ def _list_nav(
                     source_id=source_id,
                     school=school,
                     q=q,
+                    author=author,
+                    extra=extra,
                 ),
                 "active": p == result.page,
             }
@@ -100,6 +113,8 @@ def _list_nav(
         source_id=source_id,
         school=school,
         q=q,
+        author=author,
+        extra=extra,
     )
     cat_all_url = _page_url(
         path,
@@ -110,6 +125,8 @@ def _list_nav(
         source_id=source_id,
         school=school,
         q=q,
+        author=author,
+        extra=extra,
     )
     category_urls = {
         c: _page_url(
@@ -122,6 +139,8 @@ def _list_nav(
             source_id=source_id,
             school=school,
             q=q,
+            author=author,
+            extra=extra,
         )
         for c in result.categories
     }
@@ -136,6 +155,8 @@ def _list_nav(
             source_id=source_id,
             school=school,
             q=q,
+            author=author,
+            extra=extra,
         )
         if result.page > 1
         else None
@@ -151,6 +172,8 @@ def _list_nav(
             source_id=source_id,
             school=school,
             q=q,
+            author=author,
+            extra=extra,
         )
         if result.page < total_pages
         else None
@@ -164,6 +187,8 @@ def _list_nav(
         platform=platform,
         source_id=source_id,
         school=school,
+        author=author,
+        extra=extra,
     )
     return {
         "base_path": path,
@@ -179,6 +204,8 @@ def _list_nav(
         "source_id": source_id or "",
         "school": school or "",
         "q": q or "",
+        "author_filter": author or "",
+        "list_extra": extra or {},
         "clear_q_url": clear_q_url,
     }
 
@@ -258,6 +285,7 @@ def _page(
     source_id: str | None = None,
     school: str | None = None,
     q: str | None = None,
+    author: str | None = None,
     message: str | None = None,
     template: str = "items.html",
     extra: dict | None = None,
@@ -266,6 +294,9 @@ def _page(
 
     path = request.url.path
     title_q = normalize_title_q(q)
+    list_extra = None
+    if extra and isinstance(extra.get("list_extra_params"), dict):
+        list_extra = {str(k): str(v) for k, v in extra["list_extra_params"].items() if v}
     nav = _list_nav(
         path,
         result=result,
@@ -275,6 +306,8 @@ def _page(
         source_id=source_id,
         school=school,
         q=title_q,
+        author=author,
+        extra=list_extra,
     )
     source_names = (extra or {}).get("source_names") or {}
     ctx: dict = {
@@ -507,10 +540,7 @@ async def papers(
         school=family_key,
         q=title_q,
         extra={
-            "page_intro": (
-                "列表默认仅摘要。无开放 PDF 时先「探测开放 PDF」；找到地址后才出现「下载PDF并识别」"
-                "（MinerU / Kimi，见 docs/paper-parse.md）。数据源按家族聚合（arXiv 各分类合一）。"
-            ),
+            "page_intro": "",
             "source_tabs": source_tabs,
             "source_urls": source_urls,
             "source_filter": family_key or "",
@@ -528,15 +558,30 @@ async def education(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     category: str | None = Query(None),
+    track: str | None = Query(None, description="open_course | k12 | kaoyan"),
     school: str | None = Query(None, description="Institution key, e.g. mit / stanford"),
+    facet: str | None = Query(None, description="K12/kaoyan secondary filter"),
     q: str | None = Query(None, description="Title keyword"),
 ) -> HTMLResponse:
     from bagel.domain.enums import ItemStatus, SourceType
-    from bagel.pipeline.education_orgs import institution_for_source
+    from bagel.pipeline.education_orgs import institution_for_source, is_open_course_institution
+    from bagel.pipeline.education_tracks import (
+        TRACK_LABELS,
+        TRACK_TABS,
+        EduTrack,
+        facet_for_source,
+        facet_tabs_for_track,
+        normalize_facet,
+        normalize_track,
+        track_for_source,
+    )
     from bagel.storage.repositories import ItemRepository, SourceRepository, normalize_title_q
 
     owner = _owner_id(request)
     title_q = normalize_title_q(q)
+    edu_track = normalize_track(track)
+    edu_facet = normalize_facet(edu_track, facet)
+
     used_ids = set(
         ItemRepository(db).list_source_ids_for_status(
             ItemStatus.CANDIDATE,
@@ -544,53 +589,133 @@ async def education(
             owner_id=owner,
         )
     )
-    sources = [
+    all_sources = [
         s
         for s in SourceRepository(db).list_all()
         if s.source_type == SourceType.EDUCATION and (s.enabled or s.id in used_ids)
     ]
-    sources.sort(key=lambda s: (s.priority, s.name))
-    source_names = {str(s.id): s.name for s in sources}
+    track_sources = [
+        s
+        for s in all_sources
+        if track_for_source(name=s.name, url=s.url or "") == edu_track
+    ]
+    track_sources.sort(key=lambda s: (s.priority, s.name))
+    source_names = {str(s.id): s.name for s in track_sources}
 
-    # Aggregate feeds into school / institution tabs (MIT OCW + MIT News → MIT).
-    buckets: dict[str, dict] = {}
-    for s in sources:
-        inst = institution_for_source(name=s.name, url=s.url or "")
-        bucket = buckets.setdefault(
-            inst.key, {"key": inst.key, "label": inst.label, "ids": []}
+    list_extra = {"track": edu_track.value}
+    filter_ids: list | None
+    source_tabs: list[tuple[str, str]]
+    source_urls: dict[str, str]
+    source_filter = ""
+    source_filter_label = "分类"
+    empty_hint = (
+        f"暂无「{TRACK_LABELS[edu_track]}」资源。"
+        "可切换上方 Tab，或到采集页拉取；数据源见系统设置 → 教育数据源。"
+    )
+
+    if edu_track == EduTrack.OPEN_COURSE:
+        buckets: dict[str, dict] = {}
+        for s in track_sources:
+            if not is_open_course_institution(name=s.name, url=s.url or ""):
+                continue
+            inst = institution_for_source(name=s.name, url=s.url or "")
+            bucket = buckets.setdefault(
+                inst.key, {"key": inst.key, "label": inst.label, "ids": []}
+            )
+            bucket["ids"].append(s.id)
+        ordered = sorted(buckets.values(), key=lambda b: b["label"].lower())
+        school_key = (school or "").strip().lower() or None
+        if school_key and school_key not in buckets:
+            school_key = None
+        # List items only from true open-course sources (exclude mis-tagged policy feeds).
+        open_ids = [s.id for s in track_sources if is_open_course_institution(name=s.name, url=s.url or "")]
+        filter_ids = buckets[school_key]["ids"] if school_key else open_ids
+        if not open_ids:
+            filter_ids = []
+        source_tabs = [("", "全部")] + [(b["key"], b["label"]) for b in ordered]
+        source_filter = school_key or ""
+        source_filter_label = "学校"
+        source_urls = {
+            code: _page_url(
+                "/education",
+                page=1,
+                page_size=page_size,
+                category=category,
+                school=code or None,
+                q=title_q,
+                extra={**list_extra},
+            )
+            for code, _label in source_tabs
+        }
+        empty_hint = (
+            "暂无公开课资源。可切换学校 Tab，或到采集页拉取；"
+            "数据源见系统设置 → 教育数据源 → 公开课。"
         )
-        bucket["ids"].append(s.id)
-    ordered = sorted(buckets.values(), key=lambda b: b["label"].lower())
-    school_key = (school or "").strip().lower() or None
-    if school_key and school_key not in buckets:
-        school_key = None
-    filter_ids = buckets[school_key]["ids"] if school_key else None
+    else:
+        facet_tabs = facet_tabs_for_track(edu_track)
+        by_facet: dict[str, list] = {}
+        for s in track_sources:
+            fkey = facet_for_source(name=s.name, url=s.url or "") or ""
+            by_facet.setdefault(fkey, []).append(s.id)
+        if edu_facet:
+            filter_ids = by_facet.get(edu_facet, [])
+            # Also include sources whose inferred facet matches
+            source_filter = edu_facet
+        else:
+            filter_ids = [s.id for s in track_sources]
+            source_filter = ""
+        if not track_sources:
+            filter_ids = []
+        source_tabs = list(facet_tabs)
+        source_filter_label = "分层"
+        list_extra_facet = {**list_extra}
+        source_urls = {
+            code: _page_url(
+                "/education",
+                page=1,
+                page_size=page_size,
+                category=category,
+                q=title_q,
+                extra={**list_extra_facet, **({"facet": code} if code else {})},
+            )
+            for code, _label in source_tabs
+        }
+        if edu_track == EduTrack.K12:
+            empty_hint = (
+                "暂无 K12 政策/改革资讯。请确认已配置 RSSHub，并在设置中启用教育部等源后采集。"
+            )
+        else:
+            empty_hint = (
+                "暂无考研资讯。请在设置 → 教育数据源 → 考研 中填写目标校研究生院 RSS/RSSHub 后采集。"
+            )
 
+    # When track has sources but filter_ids empty (facet miss), show empty list.
     result = review_svc.list_candidates(
         db,
         item_type=ItemType.EDUCATION,
         category=category,
-        source_ids=filter_ids,
+        source_ids=filter_ids if filter_ids is not None else None,
         owner_id=owner,
         q=title_q,
         page=page,
         page_size=page_size,
     )
+    # Edge: open_course with no sources → source_ids=[] returns nothing (correct).
     _log_list_search(
         db, q=title_q, item_type=ItemType.EDUCATION, hit_count=result.total, owner_id=owner
     )
 
-    source_tabs = [("", "全部")] + [(b["key"], b["label"]) for b in ordered]
-    source_urls = {
+    track_tabs = [(t.value, label) for t, label in TRACK_TABS]
+    track_urls = {
         code: _page_url(
             "/education",
             page=1,
             page_size=page_size,
             category=category,
-            school=code or None,
             q=title_q,
+            extra={"track": code},
         )
-        for code, _label in source_tabs
+        for code, _label in track_tabs
     }
 
     return _page(
@@ -599,19 +724,23 @@ async def education(
         result=result,
         active="education",
         category=category,
-        school=school_key,
+        school=school if edu_track == EduTrack.OPEN_COURSE else None,
         q=title_q,
         extra={
+            "platform_tabs": track_tabs,
+            "platform_filter": edu_track.value,
+            "platform_urls": track_urls,
             "source_tabs": source_tabs,
-            "source_filter": school_key or "",
+            "source_filter": source_filter,
             "source_urls": source_urls,
             "source_names": source_names,
             "source_filter_style": "tabs",
-            "source_filter_label": "学校",
-            "empty_hint": (
-                "暂无教育资源。可切换上方学校 Tab（同校多源已聚合），或到采集页拉取；"
-                "数据源见系统设置 → 教育数据源。"
-            ),
+            "source_filter_label": source_filter_label,
+            "list_extra_params": {
+                "track": edu_track.value,
+                **({"facet": edu_facet} if edu_facet else {}),
+            },
+            "empty_hint": empty_hint,
         },
     )
 
@@ -1074,9 +1203,8 @@ async def media(
             "platforms": MEDIA_PLATFORMS,
             "selected_platforms": settings.media_platform_list,
             "keywords": ",".join(settings.media_keyword_list),
-            "docs_hint": "配置说明见仓库 docs/user-config-media-wechat.md",
             "latest_task": latest.to_dict() if latest else None,
-            "empty_hint": "暂无自媒体条目。请在本页选择平台与关键词后点击「开始抓取」。",
+            "empty_hint": "暂无自媒体条目。选择平台与关键词后开始抓取。",
             "platform_tabs": platform_tabs,
             "platform_filter": platform_key or "",
         },
@@ -1136,7 +1264,10 @@ async def favorites(
         "models": [ItemType.MODEL],
         "stocks": [ItemType.STOCK_NEWS],
         "media": [ItemType.MEDIA_POST],
-        "wechat": [ItemType.WECHAT_MSG],
+        "wechat_msg": [ItemType.WECHAT_MSG],
+        "wechat_mp": [ItemType.WECHAT_ARTICLE],
+        # legacy alias
+        "wechat": [ItemType.WECHAT_MSG, ItemType.WECHAT_ARTICLE],
     }
     if kind_key not in kind_map:
         kind_key = "all"
@@ -1163,6 +1294,11 @@ async def favorites(
         page=page,
         page_size=page_size,
     )
+    empty_by_kind = {
+        "wechat_msg": "暂无收藏的微信消息。",
+        "wechat_mp": "暂无收藏的公众号文章。可在公众号详情页点击收藏。",
+        "wechat": "暂无微信相关收藏。",
+    }
     extra: dict = {
         "fav_kind": kind_key,
         "fav_kinds": [
@@ -1175,9 +1311,10 @@ async def favorites(
             ("models", "模型"),
             ("stocks", "股票"),
             ("media", "自媒体"),
-            ("wechat", "微信"),
+            ("wechat_msg", "微信消息"),
+            ("wechat_mp", "微信公众号"),
         ],
-        "empty_hint": "暂无收藏。可在各列表页点击「收藏」。",
+        "empty_hint": empty_by_kind.get(kind_key, "暂无收藏。可在各列表页点击「收藏」。"),
         "title_search": False,
     }
     if kind_key == "media":
@@ -1265,7 +1402,8 @@ _TYPE_LABELS = {
     ItemType.GITHUB_REPO: "GitHub 项目",
     ItemType.GITHUB_RELEASE: "GitHub Release",
     ItemType.MEDIA_POST: "自媒体",
-    ItemType.WECHAT_MSG: "微信",
+    ItemType.WECHAT_MSG: "微信消息",
+    ItemType.WECHAT_ARTICLE: "微信公众号",
 }
 
 _TYPE_BACK = {
@@ -1278,7 +1416,8 @@ _TYPE_BACK = {
     ItemType.GITHUB_REPO: "/github",
     ItemType.GITHUB_RELEASE: "/github",
     ItemType.MEDIA_POST: "/media",
-    ItemType.WECHAT_MSG: "/wechat",
+    ItemType.WECHAT_MSG: "/wechat?tab=messages",
+    ItemType.WECHAT_ARTICLE: "/wechat?tab=accounts",
 }
 
 
@@ -1349,6 +1488,7 @@ async def item_related(
         ItemType.GITHUB_RELEASE: "github",
         ItemType.MEDIA_POST: "media",
         ItemType.WECHAT_MSG: "wechat",
+        ItemType.WECHAT_ARTICLE: "wechat",
     }
     return templates.TemplateResponse(
         request,

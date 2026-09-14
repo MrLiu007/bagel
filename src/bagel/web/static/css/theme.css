@@ -781,3 +781,130 @@ code {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Settings → 配置：三栏层级（分类 | 分组 | 字段） */
+.config-layout {
+  display: grid !important;
+  grid-template-columns: 10.5rem 12.5rem minmax(0, 1fr);
+  gap: 0.85rem;
+  align-items: stretch;
+  min-height: 28rem;
+  width: 100%;
+}
+.config-nav-primary,
+.config-nav-secondary {
+  display: flex !important;
+  flex-direction: column !important;
+  flex-wrap: nowrap !important;
+  gap: 0.2rem;
+  padding: 0.65rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: inset 0 1px 0 var(--inset-shine);
+  position: sticky;
+  top: 0.75rem;
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+  align-self: start;
+}
+.config-nav-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0.15rem 0.65rem 0.45rem;
+  font-family: var(--font-mono);
+}
+.config-nav-primary a,
+.config-nav-secondary a {
+  display: block;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 0.58rem 0.75rem;
+  border-radius: calc(var(--radius) - 2px);
+  font-size: 0.9rem;
+  line-height: 1.35;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.config-nav-primary a.on {
+  color: #fff;
+  background: color-mix(in srgb, var(--accent) 90%, #000);
+  border-color: transparent;
+}
+.config-nav-primary a:hover:not(.on) {
+  color: var(--fg);
+  background: var(--soft-bg);
+}
+.config-nav-secondary a.on {
+  color: var(--fg);
+  background: color-mix(in srgb, var(--accent) 16%, var(--panel));
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+  font-weight: 600;
+}
+.config-nav-secondary a:hover:not(.on) {
+  color: var(--fg);
+  background: var(--soft-bg);
+}
+.config-main {
+  margin-bottom: 0 !important;
+  min-height: 24rem;
+  min-width: 0;
+}
+.config-main-head { margin-bottom: 0.85rem; }
+.config-main-head h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1.15rem;
+  font-family: var(--font-mono);
+  color: var(--accent-2);
+}
+.config-field {
+  padding: 0.7rem 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+}
+.config-field:last-of-type { border-bottom: none; }
+
+.rich-body {
+  color: var(--summary);
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.rich-body img,
+.rich-body video {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0.65rem 0;
+  border-radius: 6px;
+}
+.rich-body audio {
+  width: 100%;
+  max-width: 28rem;
+  margin: 0.5rem 0;
+}
+.rich-body iframe {
+  max-width: 100%;
+  min-height: 200px;
+  border: 0;
+  margin: 0.65rem 0;
+}
+.rich-body a { color: var(--accent-2); }
+
+@media (max-width: 720px) {
+  .config-layout {
+    grid-template-columns: 1fr !important;
+  }
+  .config-nav-primary,
+  .config-nav-secondary {
+    position: static;
+    max-height: none;
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+  }
+  .config-nav-primary a,
+  .config-nav-secondary a {
+    white-space: normal;
+  }
+}

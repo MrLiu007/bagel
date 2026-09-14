@@ -1,15 +1,6 @@
 ﻿{% extends "base.html" %}
 {% block content %}
 <h1>{{ title }} <span class="mono">/ media</span></h1>
-<p class="hint">
-  <strong>本页 = 关键词发现</strong>：通过 MediaCrawler 按关键词在各平台搜索，入库标题/正文/链接等元数据。
-  视频学习与字幕请用 <a href="{{ u('/av') }}">音视频</a>（yt-dlp）。列表里 B 站/抖音/快手可「加入音视频学习」或「提取文稿」。
-  <strong>抖音提文稿/下载</strong>前请用 Edge 打开 douyin.com，并设 <code>AV_COOKIES_FROM_BROWSER=edge</code>（关闭浏览器后再点）。
-</p>
-<p class="hint">
-  关键词在本页<strong>动态填写</strong>。多平台会<strong>依次</strong>各启动一次 MediaCrawler（单次只能一个平台）。
-  抓取完成后<strong>不会整页刷新</strong>，平台勾选与关键词会保留。{{ docs_hint }}
-</p>
 
 <div class="panel">
   <div class="viz-strip" style="margin-bottom:0.75rem;">
@@ -34,40 +25,16 @@
       <div class="value" style="font-size:0.95rem;">{% if status.get_medias %}ON{% else %}OFF{% endif %}</div>
     </div>
   </div>
-  <p class="hint" style="margin-top:0.35rem;">
-    评论 / MediaCrawler 媒体下载默认关闭，可在
-    <a href="{{ u('/settings?tab=config') }}">系统设置 → 配置</a>
-    打开 <code>MEDIA_CRAWLER_GET_COMMENTS</code> / <code>MEDIA_CRAWLER_GET_MEDIAS</code>。
-    汇总用文稿请点列表「提取文稿」（yt-dlp），勿依赖 MediaCrawler 下载。
-  </p>
-
   {% if not status.enabled %}
-  <p class="hint">默认已开启；若仍显示关闭，请检查 .env 是否被覆盖。</p>
+  <p class="hint warn">请在 <a href="{{ u('/settings?tab=config&family=%E9%87%87%E9%9B%86&group=%E8%87%AA%E5%AA%92%E4%BD%93') }}">系统设置 → 配置 → 自媒体</a> 检查开关与路径。</p>
   {% elif not status.path_exists %}
   <p class="hint warn">MEDIA_CRAWLER_PATH 无效：{{ status.path }}</p>
   {% else %}
-  <span class="status-pill ok"><span class="dot"></span> MediaCrawler 目录就绪</span>
-  {% if status.playwright_ok is defined and not status.playwright_ok %}
-  <p class="hint" style="margin-top:0.65rem;">
-    将优先使用本机 <strong>Google Chrome</strong> 弹窗扫码。
-  </p>
-  {% elif status.playwright_ok %}
-  <p class="hint" style="margin-top:0.65rem;">Playwright Chromium 亦已就绪；抓取时会弹出浏览器窗口。</p>
+  <span class="status-pill ok"><span class="dot"></span> MediaCrawler 就绪</span>
   {% endif %}
-  {% endif %}
-
-  <details class="hint" style="margin-top:0.85rem;">
-    <summary style="cursor:pointer;font-weight:600;">扫码与降频说明</summary>
-    <ol style="margin:0.5rem 0 0 1.1rem;line-height:1.55;">
-      <li>二维码在弹出的 <strong>Chrome</strong> 窗口（非本页）。</li>
-      <li>建议每次只勾 1 个平台、1 个关键词；默认限约 8 条、间隔约 6 秒。</li>
-      <li>抓取时请盯住<strong>运行 bagel 的控制台</strong>：三方日志以 <code>[MediaCrawler/小红书]</code> 开头完整打印；0 条会显示 <code>[failed]</code> 而不是成功。</li>
-      <li>关键词请用逗号：<code>AI,教育</code>（不要写成整词「AI 教育」）。</li>
-    </ol>
-  </details>
 
   <form id="crawlForm" style="margin-top:1rem;">
-    <div class="meta" style="margin-bottom:0.35rem;">选择平台（建议先只勾 1 个完成登录，再多选）</div>
+    <div class="meta" style="margin-bottom:0.35rem;">选择平台</div>
     <div class="platform-grid">
       {% for code, label in platforms %}
       <label>

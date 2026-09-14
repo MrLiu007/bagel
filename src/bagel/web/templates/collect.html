@@ -7,16 +7,16 @@
 </div>
 
 {% if tab == 'manual' %}
-<p class="hint">当前为<strong>主动触发</strong>模式。每次拉取只保留<strong>近 {{ lookback_days | default(14) }} 天内发布</strong>的条目（按发布时间，而非入库时间），列表也按发布时间倒序。点击任务可查看各数据源明细。</p>
-<p class="hint"><strong>采集音视频</strong>仅扫描元数据（标题/链接/时长），<em>不下载</em>媒体文件；下载与字幕提取请在 <a href="{{ u('/av') }}">音视频</a> Tab 条目详情中操作。</p>
+<p class="hint">每次拉取保留近 {{ lookback_days | default(14) }} 天内发布的条目。音视频采集仅元数据，下载在音视频详情操作。</p>
 
 <div class="panel">
   <div class="actions" id="collect-kinds">
     <button data-kind="collect_news" type="button">采集新闻</button>
     <button data-kind="collect_github" type="button">采集 GitHub</button>
     <button data-kind="collect_papers" type="button">采集论文</button>
-    <button data-kind="collect_education" type="button">采集教育</button>
+    <button data-kind="collect_education" type="button" title="公开课 / K12 / 考研">采集教育</button>
     <button data-kind="collect_av" type="button">采集音视频</button>
+    <button data-kind="collect_wechat_mp" type="button">采集微信公众号</button>
     <button data-kind="collect_models" type="button">采集模型</button>
     <button data-kind="collect_stocks" type="button">采集股票</button>
   </div>
@@ -26,7 +26,7 @@
   </div>
 </div>
 {% else %}
-<p class="hint">定时任务在<strong>系统设置 → 定时任务</strong>开启后，每次自动触发都会写入下方记录。点击任务可查看与手动采集相同的明细指标。</p>
+<p class="hint">定时任务开启后，自动触发记录显示在此。</p>
 {% endif %}
 
 <div class="panel">
@@ -66,10 +66,11 @@
     collect_news: { label: '新闻', href: '/news' },
     collect_github: { label: 'GitHub', href: '/github' },
     collect_papers: { label: '论文', href: '/papers' },
-    collect_education: { label: '教育', href: '/education' },
+    collect_education: { label: '教育', href: '/education?track=open_course' },
     collect_models: { label: '模型', href: '/models' },
     collect_stocks: { label: '股票', href: '/stocks' },
     collect_av: { label: '音视频', href: '/av' },
+    collect_wechat_mp: { label: '微信公众号', href: '/wechat?tab=accounts' },
     collect_all: { label: '全部', href: '/news' },
     summarize: { label: '摘要', href: '/briefs' }
   };

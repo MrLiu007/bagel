@@ -78,7 +78,7 @@ class Settings(BaseSettings):
     http_proxy: str = ""
     https_proxy: str = ""
     all_proxy: str = ""
-    no_proxy: str = "localhost,127.0.0.1,postgres,rsshub,freshrss"
+    no_proxy: str = "localhost,127.0.0.1,postgres,rsshub,freshrss,wewe-rss"
 
     # Schedule
     news_collect_interval_minutes: int = 30
@@ -212,6 +212,20 @@ class Settings(BaseSettings):
     gewe_callback_url: str = "http://127.0.0.1:8000/api/wechat/webhook"
     gewe_keywords: str = "大模型,AI,Agent"
 
+    # WeChat OA discovery — WeWe-RSS (third_party clone + Docker/local sidecar)
+    enable_wewe_rss: bool = True
+    wewe_rss_auto_setup: bool = True
+    wewe_rss_auto_start: bool = True
+    wewe_rss_path: str = "./third_party/wewe-rss"
+    wewe_rss_git_url: str = ""
+    wewe_rss_git_ref: str = "main"
+    wewe_rss_port: int = 4000
+    wewe_rss_base_url: str = ""  # empty → http://127.0.0.1:{port} when sidecar
+    wewe_rss_auth_code: str = "bagel-wewe"
+    wewe_rss_docker_image: str = "cooderl/wewe-rss-sqlite:latest"
+    wewe_rss_runtime: str = "auto"  # auto | docker | local | off
+    wechat_mp_enable_sogou: bool = False
+
     unpaywall_email: str = "bagel@localhost"
 
     # Archify — GitHub learn architecture diagrams (third_party clone, Node CLI)
@@ -274,6 +288,10 @@ class Settings(BaseSettings):
     @property
     def wechat_active(self) -> bool:
         return bool(self.enable_wechat or self.gewe_enabled)
+
+    @property
+    def wewe_rss_active(self) -> bool:
+        return bool(self.enable_wewe_rss)
 
     @property
     def media_platform_list(self) -> list[str]:

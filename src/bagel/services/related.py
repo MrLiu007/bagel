@@ -452,6 +452,7 @@ def _pool_for(
             ItemType.MEDIA_POST,
             ItemType.AV,
             ItemType.WECHAT_MSG,
+            ItemType.WECHAT_ARTICLE,
         ]
     else:
         types = _same_type_family(seed.item_type)
@@ -603,7 +604,8 @@ def find_related_drawer(session: Session, item_id: UUID, *, limit: int = 36) -> 
         ItemType.GITHUB_RELEASE: "GitHub Release",
         ItemType.MEDIA_POST: "自媒体",
         ItemType.AV: "音视频",
-        ItemType.WECHAT_MSG: "微信",
+        ItemType.WECHAT_MSG: "微信消息",
+        ItemType.WECHAT_ARTICLE: "微信公众号",
     }
 
     bundle = find_related(session, item_id, limit=limit, cross_type=True)

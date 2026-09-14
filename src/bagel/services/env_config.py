@@ -80,12 +80,78 @@ ENV_CATALOG: tuple[EnvField, ...] = (
     EnvField("LLM_MODEL", "LLM 模型 / 接入点", "LLM", "str"),
     EnvField("LLM_TIMEOUT_SECONDS", "LLM 超时秒", "LLM", "int"),
     EnvField("GITHUB_TOKEN", "GitHub Token", "GitHub", "secret"),
-    EnvField("NETWORK_MODE", "网络模式", "网络", "select", options=("AUTO", "DIRECT", "PROXY")),
-    EnvField("HTTP_PROXY", "HTTP 代理", "网络", "str"),
-    EnvField("HTTPS_PROXY", "HTTPS 代理", "网络", "str"),
-    EnvField("ALL_PROXY", "ALL 代理", "网络", "str"),
-    EnvField("NO_PROXY", "NO_PROXY", "网络", "str"),
+    EnvField(
+        "NETWORK_MODE",
+        "网络模式",
+        "网络",
+        "select",
+        "AUTO：本机直连失败再走代理；PROXY：强制代理；DIRECT：始终本机 IP。"
+        "作用于全部外网能力（新闻/论文/公众号拉取等），非仅某一页。",
+        ("AUTO", "DIRECT", "PROXY"),
+    ),
+    EnvField(
+        "HTTP_PROXY",
+        "HTTP 代理",
+        "网络",
+        "str",
+        "例 http://127.0.0.1:7890。未配置则走本机 IP（云厂商 IP 易被媒体源限制时可填）",
+    ),
+    EnvField("HTTPS_PROXY", "HTTPS 代理", "网络", "str", "优先于 HTTP；留空则复用 HTTP 代理"),
+    EnvField("ALL_PROXY", "ALL 代理", "网络", "str", "socks5://… 等统一出口，可选"),
+    EnvField("NO_PROXY", "NO_PROXY", "网络", "str", "不走代理的主机，逗号分隔"),
     EnvField("RSSHUB_BASE_URL", "RSSHub 地址", "内部服务", "str"),
+    EnvField(
+        "ENABLE_WEWE_RSS",
+        "启用 WeWe-RSS",
+        "内部服务",
+        "bool",
+        "公众号近期文章；bagel dev 可自动 clone + 启动 sidecar",
+    ),
+    EnvField(
+        "WEWE_RSS_AUTO_SETUP",
+        "WeWe 自动 clone",
+        "内部服务",
+        "bool",
+        "缺失时 clone 到 third_party/wewe-rss（不入库）",
+    ),
+    EnvField(
+        "WEWE_RSS_AUTO_START",
+        "WeWe 随 bagel dev 启动",
+        "内部服务",
+        "bool",
+        "优先 Docker 镜像 cooderl/wewe-rss-sqlite；无 Docker 再试本地 Node",
+    ),
+    EnvField("WEWE_RSS_PATH", "WeWe 本地路径", "内部服务", "str"),
+    EnvField("WEWE_RSS_GIT_URL", "WeWe Git 镜像", "内部服务", "str"),
+    EnvField("WEWE_RSS_PORT", "WeWe 端口", "内部服务", "int", "默认 4000"),
+    EnvField(
+        "WEWE_RSS_BASE_URL",
+        "WeWe-RSS 地址",
+        "内部服务",
+        "str",
+        "留空则自动用 http://127.0.0.1:端口（sidecar 启动后）",
+    ),
+    EnvField(
+        "WEWE_RSS_AUTH_CODE",
+        "WeWe-RSS 授权码",
+        "内部服务",
+        "secret",
+        "默认 bagel-wewe；对应容器 AUTH_CODE",
+    ),
+    EnvField(
+        "WEWE_RSS_RUNTIME",
+        "WeWe 运行时",
+        "内部服务",
+        "str",
+        "auto / docker / local / off",
+    ),
+    EnvField(
+        "WECHAT_MP_ENABLE_SOGOU",
+        "公众号启用搜狗兜底",
+        "微信",
+        "bool",
+        "默认关。搜狗索引少且偏旧",
+    ),
     EnvField("ENABLE_MEDIA_CRAWLER", "启用自媒体", "自媒体", "bool"),
     EnvField("MEDIA_CRAWLER_PATH", "MediaCrawler 路径", "自媒体", "str"),
     EnvField("MEDIA_CRAWLER_PLATFORMS", "平台列表", "自媒体", "str", "逗号分隔，如 xhs"),
@@ -96,7 +162,7 @@ ENV_CATALOG: tuple[EnvField, ...] = (
         "抓取评论",
         "自媒体",
         "bool",
-        "默认关；开后 MediaCrawler 拉评论（更慢、更易风控）",
+        "默认关；开后更慢、更易风控。扫码在弹出的 Chrome 窗口，建议每次 1 平台 1 关键词",
     ),
     EnvField(
         "MEDIA_CRAWLER_GET_SUB_COMMENTS",
@@ -110,17 +176,29 @@ ENV_CATALOG: tuple[EnvField, ...] = (
         "MediaCrawler 下载媒体",
         "自媒体",
         "bool",
-        "默认关；视频学习请用音视频页 yt-dlp，勿与本项同时滥用",
+        "默认关；视频文稿请用音视频页 yt-dlp",
     ),
     EnvField("ENABLE_YTDLP", "启用音视频", "音视频", "bool"),
     EnvField("YTDLP_PATH", "yt-dlp 路径", "音视频", "str"),
     EnvField("YTDLP_GIT_URL", "yt-dlp 镜像 URL", "音视频", "str"),
     EnvField("YTDLP_GIT_REF", "yt-dlp 版本 tag", "音视频", "str"),
     EnvField("AV_MAX_ITEMS_PER_SOURCE", "每源最大条目", "音视频", "int"),
-    EnvField("AV_COOKIES_FROM_BROWSER", "浏览器 Cookie", "音视频", "str"),
-    EnvField("AV_BILIBILI_BROWSER", "B站 Cookie 浏览器", "音视频", "str", "edge,chrome"),
+    EnvField(
+        "AV_COOKIES_FROM_BROWSER",
+        "浏览器 Cookie",
+        "音视频",
+        "str",
+        "抖音/B 站下载或提文稿前：用该浏览器打开并登录站点后关闭浏览器再操作。常见值 edge",
+    ),
+    EnvField("AV_BILIBILI_BROWSER", "B站 Cookie 浏览器", "音视频", "str", "edge / chrome；空则复用上方 Cookie 浏览器"),
     EnvField("AV_SCAN_TIMEOUT_SEC", "单源扫描超时秒", "音视频", "int"),
-    EnvField("AV_DEFAULT_AUDIO_ONLY", "下载默认仅音频", "音视频", "bool"),
+    EnvField(
+        "AV_DEFAULT_AUDIO_ONLY",
+        "下载默认仅音频",
+        "音视频",
+        "bool",
+        "默认关=下视频；仅需音频时开启",
+    ),
     EnvField("FFMPEG_PATH", "ffmpeg 路径", "音视频", "str"),
     EnvField(
         "AV_ASR_ENABLED",
@@ -222,11 +300,17 @@ ENV_CATALOG: tuple[EnvField, ...] = (
     EnvField("GITHUB_LEARN_MAX_FILES", "学习页扫描文件上限", "GitHub学习", "int"),
     EnvField("GITHUB_LEARN_MAX_SNIPPETS", "学习页源码片段数", "GitHub学习", "int"),
     EnvField("GITHUB_LEARN_SNIPPET_CHARS", "单文件片段字数", "GitHub学习", "int"),
-    EnvField("ENABLE_WECHAT", "启用微信", "微信", "bool"),
+    EnvField(
+        "ENABLE_WECHAT",
+        "启用微信消息",
+        "微信",
+        "bool",
+        "个人微信经 Gewe Webhook 入库；公众号文章拉取不依赖此项",
+    ),
     EnvField("GEWE_BASE_URL", "Gewe API", "微信", "str"),
-    EnvField("GEWE_TOKEN", "Gewe Token", "微信", "secret"),
+    EnvField("GEWE_TOKEN", "Gewe Token", "微信", "secret", "仅放此处或 .env，勿写进列表页"),
     EnvField("GEWE_APP_ID", "Gewe AppId", "微信", "str"),
-    EnvField("GEWE_KEYWORDS", "微信关键词", "微信", "str"),
+    EnvField("GEWE_KEYWORDS", "微信消息关键词", "微信", "str", "逗号分隔；空=接收全部命中消息"),
     EnvField("ENABLE_FEISHU_CLI", "默认启用飞书", "飞书", "bool", "也可在 CLI 页覆盖"),
     EnvField("FEISHU_CLI_BIN", "飞书 CLI 路径", "飞书", "str"),
     EnvField("FEISHU_WEBHOOK_URL", "飞书 Webhook", "飞书", "secret"),
@@ -262,6 +346,73 @@ ENV_CATALOG: tuple[EnvField, ...] = (
         restart_hint=True,
     ),
 )
+
+# Settings → 配置：一级分类 → 二级分组（ENV_CATALOG.group）
+CONFIG_FAMILIES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("基础", ("应用", "存储", "功能开关")),
+    ("网络", ("网络", "内部服务")),
+    ("采集", ("自媒体", "音视频", "音视频ASR", "论文", "股票", "GitHub")),
+    ("学习", ("GitHub学习",)),
+    ("AI 与推送", ("LLM", "微信", "飞书")),
+)
+
+
+def config_family_for_group(group: str) -> str:
+    for family, groups in CONFIG_FAMILIES:
+        if group in groups:
+            return family
+    return "基础"
+
+
+def resolve_config_nav(
+    groups: list[dict[str, Any]],
+    *,
+    family: str | None = None,
+    group: str | None = None,
+) -> dict[str, Any]:
+    """Pick active family/group for the three-pane config UI."""
+    available = [g["group"] for g in groups if g.get("fields")]
+    if not available:
+        return {
+            "families": [],
+            "active_family": "",
+            "subgroups": [],
+            "active_group": "",
+            "active_fields": [],
+        }
+    family_map = {name: list(gs) for name, gs in CONFIG_FAMILIES}
+    # Drop empty subgroups; keep family order
+    families: list[str] = []
+    for name, gs in CONFIG_FAMILIES:
+        present = [g for g in gs if g in available]
+        if present:
+            families.append(name)
+            family_map[name] = present
+    # Orphan groups (if any) land under 基础
+    known = {g for _, gs in CONFIG_FAMILIES for g in gs}
+    orphans = [g for g in available if g not in known]
+    if orphans:
+        if "基础" not in families:
+            families.insert(0, "基础")
+        family_map.setdefault("基础", [])
+        family_map["基础"] = list(dict.fromkeys([*family_map.get("基础", []), *orphans]))
+
+    active_family = family if family in families else families[0]
+    subgroups = family_map.get(active_family) or available
+    active_group = group if group in subgroups else subgroups[0]
+    active_fields: list[dict[str, Any]] = []
+    for g in groups:
+        if g["group"] == active_group:
+            active_fields = g["fields"]
+            break
+    return {
+        "families": families,
+        "active_family": active_family,
+        "subgroups": subgroups,
+        "active_group": active_group,
+        "active_fields": active_fields,
+    }
+
 
 _LINE_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
 
@@ -347,6 +498,16 @@ def current_settings_fallback() -> dict[str, str]:
         "ALL_PROXY": s.all_proxy,
         "NO_PROXY": s.no_proxy,
         "RSSHUB_BASE_URL": s.rsshub_base_url,
+        "ENABLE_WEWE_RSS": str(s.enable_wewe_rss).lower(),
+        "WEWE_RSS_AUTO_SETUP": str(s.wewe_rss_auto_setup).lower(),
+        "WEWE_RSS_AUTO_START": str(s.wewe_rss_auto_start).lower(),
+        "WEWE_RSS_PATH": s.wewe_rss_path,
+        "WEWE_RSS_GIT_URL": s.wewe_rss_git_url,
+        "WEWE_RSS_PORT": str(s.wewe_rss_port),
+        "WEWE_RSS_BASE_URL": s.wewe_rss_base_url,
+        "WEWE_RSS_AUTH_CODE": s.wewe_rss_auth_code,
+        "WEWE_RSS_RUNTIME": s.wewe_rss_runtime,
+        "WECHAT_MP_ENABLE_SOGOU": str(s.wechat_mp_enable_sogou).lower(),
         "ENABLE_MEDIA_CRAWLER": str(s.enable_media_crawler).lower(),
         "MEDIA_CRAWLER_PATH": s.media_crawler_path,
         "MEDIA_CRAWLER_PLATFORMS": s.media_crawler_platforms,

@@ -46,17 +46,35 @@ def present_item(item, *, preview: bool | None = None, source_name: str | None =
     """View-model so templates do not depend on custom filters.
 
     Lists show full summary/content. Media posts dedupe identical title/body.
+    WeChat articles: list = short plain summary + detail link; detail = rich HTML.
     """
-    _ = preview
+    list_mode = preview is not False
     raw_title = strip_html(getattr(item, "title", None) or "")
-    raw_body = strip_html(item.summary or item.content or "")
-    title, body = split_title_and_body(raw_title, raw_body)
-
     item_type = getattr(item, "item_type", None)
+    meta = getattr(item, "metadata_", None) or {}
+    if not isinstance(meta, dict):
+        meta = {}
+    wechat_mp = meta.get("wechat_mp") if isinstance(meta.get("wechat_mp"), dict) else {}
+    raw_content = getattr(item, "content", None) or ""
+    content_is_html = bool(wechat_mp.get("content_is_html")) or (
+        item_type == ItemType.WECHAT_ARTICLE and "<" in raw_content and ">" in raw_content
+    )
+    # List never embeds full 公众号 HTML (images/video belong on detail page).
+    if item_type == ItemType.WECHAT_ARTICLE and list_mode:
+        summary_html = ""
+        raw_body = strip_html(item.summary or raw_content)
+    elif content_is_html and raw_content:
+        summary_html = raw_content
+        raw_body = strip_html(item.summary or raw_content)
+    else:
+        summary_html = ""
+        raw_body = strip_html(item.summary or raw_content)
+    title, body = split_title_and_body(raw_title, raw_body)
+    if item_type == ItemType.WECHAT_ARTICLE and list_mode:
+        body = truncate(body or raw_body, 140)
 
     stock_meta = {}
-    meta = getattr(item, "metadata_", None) or {}
-    if isinstance(meta, dict) and isinstance(meta.get("stock"), dict):
+    if isinstance(meta.get("stock"), dict):
         stock_meta = meta["stock"]
     tickers = []
     for t in stock_meta.get("tickers") or []:
@@ -126,6 +144,7 @@ def present_item(item, *, preview: bool | None = None, source_name: str | None =
         "source_id": str(getattr(item, "source_id", "") or ""),
         "tags": list(item.tags or []),
         "summary": body or raw_body,
+        "summary_html": summary_html,
         "show_related": item_type
         in {
             ItemType.NEWS,
@@ -153,7 +172,13 @@ def present_item(item, *, preview: bool | None = None, source_name: str | None =
         "download_label": download_label,
         "local_play_url": local_play_url,
         "show_av_download": item_type == ItemType.AV,
-        "detail_url": f"/av/items/{item.id}" if item_type == ItemType.AV else "",
+        "detail_url": (
+            f"/av/items/{item.id}"
+            if item_type == ItemType.AV
+            else f"/wechat/articles/{item.id}"
+            if item_type == ItemType.WECHAT_ARTICLE
+            else ""
+        ),
         "show_av_import": show_av_import,
         "av_detail_url": av_detail_url,
         "show_av_enrich": show_av_enrich,

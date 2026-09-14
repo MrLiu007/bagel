@@ -115,3 +115,52 @@ GEWE_KEYWORDS=大模型,AI,Agent
 ### 风险声明
 
 个人微信号第三方协议存在封号风险；请控制频率，仅用于私域情报，勿群发骚扰。
+
+---
+
+## 3. 微信公众号（近期文章）
+
+搜狗索引少且偏旧，**默认不用**。Bagel 用 [WeWe-RSS](https://github.com/cooderl/wewe-rss) 获取近期文章。
+
+### 零配置路径（推荐）
+
+```bash
+uv run bagel dev --host 127.0.0.1 --port 8000 --reload
+```
+
+启动时自动：
+
+1. clone `third_party/wewe-rss/`（gitignored，不入库）
+2. 优先用 Docker 拉起 `cooderl/wewe-rss-sqlite`（`http://127.0.0.1:4000`）
+3. 未填 `WEWE_RSS_BASE_URL` 时自动指向该地址
+
+**建议安装 Docker Desktop**（与 RSSHub 类似的长驻服务）。无 Docker 时需本机 Node ≥ 20 + pnpm。
+
+### 首次订阅公众号
+
+1. 打开 WeWe Web：`http://127.0.0.1:4000` → 微信读书扫码（勿勾选 24h 退出）
+2. 用目标公众号**任意一篇文章链接**添加源
+3. 回 Bagel **微信 → 公众号**：填名称订阅（或粘贴 WeWe 的 `…/feeds/MP_WXS_….json`）→ 立即采集
+
+### 发现优先级
+
+1. 订阅绑定的 `feed:` RSS/Atom/JSON  
+2. WeWe-RSS 按名称匹配  
+3. （可选）搜狗：`WECHAT_MP_ENABLE_SOGOU=true`
+
+### 相关命令 / 配置
+
+```bash
+uv run bagel setup-wewe          # 手动 clone + 启动
+uv run bagel doctor              # 含 WeWe-RSS 探测
+```
+
+| 变量 | 默认 | 说明 |
+|------|------|------|
+| `ENABLE_WEWE_RSS` | true | 总开关 |
+| `WEWE_RSS_AUTO_SETUP` | true | 自动 clone |
+| `WEWE_RSS_AUTO_START` | true | 随 `bagel dev` 启动 sidecar |
+| `WEWE_RSS_RUNTIME` | auto | auto / docker / local / off |
+| `WEWE_RSS_AUTH_CODE` | bagel-wewe | 与容器 AUTH_CODE 一致 |
+
+不修改 WeWe-RSS / FreshRSS / RSSHub 源码。

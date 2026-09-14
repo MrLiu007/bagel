@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from typing import Any, Sequence
 from urllib.parse import urlparse, urlunparse
 
-from sqlalchemy import String, cast, func, or_, select
+from sqlalchemy import String, cast, false, func, or_, select
 from sqlalchemy.orm import Session
 
 from bagel.domain.enums import ItemStatus, ItemType
@@ -344,6 +344,7 @@ class ItemRepository:
         source_ids: Sequence[uuid.UUID] | None = None,
         owner_id=None,
         q: str | None = None,
+        author: str | None = None,
     ):
         statuses = [status] if isinstance(status, str) else list(status)
         stmt = select(IntelItem).where(IntelItem.status.in_(statuses))
@@ -351,8 +352,12 @@ class ItemRepository:
             stmt = stmt.where(IntelItem.item_type == item_type)
         if category:
             stmt = stmt.where(IntelItem.category == category)
-        if source_ids:
-            stmt = stmt.where(IntelItem.source_id.in_(list(source_ids)))
+        if source_ids is not None:
+            ids = list(source_ids)
+            if not ids:
+                stmt = stmt.where(false())
+            else:
+                stmt = stmt.where(IntelItem.source_id.in_(ids))
         elif source_id is not None:
             stmt = stmt.where(IntelItem.source_id == source_id)
         plat = self._platform_clause(platform or "")
@@ -364,6 +369,9 @@ class ItemRepository:
         title_q = self._title_q_clause(q)
         if title_q is not None:
             stmt = stmt.where(title_q)
+        author_q = (author or "").strip()
+        if author_q:
+            stmt = stmt.where(IntelItem.author == author_q)
         return stmt
 
     def list_by_status(
@@ -377,6 +385,7 @@ class ItemRepository:
         source_ids: Sequence[uuid.UUID] | None = None,
         owner_id=None,
         q: str | None = None,
+        author: str | None = None,
         limit: int = 20,
         offset: int = 0,
     ) -> Sequence[IntelItem]:
@@ -390,6 +399,7 @@ class ItemRepository:
                 source_ids=source_ids,
                 owner_id=owner_id,
                 q=q,
+                author=author,
             )
             .order_by(
                 func.coalesce(IntelItem.published_at, IntelItem.first_seen_at).desc(),
@@ -411,6 +421,7 @@ class ItemRepository:
         source_ids: Sequence[uuid.UUID] | None = None,
         owner_id=None,
         q: str | None = None,
+        author: str | None = None,
     ) -> int:
         filtered = self._status_filter(
             status,
@@ -421,6 +432,7 @@ class ItemRepository:
             source_ids=source_ids,
             owner_id=owner_id,
             q=q,
+            author=author,
         ).subquery()
         return int(self.session.scalar(select(func.count()).select_from(filtered)) or 0)
 
@@ -434,6 +446,7 @@ class ItemRepository:
         source_ids: Sequence[uuid.UUID] | None = None,
         owner_id=None,
         q: str | None = None,
+        author: str | None = None,
     ) -> Sequence[str]:
         base = self._status_filter(
             status,
@@ -443,6 +456,7 @@ class ItemRepository:
             source_ids=source_ids,
             owner_id=owner_id,
             q=q,
+            author=author,
         ).subquery()
         stmt = (
             select(base.c.category)
@@ -452,6 +466,30 @@ class ItemRepository:
         )
         rows = self.session.scalars(stmt).all()
         return [c for c in rows if c]
+
+    def list_authors(
+        self,
+        status: str | Sequence[str],
+        *,
+        item_type: str | None = None,
+        owner_id=None,
+        limit: int = 200,
+    ) -> Sequence[str]:
+        base = self._status_filter(
+            status,
+            item_type=item_type,
+            owner_id=owner_id,
+        ).subquery()
+        stmt = (
+            select(base.c.author)
+            .where(base.c.author.is_not(None))
+            .where(base.c.author != "")
+            .distinct()
+            .order_by(base.c.author)
+            .limit(limit)
+        )
+        rows = self.session.scalars(stmt).all()
+        return [a for a in rows if a]
 
     def list_source_ids_for_status(
         self,

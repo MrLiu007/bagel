@@ -7,18 +7,25 @@ ORM models; call `alembic upgrade head` for production schema upgrades.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from bagel.settings import get_settings
+from bagel.settings import DEFAULT_SQLITE_URL, get_settings
+
+logger = logging.getLogger(__name__)
+
+# Keep local boot snappy when Postgres is misconfigured / unreachable.
+_PG_CONNECT_TIMEOUT_SEC = 3
 
 _engine: Engine | None = None
 _SessionLocal: sessionmaker[Session] | None = None
+_active_database_url: str | None = None
 
 
 def _ensure_sqlite_parent(database_url: str) -> None:
@@ -32,14 +39,30 @@ def _ensure_sqlite_parent(database_url: str) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
 
 
+def reset_engine() -> None:
+    """Dispose the process-global engine (used when falling back to SQLite)."""
+    global _engine, _SessionLocal, _active_database_url
+    if _engine is not None:
+        try:
+            _engine.dispose()
+        except Exception:  # noqa: BLE001
+            pass
+    _engine = None
+    _SessionLocal = None
+    _active_database_url = None
+
+
 def get_engine(url: str | None = None, *, echo: bool = False) -> Engine:
     """Create (or return process-global) SQLAlchemy engine.
 
     Passing an explicit ``url`` returns a one-off engine without touching the
     process globals — used heavily by unit tests.
     """
-    global _engine, _SessionLocal
-    database_url = url or get_settings().resolved_database_url
+    global _engine, _SessionLocal, _active_database_url
+    database_url = url or _active_database_url or get_settings().resolved_database_url
+    if url is None and _engine is not None and _active_database_url == database_url:
+        return _engine
+
     _ensure_sqlite_parent(database_url)
     connect_args: dict = {}
     engine_kwargs: dict = {"echo": echo, "pool_pre_ping": True}
@@ -51,6 +74,11 @@ def get_engine(url: str | None = None, *, echo: bool = False) -> Engine:
 
             engine_kwargs["poolclass"] = StaticPool
             engine_kwargs["pool_pre_ping"] = False
+    elif database_url.startswith("postgresql"):
+        # psycopg / libpq: fail fast instead of hanging app startup (~minutes).
+        connect_args["connect_timeout"] = _PG_CONNECT_TIMEOUT_SEC
+        engine_kwargs["pool_timeout"] = float(_PG_CONNECT_TIMEOUT_SEC)
+        engine_kwargs["pool_recycle"] = 300
 
     engine = create_engine(database_url, connect_args=connect_args, **engine_kwargs)
 
@@ -63,7 +91,13 @@ def get_engine(url: str | None = None, *, echo: bool = False) -> Engine:
             cursor.close()
 
     if url is None:
+        if _engine is not None and _engine is not engine:
+            try:
+                _engine.dispose()
+            except Exception:  # noqa: BLE001
+                pass
         _engine = engine
+        _active_database_url = database_url
         _SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
     return engine
 
@@ -106,6 +140,30 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
+def _is_db_unreachable(exc: BaseException) -> bool:
+    text_exc = f"{type(exc).__name__}: {exc}".lower()
+    markers = (
+        "connectiontimeout",
+        "connection refused",
+        "could not connect",
+        "operationalerror",
+        "timeout expired",
+        "server closed the connection",
+        "connection reset",
+        "name or service not known",
+        "nodename nor servname",
+        "temporarily unavailable",
+    )
+    return any(m in text_exc for m in markers)
+
+
+def probe_db(engine: Engine | None = None) -> None:
+    """Open one connection and run ``SELECT 1`` (raises on failure)."""
+    eng = engine or get_engine()
+    with eng.connect() as conn:
+        conn.execute(text("SELECT 1"))
+
+
 def init_db(*, seed: bool = True) -> None:
     """Create missing tables (idempotent) and optionally seed defaults."""
     ensure_schema()
@@ -123,6 +181,57 @@ def init_db(*, seed: bool = True) -> None:
         raise
     finally:
         session.close()
+
+
+def init_db_resilient(*, seed: bool = True, fallback_sqlite: bool | None = None) -> dict[str, str]:
+    """Init DB; on unreachable Postgres fall back to local SQLite so the UI can boot.
+
+    Returns ``{"backend": "sqlite"|"postgresql", "url": "...", "fallback": "0"|"1"}``.
+    """
+    global _active_database_url
+
+    settings = get_settings()
+    if fallback_sqlite is None:
+        # Local / bagel dev: prefer a working site over a hung Postgres wait.
+        fallback_sqlite = bool(settings.is_dev) or settings.app_env.lower() in {
+            "test",
+            "",
+        }
+
+    primary = settings.resolved_database_url
+    try:
+        reset_engine()
+        get_engine(url=None)
+        probe_db()
+        init_db(seed=seed)
+        return {
+            "backend": "sqlite" if primary.startswith("sqlite") else "postgresql",
+            "url": primary,
+            "fallback": "0",
+        }
+    except Exception as exc:  # noqa: BLE001
+        if (
+            not fallback_sqlite
+            or primary.startswith("sqlite")
+            or not _is_db_unreachable(exc)
+        ):
+            raise
+        logger.warning(
+            "db.unreachable primary=%s err=%s — falling back to SQLite %s",
+            primary.split("@")[-1] if "@" in primary else primary[:80],
+            exc,
+            DEFAULT_SQLITE_URL,
+        )
+        reset_engine()
+        _active_database_url = DEFAULT_SQLITE_URL
+        get_engine()
+        init_db(seed=seed)
+        return {
+            "backend": "sqlite",
+            "url": DEFAULT_SQLITE_URL,
+            "fallback": "1",
+            "error": str(exc)[:240],
+        }
 
 
 def ensure_schema() -> None:

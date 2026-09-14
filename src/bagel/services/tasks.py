@@ -462,6 +462,14 @@ class TaskManager:
                     on_progress=on_progress,
                     owner_id=options.get("owner_id"),
                 )
+            elif kind == "collect_wechat_mp":
+                from bagel.jobs.wechat_mp import run_collect_wechat_mp
+
+                result = run_collect_wechat_mp(
+                    session,
+                    on_progress=on_progress,
+                    owner_id=options.get("owner_id"),
+                )
             elif kind == "download_av":
                 from bagel.jobs.av import run_download_av
                 from bagel.services import user_config as user_cfg
