@@ -1,16 +1,23 @@
 # Bagel（贝果）— Docker Compose
 #
-# Quick start (from repo root, with a local .env):
-#   cp .env.example .env
+# ECS / 多容器同机（推荐）：
+#   cp .env.example .env   # 改 SESSION_SECRET
 #   docker compose up -d --build
-#   open http://localhost:8000
+#   宿主机 Nginx include deploy/nginx/bagel-location.conf → https://域名/bagel/
 #
-# Stack: app + Postgres (SoT) + RSSHub + FreshRSS (infra only).
-# MediaCrawler is NOT in the image (gitignored / cloned on host if needed).
+# 默认不抢 80/443：仅把应用绑到 127.0.0.1:6280；Postgres/RSSHub/FreshRSS 不映射宿主机端口。
+# 容器名 / 网络 / 卷均带 bagel- 前缀，降低与同机其它 Compose 项目冲突。
+#
+# 本机直连调试（不经 Nginx）：
+#   BAGEL_BIND=0.0.0.0 BAGEL_HOST_PORT=8000 docker compose up -d --build
+#   open http://localhost:8000
+
+name: bagel
 
 services:
   postgres:
     image: postgres:16-alpine
+    container_name: bagel-postgres
     environment:
       POSTGRES_USER: bagel
       POSTGRES_PASSWORD: bagel
@@ -23,9 +30,11 @@ services:
       timeout: 5s
       retries: 10
     restart: unless-stopped
+    # 不映射宿主机端口，避免与其它 Postgres 抢 5432
 
   rsshub:
     image: diygod/rsshub:latest
+    container_name: bagel-rsshub
     environment:
       CACHE_TYPE: memory
       NODE_ENV: production
@@ -39,16 +48,18 @@ services:
 
   freshrss:
     image: freshrss/freshrss:latest
+    container_name: bagel-freshrss
     environment:
       TZ: Asia/Shanghai
       CRON_MIN: "1,31"
     volumes:
       - freshrss_data:/var/www/FreshRSS/data
-    # Not exposed publicly by default; use profile "debug" below.
+    # 不对外暴露；需要 UI 时用 profile debug
     restart: unless-stopped
 
   app:
     build: .
+    container_name: bagel-app
     env_file:
       - .env
     environment:
@@ -62,7 +73,8 @@ services:
       # HTTP_PROXY: http://host.docker.internal:7890
       # HTTPS_PROXY: http://host.docker.internal:7890
     ports:
-      - "${APP_PORT:-8000}:8000"
+      # 仅本机回环：供宿主机 Nginx 反代；不占用公网 80/443
+      - "${BAGEL_BIND:-127.0.0.1}:${BAGEL_HOST_PORT:-6280}:8000"
     volumes:
       - ./data:/app/data
     extra_hosts:
@@ -88,15 +100,18 @@ services:
       start_period: 40s
     restart: unless-stopped
 
-  # Optional: expose FreshRSS UI for ops
+  # Optional: expose FreshRSS UI for ops（仍绑本机，避免抢公网端口）
   #   docker compose --profile debug up -d
   freshrss-debug:
     profiles: ["debug"]
     image: freshrss/freshrss:latest
+    container_name: bagel-freshrss-debug
     network_mode: "service:freshrss"
     ports:
-      - "8080:80"
+      - "127.0.0.1:${BAGEL_FRESHRSS_DEBUG_PORT:-6288}:80"
 
 volumes:
   postgres_data:
+    name: bagel_postgres_data
   freshrss_data:
+    name: bagel_freshrss_data

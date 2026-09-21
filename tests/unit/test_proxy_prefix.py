@@ -66,12 +66,20 @@ def test_auth_redirect_location_with_prefix(monkeypatch: pytest.MonkeyPatch) -> 
         get_settings.cache_clear()
 
 
-def test_login_post_redirect_preserves_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_login_post_redirect_preserves_prefix(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
     monkeypatch.setenv("AUTH_REQUIRED", "false")
+    monkeypatch.setenv("STORAGE_BACKEND", "sqlite")
+    monkeypatch.setenv(
+        "DATABASE_URL",
+        f"sqlite+pysqlite:///{(tmp_path / 'proxy.db').as_posix()}",
+    )
     get_settings.cache_clear()
     try:
-        from bagel.storage.database import init_db
+        from bagel.storage.database import init_db, reset_engine
 
+        reset_engine()
         init_db(seed=True)
         client = TestClient(create_app())
         resp = client.post(
@@ -84,6 +92,9 @@ def test_login_post_redirect_preserves_prefix(monkeypatch: pytest.MonkeyPatch) -
         assert resp.headers["location"] == "/bagel/"
     finally:
         get_settings.cache_clear()
+        from bagel.storage.database import reset_engine
+
+        reset_engine()
 
 
 def test_x_script_name_header(monkeypatch: pytest.MonkeyPatch) -> None:

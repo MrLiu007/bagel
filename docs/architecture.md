@@ -23,7 +23,7 @@ Postgres  (RSS infra)    (feed adapter)
 - In-process APScheduler for scheduled jobs (idempotent; prefer single worker).
 - Optional Markdown **wiki** under `WIKI_DIR` holds compiled readable pages; `wiki_page` / `wiki_edge` hold transactional indexes. Domain taxonomy seed lives in-package (structure inspired by os-taxonomy; not Marble curriculum data). Personal space GBrain is a resource-first 3D cone (`/briefs/space?view=graph`); UX notes in [wiki-taxonomy-gbrain.md](./wiki-taxonomy-gbrain.md) and [briefs-dashboard.md](./briefs-dashboard.md).
 - **AV / papers / GitHub learn** are first-class product surfaces: yt-dlp + openspeech ASR ([media-vs-av.md](./media-vs-av.md)), MinerU/Kimi paper parse ([paper-parse.md](./paper-parse.md)), lazy GitHub Wiki + Archify ([github-learn.md](./github-learn.md)).
-- Reverse-proxy path prefix via `X-Forwarded-Prefix` / `X-Script-Name` (`web/proxy_prefix.py`) so one Nginx can mount multiple apps (e.g. `/bagel`).
+- Reverse-proxy path prefix via `X-Forwarded-Prefix` / `X-Script-Name` (`web/proxy_prefix.py`) so one Nginx can mount multiple apps (e.g. `/bagel`). Compose defaults to `127.0.0.1:6280` + `deploy/nginx/bagel-location.conf` — see [deploy-ecs.md](./deploy-ecs.md).
 
 ## Package layout
 

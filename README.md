@@ -140,9 +140,10 @@ HTTP_PROXY=http://127.0.0.1:7890
 ```bash
 cp .env.example .env   # 至少改 SESSION_SECRET
 docker compose up -d --build
+# 或：./docker-up.sh up -d --build
 ```
 
-浏览器打开 **http://localhost:8000**（端口可用 `APP_PORT` 覆盖）。
+默认映射 **`127.0.0.1:6280`**（不抢公网 80/443；容器名均为 `bagel-*`）。本机直连可设 `BAGEL_BIND=0.0.0.0 BAGEL_HOST_PORT=8000`。
 
 本地开发仍推荐 `uv run bagel dev` + SQLite。Compose 变量、代理、排障见下方要点：
 
@@ -151,9 +152,15 @@ docker compose up -d --build
 - MediaCrawler / yt-dlp / Archify **不进镜像**；请在宿主机 `setup-*` 或挂载本机 `third_party/`  
 - 拉取基础镜像超时：配置 Docker Hub 镜像或代理后再试  
 
-### 反向代理前缀（可选）
+### 反向代理前缀（ECS / 多应用同机）
 
-同一 Nginx 后挂多个 Compose 应用时，可将 Bagel 挂在 `/bagel`：代理转发时带上 `X-Forwarded-Prefix: /bagel`（或 `X-Script-Name`），应用内链接会自动加前缀；内部路由仍为 `/login`、`/av` 等。
+同一域名挂多个应用时，推荐 **`https://域名/bagel/`**：
+
+1. Compose 只监听本机 `127.0.0.1:6280`（见上）
+2. 在**已有** Nginx `server` 中 `include deploy/nginx/bagel-location.conf`（剥离 `/bagel` 并设置 `X-Forwarded-Prefix`）
+3. 应用内链接 / 登录跳转自动带前缀；内部路由仍为 `/login`、`/av` 等
+
+完整说明：[docs/deploy-ecs.md](./docs/deploy-ecs.md)。
 
 ---
 
